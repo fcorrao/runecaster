@@ -244,13 +244,15 @@ function resolveMiss(sp, r) {
   teachFlash(r);
   if (OPT.pen === 'strict') fizzle(sp);
 }
-function grade(r, g) {
+function grade(r, g, delta) {
   r.status = g; r.hitAt = now();
   G.combo++; G.maxCombo = Math.max(G.maxCombo, G.combo);
   const mult = 1 + Math.min(3, G.combo/10);
   G.score += Math.round((g === 'perfect' ? 100 : 50) * mult);
   G.hits[g]++;
-  popup(g === 'perfect' ? 'PERFECT' : 'good', g === 'perfect' ? '#fbbf24' : '#4ade80', LNX[r.lane], HIT_Y - 30);
+  // tell the learner WHICH way the timing was off (§6: mistakes are lessons)
+  const label = g === 'perfect' ? 'PERFECT' : (delta < 0 ? 'good · early' : 'good · late');
+  popup(label, g === 'perfect' ? '#fbbf24' : '#4ade80', LNX[r.lane], HIT_Y - 30);
   G.fx.push({ kind:'ring', color: g==='perfect' ? '#fbbf24' : '#4ade80', t0: now(), dur: .25, x: LNX[r.lane], y: HIT_Y });
   burst(LNX[r.lane], HIT_Y, g === 'perfect' ? '#fbbf24' : '#4ade80', g === 'perfect' ? 12 : 5, 150);
   hitSnd(g);
@@ -264,8 +266,9 @@ function resolveCast(sp) {
   const el = Object.entries(elCount).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'space';
   sp.element = el;
   sp.power = OPT.pen === 'strict' ? 1 : (sp.runes.length ? (p + 0.6*g) / sp.runes.length : 1);
-  // spell quality → effect: power 0 = dead cast, the arrow lands whole (§6);
-  // partial power launches a weak bolt whose guard leak lands on impact
+  // The enemy's attack is one arrow: a full-power counter deflects it whole,
+  // a weak counter deflects only (power) of it — the rest lands as an arrow
+  // after your bolt connects (§6 penalty ladder, no partial credit fizzle)
   if (sp.power <= 0) {
     popup('FIZZLE', '#f87171', W/2, HIT_Y - 60);
     fizzleSnd();
@@ -276,6 +279,8 @@ function resolveCast(sp) {
     G.fx.push({ kind:'ring', color: ELC[el], t0: now(), dur: .45 + .35*sp.power, x: W/2, y: HIT_Y, big: sp.power });
     popup((el.toUpperCase()) + (sp.power > .99 ? ' — FULL POWER' : ` — ${Math.round(sp.power*100)}%`), ELC[el], W/2, HIT_Y - 85);
     castSnd(el, sp.power);
+    const leak = Math.round(DMG * (1 - sp.power));
+    if (leak > 0) G.strikes.push({ t0: now() + BOLT_F, at: now() + BOLT_F + ARROW_F, dmg: leak });
   }
 }
 function applyImpact(b) { // spell bolt reached the archer
@@ -285,13 +290,6 @@ function applyImpact(b) { // spell bolt reached the archer
   G.shake = Math.max(G.shake, 3 + 7*b.power);
   impactSnd(b.power);
   burst(W/2, 66, ELC[b.el], 14 + Math.round(22*b.power), 180 + 240*b.power);
-  // a weak counter lets partial damage through — the cast happened, the guard didn't
-  const leak = Math.round(DMG * (1 - b.power));
-  if (leak > 0) {
-    G.hp -= leak; G.redFlash = now();
-    popup('-' + leak, '#f87171', W/2, HIT_Y - 60);
-    if (G.hp <= 0) { G.hp = 0; G.over = true; }
-  }
   if (G.enemyHp <= 0) { // wave cleared: the line reforms, tempo tightens (§7 curve)
     G.wave++; G.enemyHp = ENEMY_HP;
     G.bpm = Math.min(200, G.bpm + WAVE_BPM);
@@ -300,11 +298,12 @@ function applyImpact(b) { // spell bolt reached the archer
     G.shake = 12;
   }
 }
-function applyStrike(s) { // enemy arrow reached you
+function applyStrike(s) { // enemy arrow reached you — the counter's shortfall lands
   G.hp -= s.dmg; G.redFlash = now();
-  G.shake = Math.max(G.shake, 9);
+  G.shake = Math.max(G.shake, 3 + 6 * (s.dmg/DMG));
   thudSnd();
-  burst(140, 40, '#f87171', 16, 200);
+  burst(140, 40, '#f87171', 8 + Math.round(10 * s.dmg/DMG), 140 + 120*s.dmg/DMG);
+  popup('-' + s.dmg, '#f87171', 136, 60);
   if (G.hp <= 0) { G.hp = 0; G.over = true; }
 }
 
@@ -319,9 +318,13 @@ addEventListener('keydown', e => {
   const r = sp.runes.find(r => r.status === 'pending'); if (!r) return;
   const t = now();
   if (k === r.ch) {
-    if (t < r.time - GW) return; // too early: ignore, rune stays pending (§5: the deadline, not the beat, is the gate)
-    else if (Math.abs(t - r.time) <= PW) grade(r, 'perfect');
-    else grade(r, 'good');
+    const delta = t - r.time;
+    if (delta < -GW) { // too early to count: the rune stays pending, but say why (§5: gate = deadline)
+      if (!r.warned) { r.warned = true; popup('EARLY', '#8fa0bd', LNX[r.lane], HIT_Y - 30); }
+      return;
+    }
+    else if (Math.abs(delta) <= PW) grade(r, 'perfect', delta);
+    else grade(r, 'good', delta);
   } else {
     G.combo = 0;
     popup('WRONG', '#f87171', LNX[r.lane], HIT_Y - 30);
