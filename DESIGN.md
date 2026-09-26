@@ -66,6 +66,11 @@ G = right of F, R = upper-left, V = down, etc. The lane answers *which finger*;
 the cue answers *what the finger does next*. Playtested: it's readable
 peripherally and turns the lane into motor instruction, not just identification.
 
+**Shift flags.** Numbers ride their digit rows in the same lanes; symbols are
+shifted digits/punctuation and carry a small `⇧` marker — the *other* hand
+supplies shift, which the lane cannot express. (Prototype exposes the typing
+truth that symbols are a two-hand chord, not a key.)
+
 **Elements = finger positions:**
 - Index = Fire, Middle = Water, Ring = Earth, Pinky = Air
 - Each element appears in 2 lanes (left + right)

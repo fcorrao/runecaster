@@ -36,7 +36,8 @@
     </fieldset>
     <fieldset><legend>Key set (§7)</legend>
       <label><input type="radio" name="keys" value="home" checked> home row</label><br>
-      <label><input type="radio" name="keys" value="top"> + top row</label>
+      <label><input type="radio" name="keys" value="top"> + top row</label><br>
+      <label><input type="radio" name="keys" value="num"> + numbers &amp; symbols</label>
     </fieldset>
     <fieldset><legend>Tempo (§5 OPEN)</legend>
       <input id="bpm" type="range" min="60" max="160" value="90"><span id="bpmv">90</span> bpm<br>
@@ -68,22 +69,22 @@
 'use strict';
 // ================= finger lanes (the core mechanic, §3) =================
 const LANES = [
-  {id:'LP', name:'L pinky',  el:'air',   color:'#a78bfa', keys:'1 Q A Z'},
-  {id:'LR', name:'L ring',   el:'earth', color:'#4ade80', keys:'2 W S X'},
-  {id:'LM', name:'L mid',    el:'water', color:'#38bdf8', keys:'3 E D C'},
-  {id:'LI', name:'L index',  el:'fire',  color:'#fb923c', keys:'4 5 R T F G V B'},
-  {id:'SP', name:'thumb',    el:'space', color:'#94a3b8', keys:'SPACE'},
-  {id:'RI', name:'R index',  el:'fire',  color:'#f97316', keys:'6 7 Y U H J M N'},
-  {id:'RM', name:'R mid',    el:'water', color:'#0ea5e9', keys:'8 I K ,'},
-  {id:'RR', name:'R ring',   el:'earth', color:'#22c55e', keys:'9 O L .'},
-  {id:'RP', name:'R pinky',  el:'air',   color:'#8b5cf6', keys:'0 P ; \''},
+  {id:'LP', name:'L pinky',  el:'air',   color:'#a78bfa', keys:'1 Q A Z', sym:'`~ 1!'},
+  {id:'LR', name:'L ring',   el:'earth', color:'#4ade80', keys:'2 W S X', sym:'2 @'},
+  {id:'LM', name:'L mid',    el:'water', color:'#38bdf8', keys:'3 E D C', sym:'3 #'},
+  {id:'LI', name:'L index',  el:'fire',  color:'#fb923c', keys:'4 5 R T F G V B', sym:'4$ 5%'},
+  {id:'SP', name:'thumb',    el:'space', color:'#94a3b8', keys:'SPACE', sym:'SPACE'},
+  {id:'RI', name:'R index',  el:'fire',  color:'#f97316', keys:'6 7 Y U H J M N', sym:'6^ 7&'},
+  {id:'RM', name:'R mid',    el:'water', color:'#0ea5e9', keys:'8 I K ,', sym:'8* <'},
+  {id:'RR', name:'R ring',   el:'earth', color:'#22c55e', keys:'9 O L .', sym:'9) >'},
+  {id:'RP', name:'R pinky',  el:'air',   color:'#8b5cf6', keys:'0 P ; \'' , sym:'0) -_ =+ :\' /?'},
 ];
 const LANE = Object.fromEntries(LANES.map(l => [l.id, l]));
 const ELC = {fire:'#f97316', water:'#38bdf8', earth:'#4ade80', air:'#a78bfa', space:'#94a3b8'};
 const KEY2LANE = {};
 for (const [id, ks] of Object.entries({
-  LP:'`~1!@qazQAZ', LR:'2@#wsxWSX', LM:'3$%edcEDC', LI:'45$%rtfgvbRTFGBV',
-  RI:'67^&yuhjmnYUHMN', RM:'8*(ik,<I,K', RR:'9_)ol.>O.L', RP:'0-=_+p;\'`~:"`?P',
+  LP:'`~1!qazQAZ', LR:'2@wsxWSX', LM:'3#edcEDC', LI:'45$%rtfgvbRTFGBV',
+  RI:'67^&yuhjmnYUHMN', RM:'8*(ik,<I,K', RR:'9)ol.>O.L', RP:'0-=_+p;\':"/?P',
 })) for (const c of ks) KEY2LANE[c] = id;
 KEY2LANE[' '] = 'SP';
 
@@ -94,6 +95,9 @@ const KEYPOS = {
   q:[0,0],w:[1,0],e:[2,0],r:[3,0],t:[4,0],y:[5,0],u:[6,0],i:[7,0],o:[8,0],p:[9,0],
   a:[.5,1],s:[1.5,1],d:[2.5,1],f:[3.5,1],g:[4.5,1],h:[5.5,1],j:[6.5,1],k:[7.5,1],l:[8.5,1],';':[9.5,1],"'":[10.5,1],
   z:[1,2],x:[2,2],c:[3,2],v:[4,2],b:[5,2],n:[6,2],m:[7,2],',':[7.8,2],'.':[8.8,2],'/':[9.8,2],
+  '`':[-.5,0],'~':[-.5,0],'!':[-.5,-1],'@':[.5,-1],'#':[1.5,-1],'$':[2.5,-1],'%':[3.5,-1],
+  '^':[4.5,-1],'&':[5.5,-1],'*':[6.5,-1],'(':[7.5,-1],')':[8.5,-1],
+  '-':[9.5,1],'_':[9.5,1],'=':[10.5,1],'+':[10.5,1],':':[9.5,1],'?':[9.8,2],'"':[10.5,1],
 };
 const HOME_KEY = {LP:'a',LR:'s',LM:'d',LI:'f',SP:' ',RI:'j',RM:'k',RR:'l',RP:';'};
 const KEYDIR = {}; // lane -> key -> [sx, sy] in {-1,0,1}; [0,0] = home (no travel)
@@ -107,6 +111,11 @@ for (const [lane, home] of Object.entries(HOME_KEY)) {
 }
 // index fingers reach diagonally even though key-stagger hides the full offset
 Object.assign(KEYDIR, { r: [-1,-1], t: [1,-1], y: [-1,-1], m: [1,1] });
+// shifted symbols travel with their base key and need the other hand's shift
+const SHIFT = new Set('!@#$%^&*()_+:"~<>');
+const BASE_OF = { '!':'1','@':'2','#':'3','$':'4','%':'5','^':'6','&':'7','*':'8','(':'9',')':'0',
+  '_':'-','+':'=',':':';','"':"'",'<':',','>':'.','~':'`' };
+for (const [sh, base] of Object.entries(BASE_OF)) if (KEYDIR[base]) KEYDIR[sh] = KEYDIR[base];
 
 // ================= geometry =================
 const cv = document.getElementById('game'), cx = cv.getContext('2d');
@@ -125,15 +134,17 @@ const ENEMY_HP = 24, WAVE_BPM = 4, BOLT_F = 0.38, ARROW_F = 0.45; // casting fee
 const POOL = {
   home: ['add','all','ask','dad','fall','falls','flag','flags','flask','gala','gash','glad','had','has','halls','hash','lash','lass','lad','lag','sad','salad','slash','glass'],
   top:  ['quiet','quite','suite','fruit','type','types','write','quote','your','out','our','try','yet','yes','unit','units','until','right','eight','white','tower','towers','power','route','true','pure','pretty','require'],
+  num:  ['f1re','w2ter','h3al','s0ul','v0lt','z3ro','4air','hi!','go?','1+1','3=3','x^2','2*3','9>5','6<7','50%','a&b','4!'],
 };
 const MULTI = {
   home: ['sad lad','dad had','add all','gala falls'],
   top:  ['quiet unit','power out','type right','true quote'],
+  num:  ['f1re! f1re!','g0 g0 g0','2 h3al 1 s0ul'],
 };
 let lastWord = '';
 function pickWord() {
-  const set = OPT.keys === 'top' ? 'top' : 'home';
-  const pool = set === 'top' ? POOL.top.concat(POOL.home) : POOL.home;
+  const set = OPT.keys === 'num' ? 'num' : (OPT.keys === 'top' ? 'top' : 'home');
+  const pool = set === 'num' ? POOL.num.concat(POOL.home) : set === 'top' ? POOL.top.concat(POOL.home) : POOL.home;
   let w = '';
   if (OPT.space === 'chan' && Math.random() < 0.25) w = MULTI[set][Math.floor(Math.random()*MULTI[set].length)];
   else w = pool[Math.floor(Math.random()*pool.length)];
@@ -592,13 +603,26 @@ function draw(t) {
   for (const l of LANES) {
     const w = l.id === 'SP' ? SW : LW, x = LNX[l.id] - w/2;
     cx.strokeStyle = l.color; cx.globalAlpha = .55;
-    rr(x + 4, HIT_Y + 10, w - 8, 46, 8); cx.stroke();
+    rr(x + 4, HIT_Y + 28, w - 8, 42, 8); cx.stroke();
     cx.globalAlpha = 1;
     cx.fillStyle = l.color; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
-    cx.fillText(l.name, LNX[l.id], HIT_Y + 29);
+    cx.fillText(l.name, LNX[l.id], HIT_Y + 42);
     cx.fillStyle = '#8fa0bd'; cx.font = '9.5px ui-monospace, Menlo, monospace';
-    cx.fillText(l.keys, LNX[l.id], HIT_Y + 45);
+    cx.fillText(OPT.keys === 'num' ? l.sym : l.keys, LNX[l.id], HIT_Y + 56);
   }
+
+  // health bars in the band under the hit line, each on its fighter's side
+  const BAR_Y = HIT_Y + 74, BAR_H = 16, HALF = (W/2 - X0) - 24;
+  cx.fillStyle = '#1c2536'; rr(X0, BAR_Y, HALF, BAR_H, 6); cx.fill();
+  cx.fillStyle = G.hp > 40 ? '#4ade80' : '#f87171'; rr(X0, BAR_Y, HALF * Math.max(0, G.hp)/100, BAR_H, 6); cx.fill();
+  cx.strokeStyle = '#2a3346'; rr(X0, BAR_Y, HALF, BAR_H, 6); cx.stroke();
+  cx.fillStyle = '#0b0e14'; cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
+  cx.fillText('CASTER ' + G.hp, X0 + 8, BAR_Y + 12);
+  cx.fillStyle = '#1c2536'; rr(W/2 + 24, BAR_Y, HALF, BAR_H, 6); cx.fill();
+  cx.fillStyle = '#f87171'; rr(W/2 + 24, BAR_Y, HALF * Math.max(0, G.enemyHp)/ENEMY_HP, BAR_H, 6); cx.fill();
+  cx.strokeStyle = '#2a3346'; rr(W/2 + 24, BAR_Y, HALF, BAR_H, 6); cx.stroke();
+  cx.fillStyle = '#0b0e14'; cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
+  cx.fillText('ARCHER wave ' + G.wave + '  ' + Math.max(0, G.enemyHp), W/2 + 32, BAR_Y + 12);
 
   // spells: connectors + runes
   for (const s of G.spells) {
@@ -635,6 +659,10 @@ function draw(t) {
             cx.restore();
           }
         }
+        if (SHIFT.has(r.ch)) { // shift is the OTHER hand's job — flag it
+          cx.fillStyle = 'rgba(11,14,20,.85)'; cx.font = 'bold 14px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
+          cx.fillText('\u21E7', LNX[r.lane] + 15, y - 12);
+        }
       } else if (r.hitAt && t - r.hitAt < 0.25) {
         const a = 1 - (t - r.hitAt) / 0.25;
         cx.globalAlpha = a * .8;
@@ -648,27 +676,11 @@ function draw(t) {
     if (!s.fizzled) {
       const p = Math.max(0, Math.min(1, (t - s.arrow.from) / (s.arrow.to - s.arrow.from)));
       const ay = (STAGE_TOP - 10) - p * (STAGE_TOP - HIT_Y - 20);
-      cx.strokeStyle = '#f87171'; cx.lineWidth = 2;
-      cx.beginPath(); cx.moveTo(W/2, STAGE_TOP - 10); cx.lineTo(W/2, ay); cx.stroke();
       cx.fillStyle = '#f87171';
       cx.beginPath(); cx.moveTo(W/2, ay - 10); cx.lineTo(W/2 - 6, ay + 2); cx.lineTo(W/2 + 6, ay + 2); cx.fill();
       cx.lineWidth = 1;
     }
   }
-
-  // HUD: health bars, each beside its fighter (caster left, archer right)
-  cx.fillStyle = '#1c2536'; rr(16, 16, 240, 18, 6); cx.fill();
-  cx.fillStyle = G.hp > 40 ? '#4ade80' : '#f87171';
-  rr(16, 16, 240 * G.hp/100, 18, 6); cx.fill();
-  cx.strokeStyle = '#2a3346'; rr(16, 16, 240, 18, 6); cx.stroke();
-  cx.fillStyle = '#0b0e14'; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
-  cx.fillText('CASTER ' + G.hp, 24, 29);
-
-  cx.fillStyle = '#1c2536'; rr(W - 256, 16, 240, 18, 6); cx.fill();
-  cx.fillStyle = '#f87171'; rr(W - 256, 16, 240 * Math.max(0, G.enemyHp)/ENEMY_HP, 18, 6); cx.fill();
-  cx.strokeStyle = '#2a3346'; rr(W - 256, 16, 240, 18, 6); cx.stroke();
-  cx.fillStyle = '#0b0e14'; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
-  cx.fillText('ARCHER wave ' + G.wave, W - 248, 29);
 
   // HUD: score / combo / bpm
   cx.textAlign = 'left'; cx.fillStyle = '#e2e8f0'; cx.font = 'bold 16px ui-monospace, Menlo, monospace';
