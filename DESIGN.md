@@ -57,6 +57,15 @@ take damage.
 - **Color-coded by hand** (and per-finger) so the eye learns the mapping before
   the fingers do.
 
+**Travel cues.** A per-finger lane is ambiguous within the lane: F and G both
+ride the left-index lane, and the lane alone doesn't say which the note wants.
+Each rune therefore carries a small movement marker relative to that finger's
+**home key**: home keys (A S D F J K L ;) show a dot ("finger stays put"),
+off-home keys show a chevron in the direction the finger travels from home —
+G = right of F, R = upper-left, V = down, etc. The lane answers *which finger*;
+the cue answers *what the finger does next*. Playtested: it's readable
+peripherally and turns the lane into motor instruction, not just identification.
+
 **Elements = finger positions:**
 - Index = Fire, Middle = Water, Ring = Earth, Pinky = Air
 - Each element appears in 2 lanes (left + right)
