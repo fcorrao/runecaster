@@ -50,7 +50,7 @@
       <label><input type="checkbox" id="guide" checked> highlight next lane</label>
     </fieldset>
   </div>
-  <canvas id="game" width="1120" height="680"></canvas>
+  <canvas id="game" width="1120" height="840"></canvas>
   <div id="help">
     <b>Try these (each answers an [OPEN] question):</b>
     <ul>
@@ -93,7 +93,9 @@ const W = cv.width, H = cv.height;
 const LW = 92, SW = 112, GAP = 14;
 const X0 = (W - (8*LW + SW + 2*GAP)) / 2;
 const LNX = {}; { let x = X0; for (const l of LANES) { const w = l.id==='SP' ? SW : LW; if (l.id==='SP') x += GAP; if (l.id==='RI') x += GAP; LNX[l.id] = x + w/2; x += w; } }
-const HIT_Y = 552, TOP_Y = 100, LOOK = 2.2, PXS = (HIT_Y - TOP_Y) / LOOK;
+const HIT_Y = 700, TOP_Y = 248, LOOK = 2.2, PXS = (HIT_Y - TOP_Y) / LOOK;
+// battle stage: top quarter of the canvas, sprites live here (see drawing section)
+const STAGE_H = 210, GROUND_Y = 178, WIZ_X = 190, WIZ_Y = 178, ARC_X = 930, ARC_Y = 178, STAFF_X = 284, STAFF_Y = 28;
 const PW = 0.055, GW = 0.14, DMG = 18, REST = 1.2, FIT = 4;
 const ENEMY_HP = 24, WAVE_BPM = 4, BOLT_F = 0.38, ARROW_F = 0.45; // casting feel: bolt flight, enemy-arrow flight
 
@@ -186,6 +188,8 @@ function newGame() {
     // effects: enemy with hp/waves, in-flight spell bolts, enemy arrow strikes, particles
     enemyHp: ENEMY_HP, wave: 1, bolts: [], strikes: [], parts: [],
     shake: 0, archFlash: 0, lastT: 0,
+    // stage sprite state (all timestamp-driven poses, no animation loop needed)
+    wizCast: null, wizHurt: -9, arcEnter: -9, arcDead: -9,
   };
 }
 function startRun() {
@@ -219,10 +223,15 @@ function makeSpell(t0) {
 // ================= grading / resolution =================
 function popup(text, color, x, y) { G.pops.push({ text, color, x, y, until: now() + 0.8 }); }
 function teachFlash(r) { const l = LANE[r.lane]; G.flash = { text: `'${r.ch === ' ' ? 'SPACE' : r.ch}' → ${l.name}`, color: l.color, until: now() + 1.0 }; }
-function burst(x, y, color, n, spd) {
+function burst(x, y, color, n, spd, kind) {
   for (let i = 0; i < n; i++) {
-    const a = Math.random() * Math.PI * 2, v = spd * (0.3 + Math.random() * 0.7);
-    G.parts.push({ x, y, vx: Math.cos(a)*v, vy: Math.sin(a)*v, color, size: 1.5 + Math.random()*3, born: now(), ttl: 0.35 + Math.random()*0.4 });
+    let a = Math.random() * Math.PI * 2, v = spd * (0.3 + Math.random() * 0.7);
+    let vx = Math.cos(a)*v, vy = Math.sin(a)*v, ttl = 0.35 + Math.random()*0.4;
+    if (kind === 'fire') { vy = -Math.abs(vy) - 60; ttl *= 1.5; }            // embers rise
+    if (kind === 'earth') { vy = -Math.abs(vy) * 0.7; ttl *= 1.4; }          // chunks arc + gravity
+    if (kind === 'water') { vy *= 0.85; ttl *= 1.2; }                          // splash
+    if (kind === 'air') { vx = v * (0.6 + Math.random()*0.8) * (Math.random() < 0.5 ? -1 : 1); vy = (Math.random()-.5)*80; ttl *= 1.3; } // horizontal gust
+    G.parts.push({ x, y, vx, vy, color, size: 1.5 + Math.random()*3, born: now(), ttl, kind: kind || 'spark' });
   }
   if (G.parts.length > 600) G.parts.splice(0, G.parts.length - 600);
 }
@@ -269,13 +278,15 @@ function resolveCast(sp) {
   // The enemy's attack is one arrow: a full-power counter deflects it whole,
   // a weak counter deflects only (power) of it — the rest lands as an arrow
   // after your bolt connects (§6 penalty ladder, no partial credit fizzle)
+  G.wizCast = { el, until: now() + 0.5 }; // caster raises his staff
   if (sp.power <= 0) {
     popup('FIZZLE', '#f87171', W/2, HIT_Y - 60);
     fizzleSnd();
     G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: DMG });
     whooshSnd();
   } else {
-    G.bolts.push({ word: sp.word, el, power: sp.power, t0: now(), at: now() + BOLT_F });
+    G.bolts.push({ word: sp.word, el, power: sp.power, t0: now(), at: now() + BOLT_F,
+      x0: STAFF_X, y0: STAFF_Y, x1: ARC_X, y1: ARC_Y - 44, arc: 70 + 60 * sp.power });
     G.fx.push({ kind:'ring', color: ELC[el], t0: now(), dur: .45 + .35*sp.power, x: W/2, y: HIT_Y, big: sp.power });
     popup((el.toUpperCase()) + (sp.power > .99 ? ' — FULL POWER' : ` — ${Math.round(sp.power*100)}%`), ELC[el], W/2, HIT_Y - 85);
     castSnd(el, sp.power);
@@ -287,23 +298,23 @@ function applyImpact(b) { // spell bolt reached the archer
   const dmg = Math.round(8 * b.power); // ENEMY_HP/8 = casts-per-wave at full power
   G.enemyHp -= dmg;
   G.archFlash = now();
-  G.shake = Math.max(G.shake, 3 + 7*b.power);
-  impactSnd(b.power);
-  burst(W/2, 66, ELC[b.el], 14 + Math.round(22*b.power), 180 + 240*b.power);
-  if (G.enemyHp <= 0) { // wave cleared: the line reforms, tempo tightens (§7 curve)
+  burst(ARC_X, ARC_Y - 44, ELC[b.el], 14 + Math.round(22*b.power), 180 + 240*b.power, b.el);
+  if (G.enemyHp <= 0) { // wave cleared: the archer falls, a new one enters, tempo tightens (§7)
     G.wave++; G.enemyHp = ENEMY_HP;
     G.bpm = Math.min(200, G.bpm + WAVE_BPM);
     popup('WAVE ' + G.wave, '#fbbf24', W/2, 150);
-    burst(W/2, 66, '#fbbf24', 60, 340);
+    burst(ARC_X, ARC_Y - 40, '#fbbf24', 60, 340);
     G.shake = 12;
+    G.arcDead = now(); G.arcEnter = now() + 0.55;
   }
 }
-function applyStrike(s) { // enemy arrow reached you — the counter's shortfall lands
+function applyStrike(s) { // enemy arrow reached the caster — the counter's shortfall lands
   G.hp -= s.dmg; G.redFlash = now();
+  G.wizHurt = now();
   G.shake = Math.max(G.shake, 3 + 6 * (s.dmg/DMG));
   thudSnd();
-  burst(140, 40, '#f87171', 8 + Math.round(10 * s.dmg/DMG), 140 + 120*s.dmg/DMG);
-  popup('-' + s.dmg, '#f87171', 136, 60);
+  burst(WIZ_X + 26, WIZ_Y - 56, '#f87171', 8 + Math.round(10 * s.dmg/DMG), 140 + 120*s.dmg/DMG);
+  popup('-' + s.dmg, '#f87171', WIZ_X + 30, WIZ_Y - 120);
   if (G.hp <= 0) { G.hp = 0; G.over = true; }
 }
 
@@ -361,7 +372,10 @@ function frame() {
   if (G.bolts.length) { for (const b of G.bolts) if (t >= b.at) applyImpact(b); G.bolts = G.bolts.filter(b => t < b.at); }
   if (G.strikes.length) { for (const s of G.strikes) if (t >= s.at) applyStrike(s); G.strikes = G.strikes.filter(s => t < s.at); }
   const decay = Math.exp(-2.5*dt), drag = Math.exp(-8*dt);
-  for (const p of G.parts) { p.x += p.vx*dt; p.y += p.vy*dt; p.vx *= decay; p.vy *= decay; }
+  for (const p of G.parts) {
+    p.x += p.vx*dt; p.y += p.vy*dt; p.vx *= decay;
+    p.vy = p.kind === 'earth' ? p.vy * decay + 700*dt : p.kind === 'fire' ? p.vy * decay - 120*dt : p.vy * decay; // chunks fall, embers lift
+  }
   if (G.parts.length) G.parts = G.parts.filter(p => t - p.born < p.ttl);
   if (G.shake > 0.2) G.shake *= drag; else G.shake = 0;
   G.pops = G.pops.filter(p => p.until > t);
@@ -375,11 +389,157 @@ requestAnimationFrame(frame);
 function rr(x, y, w, h, r) { cx.beginPath(); cx.roundRect(x, y, w, h, r); }
 function noteY(r, t) { return HIT_Y - (r.time - t) * PXS; }
 
+// ================= battle stage (top quarter) =================
+function nextCharge(t) { // staff crystal tracks the next rune: element + charge level
+  const sp = activeSpell();
+  if (sp) for (const r of sp.runes) if (r.status === 'pending') {
+    const el = LANE[r.lane].el === 'space' ? null : LANE[r.lane].el;
+    return { el, c: Math.max(0, Math.min(1, 1 - (r.time - t) / 1.2)) };
+  }
+  return null;
+}
+function drawWizard(t, phase) {
+  const hurt = t - G.wizHurt, casting = G.wizCast && t < G.wizCast.until;
+  const cp = casting ? 1 - (G.wizCast.until - t) / 0.5 : -1; // 0..1 cast sweep progress
+  cx.save();
+  cx.translate(WIZ_X + (hurt < 0.3 ? -7 * (1 - hurt/0.3) : 0), WIZ_Y + Math.sin(t * 2.2) * 2);
+  if (G.over) { cx.translate(-10, 26); cx.rotate(-0.5); } // struck down
+  const castEl = casting ? G.wizCast.el : null;
+  const trim = ELC[castEl] || '#7dd3fc';
+  cx.fillStyle = 'rgba(0,0,0,.4)'; cx.beginPath(); cx.ellipse(0, 3, 38, 7, 0, 0, 7); cx.fill();
+  // staff: snaps up, then sweeps toward the enemy as the bolt flies
+  const sa = cp < 0 ? 0 : (cp < 0.3 ? -0.5 * (cp / 0.3) : -0.5 + 1.05 * ((cp - 0.3) / 0.7));
+  cx.save();
+  cx.translate(10, -40); cx.rotate(sa);
+  cx.strokeStyle = '#6b4f2a'; cx.lineWidth = 5;
+  cx.beginPath(); cx.moveTo(-14, 46); cx.lineTo(94, -146); cx.stroke(); cx.lineWidth = 1;
+  const ch = nextCharge(t);
+  const orbC = ELC[castEl] || ELC[ch && ch.el] || '#7dd3fc';
+  const orbR = 6 + (cp >= 0 ? 9 * Math.sin(Math.min(1, cp * 1.35) * Math.PI) : 2 + 3 * (1 - phase) + (ch ? 3 * ch.c : 0));
+  cx.shadowColor = orbC; cx.shadowBlur = 14 + 12 * (ch ? ch.c : 0) + (cp >= 0 ? 16 : 0);
+  cx.fillStyle = orbC; cx.beginPath(); cx.arc(94, -146, Math.max(2, orbR), 0, 7); cx.fill();
+  cx.shadowBlur = 0;
+  cx.restore();
+  // robe
+  cx.fillStyle = '#272e52';
+  cx.beginPath();
+  cx.moveTo(-4, -64); cx.bezierCurveTo(-14, -50, -28, -16, -32, 2);
+  cx.lineTo(30, 2); cx.bezierCurveTo(26, -16, 12, -50, 4, -64);
+  cx.closePath(); cx.fill();
+  cx.strokeStyle = trim; cx.globalAlpha = .7; cx.lineWidth = 2.5; // elemental trim
+  cx.beginPath(); cx.moveTo(-32, 2); cx.lineTo(30, 2); cx.stroke();
+  cx.beginPath(); cx.moveTo(-1, -58); cx.lineTo(-11, -8); cx.stroke();
+  cx.globalAlpha = 1; cx.lineWidth = 1;
+  // hood + face void
+  cx.fillStyle = '#272e52';
+  cx.beginPath();
+  cx.moveTo(0, -60); cx.bezierCurveTo(-17, -60, -18, -88, 0, -94);
+  cx.bezierCurveTo(18, -88, 17, -60, 0, -60);
+  cx.closePath(); cx.fill();
+  cx.fillStyle = '#05070c'; cx.beginPath(); cx.ellipse(3, -76, 8, 10, 0, 0, 7); cx.fill();
+  if (hurt < 0.25) { // red rim on hit
+    cx.globalAlpha = .5 * (1 - hurt/0.25); cx.strokeStyle = '#f87171'; cx.lineWidth = 3;
+    cx.beginPath(); cx.ellipse(-1, -40, 40, 58, 0, 0, 7); cx.stroke();
+    cx.globalAlpha = 1; cx.lineWidth = 1;
+  }
+  cx.restore();
+}
+function drawArcher(t) {
+  if (G.enemyHp <= 0 && t - G.arcDead < 0.55) return; // fell; new one marching in
+  const enter = t - G.arcEnter;
+  const dx = (enter >= 0 && enter < 0.5) ? (1 - enter / 0.5) * 170 : 0;
+  const fl = t - G.archFlash;
+  // draw the bow as the counter loads: windup begins with the strike's t0
+  const wind = G.strikes.length ? G.strikes[0].t0 - t : 9;
+  const pull = (wind < 0.24 && wind > -0.05) ? 1 - Math.max(0, wind) / 0.24 : 0;
+  cx.save();
+  cx.translate(ARC_X + dx - (fl < 0.25 ? 10 * (1 - fl/0.25) : 0), ARC_Y - (fl < 0.25 ? 3 : 0));
+  cx.fillStyle = 'rgba(0,0,0,.4)'; cx.beginPath(); cx.ellipse(0, 3, 32, 6, 0, 0, 7); cx.fill();
+  // bow arm + recurve bow (drawn toward the caster)
+  cx.save();
+  cx.translate(-14, -48); cx.rotate(pull * 0.18);
+  cx.strokeStyle = '#7a4f2b'; cx.lineWidth = 4;
+  cx.beginPath(); cx.arc(0, 0, 30, Math.PI * 0.62, Math.PI * 1.38); cx.stroke();
+  const px = Math.cos(Math.PI * 0.62) * 30, py = Math.sin(Math.PI * 0.62) * 30;
+  const nx = -10 * pull; // string pulled back
+  cx.strokeStyle = '#cbd5e1'; cx.lineWidth = 1.5;
+  cx.beginPath(); cx.moveTo(px, py); cx.lineTo(nx, 0); cx.lineTo(px, -py); cx.stroke();
+  if (pull > 0.15) { // nocked arrow glowing red
+    cx.strokeStyle = '#f87171'; cx.lineWidth = 2.5;
+    cx.beginPath(); cx.moveTo(nx, 0); cx.lineTo(-64, 0); cx.stroke();
+    cx.shadowColor = '#f87171'; cx.shadowBlur = 8;
+    cx.beginPath(); cx.moveTo(-64, 0); cx.lineTo(-56, -4); cx.moveTo(-64, 0); cx.lineTo(-56, 4); cx.stroke();
+    cx.shadowBlur = 0;
+  }
+  cx.lineWidth = 1;
+  cx.restore();
+  // body: lean into the draw
+  cx.rotate(-pull * 0.1);
+  cx.fillStyle = '#4b2430';
+  cx.beginPath();
+  cx.moveTo(2, -58); cx.bezierCurveTo(12, -44, 24, -14, 26, 2);
+  cx.lineTo(-18, 2); cx.bezierCurveTo(-16, -18, -8, -46, -2, -58);
+  cx.closePath(); cx.fill();
+  cx.strokeStyle = '#f87171'; cx.globalAlpha = .5; cx.lineWidth = 2;
+  cx.beginPath(); cx.moveTo(-18, 2); cx.lineTo(26, 2); cx.stroke();
+  cx.globalAlpha = 1; cx.lineWidth = 1;
+  // hood + face void (facing left) + quiver
+  cx.fillStyle = '#4b2430';
+  cx.beginPath();
+  cx.moveTo(0, -56); cx.bezierCurveTo(-15, -56, -16, -80, 0, -86);
+  cx.bezierCurveTo(15, -80, 15, -56, 0, -56);
+  cx.closePath(); cx.fill();
+  cx.fillStyle = '#05070c'; cx.beginPath(); cx.ellipse(-3, -70, 7, 9, 0, 0, 7); cx.fill();
+  cx.strokeStyle = '#6b4f2a'; cx.lineWidth = 4;
+  cx.beginPath(); cx.moveTo(16, -52); cx.lineTo(30, -22); cx.stroke(); cx.lineWidth = 1;
+  cx.strokeStyle = '#cbd5e1';
+  cx.beginPath(); cx.moveTo(15, -55); cx.lineTo(19, -60); cx.moveTo(20, -52); cx.lineTo(25, -58); cx.stroke();
+  if (fl < 0.25) { // bolt impact flash
+    cx.globalAlpha = .85 * (1 - fl/0.25); cx.fillStyle = '#ffffff';
+    cx.beginPath(); cx.ellipse(0, -42, 26, 46, 0, 0, 7); cx.fill();
+    cx.globalAlpha = 1;
+  }
+  if (pull > 0.15) { // charge glow on the archer while winding up
+    cx.globalAlpha = .35 * pull; cx.fillStyle = '#f87171';
+    cx.beginPath(); cx.ellipse(-40, -48, 26, 18, 0, 0, 7); cx.fill();
+    cx.globalAlpha = 1;
+  }
+  cx.restore();
+}
+function drawStage(t, beat, phase) {
+  const sky = cx.createLinearGradient(0, 0, 0, STAGE_H);
+  sky.addColorStop(0, '#0c1222'); sky.addColorStop(.72, '#111827'); sky.addColorStop(1, '#0a0f1a');
+  cx.fillStyle = sky; cx.fillRect(0, 0, W, STAGE_H);
+  cx.fillStyle = 'rgba(203,213,225,.045)'; cx.beginPath(); cx.arc(560, 46, 100, 0, 7); cx.fill(); // moon haze
+  cx.fillStyle = '#121a2b'; // ridges
+  cx.beginPath(); cx.ellipse(180, GROUND_Y + 4, 320, 74, 0, Math.PI, Math.PI * 2); cx.fill();
+  cx.fillStyle = '#0f1626';
+  cx.beginPath(); cx.ellipse(880, GROUND_Y + 4, 420, 96, 0, Math.PI, Math.PI * 2); cx.fill();
+  cx.beginPath(); cx.ellipse(560, GROUND_Y + 4, 260, 52, 0, Math.PI, Math.PI * 2); cx.fill();
+  cx.fillStyle = '#070a12'; cx.fillRect(0, GROUND_Y, W, STAGE_H - GROUND_Y); // ground
+  cx.strokeStyle = '#7dd3fc'; cx.globalAlpha = .06 + .22 * (1 - phase); cx.lineWidth = 2; // horizon pulses on beat
+  cx.beginPath(); cx.moveTo(0, GROUND_Y); cx.lineTo(W, GROUND_Y); cx.stroke();
+  cx.globalAlpha = 1; cx.lineWidth = 1;
+  // aim arc: the enemy's intent, drawn while a spell is live
+  const asp = activeSpell();
+  if (asp && !G.over) {
+    const mx = (WIZ_X + ARC_X) / 2, my = 40;
+    cx.strokeStyle = '#f87171'; cx.globalAlpha = .14; cx.lineWidth = 2; cx.setLineDash([3, 9]);
+    cx.beginPath(); cx.moveTo(WIZ_X + 40, WIZ_Y - 70);
+    cx.quadraticCurveTo(mx, my - 26, ARC_X - 34, ARC_Y - 46); cx.stroke();
+    cx.setLineDash([]); cx.globalAlpha = 1; cx.lineWidth = 1;
+  }
+  drawWizard(t, phase);
+  drawArcher(t);
+  cx.strokeStyle = '#1e293b'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(0, STAGE_H); cx.lineTo(W, STAGE_H); cx.stroke(); cx.lineWidth = 1;
+}
+
 function draw(t) {
   cx.clearRect(0, 0, W, H);
   const beat = 60/G.bpm, phase = ((t % beat) + beat) % beat / beat;
   const shaking = G.shake > 0.2;
   if (shaking) { cx.save(); cx.translate((Math.random()-.5)*2*G.shake, (Math.random()-.5)*2*G.shake); }
+  drawStage(t, beat, phase);
 
   // lane columns
   for (const l of LANES) {
@@ -448,52 +608,38 @@ function draw(t) {
         cx.globalAlpha = 1; cx.lineWidth = 1;
       }
     }
-    // arrow: the volley closing in
+    // arrow: the volley closing in — a target reticle descending from the stage
     if (!s.fizzled) {
       const p = Math.max(0, Math.min(1, (t - s.arrow.from) / (s.arrow.to - s.arrow.from)));
-      const ay = 96 + p * (HIT_Y - 96);
+      const ay = (STAGE_H + 10) + p * (HIT_Y - STAGE_H - 10);
       cx.strokeStyle = '#f87171'; cx.lineWidth = 2;
-      cx.beginPath(); cx.moveTo(W/2, 96); cx.lineTo(W/2, ay); cx.stroke();
+      cx.beginPath(); cx.moveTo(W/2, STAGE_H + 10); cx.lineTo(W/2, ay); cx.stroke();
       cx.fillStyle = '#f87171';
       cx.beginPath(); cx.moveTo(W/2, ay + 10); cx.lineTo(W/2 - 6, ay - 2); cx.lineTo(W/2 + 6, ay - 2); cx.fill();
       cx.lineWidth = 1;
     }
   }
 
-  // enemy (archer) — pulses on beat, flashes when a bolt connects
-  const fl = G.archFlash ? t - G.archFlash : 9;
-  const eR = 26 + 6 * (1 - phase) + (fl < 0.22 ? 10 * (1 - fl/0.22) : 0);
-  cx.fillStyle = '#38bdf8'; cx.globalAlpha = .25 + .3 * (1 - phase);
-  cx.beginPath(); cx.arc(W/2, 66, eR, 0, 7); cx.fill();
-  if (fl < 0.22) {
-    cx.globalAlpha = 0.9 * (1 - fl/0.22); cx.fillStyle = '#ffffff';
-    cx.beginPath(); cx.arc(W/2, 66, eR - 6, 0, 7); cx.fill();
-  }
-  cx.globalAlpha = 1;
-  cx.fillStyle = '#e2e8f0'; cx.font = 'bold 12px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
-  cx.fillText('ARCHER', W/2, 70);
-
-  // HUD: enemy health + wave (top-right, opposite the player's)
-  cx.fillStyle = '#1c2536'; rr(W - 256, 84, 240, 12, 5); cx.fill();
-  cx.fillStyle = '#f87171'; rr(W - 256, 84, 240 * Math.max(0, G.enemyHp)/ENEMY_HP, 12, 5); cx.fill();
-  cx.strokeStyle = '#2a3346'; rr(W - 256, 84, 240, 12, 5); cx.stroke();
-  cx.fillStyle = '#cbd5e1'; cx.font = 'bold 9.5px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
-  cx.fillText('ARCHER · wave ' + G.wave, W - 250, 93);
-
-  // HUD: health
+  // HUD: health bars, each beside its fighter (caster left, archer right)
   cx.fillStyle = '#1c2536'; rr(16, 16, 240, 18, 6); cx.fill();
   cx.fillStyle = G.hp > 40 ? '#4ade80' : '#f87171';
   rr(16, 16, 240 * G.hp/100, 18, 6); cx.fill();
   cx.strokeStyle = '#2a3346'; rr(16, 16, 240, 18, 6); cx.stroke();
   cx.fillStyle = '#0b0e14'; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
-  cx.fillText('HP ' + G.hp, 24, 29);
+  cx.fillText('CASTER ' + G.hp, 24, 29);
+
+  cx.fillStyle = '#1c2536'; rr(W - 256, 16, 240, 18, 6); cx.fill();
+  cx.fillStyle = '#f87171'; rr(W - 256, 16, 240 * Math.max(0, G.enemyHp)/ENEMY_HP, 18, 6); cx.fill();
+  cx.strokeStyle = '#2a3346'; rr(W - 256, 16, 240, 18, 6); cx.stroke();
+  cx.fillStyle = '#0b0e14'; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
+  cx.fillText('ARCHER wave ' + G.wave, W - 248, 29);
 
   // HUD: score / combo / bpm
-  cx.textAlign = 'right'; cx.fillStyle = '#e2e8f0'; cx.font = 'bold 14px ui-monospace, Menlo, monospace';
-  cx.fillText(G.score.toLocaleString(), W - 16, 30);
-  if (G.combo > 1) { cx.fillStyle = '#fbbf24'; cx.font = 'bold 18px ui-monospace, Menlo, monospace'; cx.fillText('x' + G.combo, W - 16, 54); }
+  cx.textAlign = 'left'; cx.fillStyle = '#e2e8f0'; cx.font = 'bold 16px ui-monospace, Menlo, monospace';
+  cx.fillText(G.score.toLocaleString(), 16, 62);
+  if (G.combo > 1) { cx.fillStyle = '#fbbf24'; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.fillText('combo x' + G.combo, 16, 84); }
   cx.fillStyle = '#66738d'; cx.font = '11px ui-monospace, Menlo, monospace';
-  cx.fillText(Math.round(G.bpm) + ' bpm' + (OPT.cavalry ? ' (cavalry)' : ''), W - 16, 72);
+  cx.fillText(Math.round(G.bpm) + ' bpm' + (OPT.cavalry ? ' (cavalry)' : ''), 16, 102);
 
   // current word, graded
   const sp = activeSpell();
@@ -507,7 +653,7 @@ function draw(t) {
     }
     const total = segs.reduce((a, s) => a + cx.measureText(s.c).width + 2, 0);
     let x = W/2 - total/2;
-    for (const s of segs) { const w = cx.measureText(s.c).width; cx.fillStyle = col[s.s]; cx.fillText(s.c, x + w/2, 92); x += w + 2; }
+    for (const s of segs) { const w = cx.measureText(s.c).width; cx.fillStyle = col[s.s]; cx.fillText(s.c, x + w/2, STAGE_H + 34); x += w + 2; }
   }
 
   // fx rings
@@ -517,38 +663,53 @@ function draw(t) {
     cx.beginPath(); cx.arc(f.x, f.y, (f.big ? 40 : 20) + p * (f.big ? 120 : 50), 0, 7); cx.stroke();
     cx.globalAlpha = 1; cx.lineWidth = 1;
   }
-  // spell bolts in flight: the cast word streaks up at the archer
+  // spell bolts in flight: the incantation arcs from staff to archer
+  const qp = (a, c, b, p) => (1-p)*(1-p)*a + 2*(1-p)*p*c + p*p*b;
   for (const b of G.bolts) {
     const p = (t - b.t0) / (b.at - b.t0), e = ELC[b.el];
-    const by = HIT_Y - 26 - p * (HIT_Y - 26 - 78);
-    cx.strokeStyle = e; cx.globalAlpha = .5; cx.lineWidth = 3;
-    cx.beginPath(); cx.moveTo(W/2, HIT_Y - 26); cx.lineTo(W/2, by + 10); cx.stroke();
-    cx.globalAlpha = 1; cx.lineWidth = 1;
+    const qx = (b.x0 + b.x1) / 2, qy = Math.min(b.y0, b.y1) - b.arc;
+    const bx = qp(b.x0, qx, b.x1, p), by = qp(b.y0, qy, b.y1, p);
+    cx.strokeStyle = e; cx.globalAlpha = .4; cx.lineWidth = 3; // comet trail along the arc
+    cx.beginPath();
+    for (let k = 0; k <= 8; k++) {
+      const q = Math.max(0, p - k*0.055);
+      k ? cx.lineTo(qp(b.x0, qx, b.x1, q), qp(b.y0, qy, b.y1, q)) : cx.moveTo(qp(b.x0, qx, b.x1, q), qp(b.y0, qy, b.y1, q));
+    }
+    cx.stroke(); cx.globalAlpha = 1; cx.lineWidth = 1;
     cx.shadowColor = e; cx.shadowBlur = 18;
-    cx.fillStyle = e; cx.font = 'bold ' + (16 + Math.round(10*b.power)) + 'px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
-    cx.fillText(b.word, W/2, by);
+    cx.fillStyle = e;
+    cx.beginPath(); cx.arc(bx, by, 8 + 5*b.power, 0, 7); cx.fill();
+    cx.font = 'bold ' + (13 + Math.round(7*b.power)) + 'px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
+    cx.fillText(b.word, bx, by - 16);
     cx.shadowBlur = 0;
   }
-  // enemy arrows in flight (fizzle counterattack) — accelerating toward the HP bar
+  // enemy arrows in flight: released from the drawn bow, accelerating at the caster
   for (const s of G.strikes) {
     const p = Math.min(1, (t - s.t0) / (s.at - s.t0)), e = p * p;
-    const ax = W/2 + (150 - W/2) * e, ay = 96 + (26 - 96) * e, ang = Math.atan2(26 - 96, 150 - W/2);
+    const x0 = ARC_X - 56, y0 = ARC_Y - 48, x1 = WIZ_X + 26, y1 = WIZ_Y - 56;
+    const ax = x0 + (x1 - x0) * e, ay = y0 + (y1 - y0) * e, ang = Math.atan2(y1 - y0, x1 - x0);
     cx.save(); cx.translate(ax, ay); cx.rotate(ang);
+    cx.shadowColor = '#f87171'; cx.shadowBlur = 10;
     cx.strokeStyle = '#f87171'; cx.lineWidth = 3;
     cx.beginPath(); cx.moveTo(-28, 0); cx.lineTo(4, 0); cx.stroke();
     cx.fillStyle = '#f87171';
     cx.beginPath(); cx.moveTo(12, 0); cx.lineTo(2, -5); cx.lineTo(2, 5); cx.fill();
     cx.beginPath(); cx.moveTo(-28, 0); cx.lineTo(-20, -4); cx.moveTo(-28, 0); cx.lineTo(-20, 4); cx.stroke();
+    cx.shadowBlur = 0;
     cx.restore();
   }
-  // particles
+  // particles: shape by elemental kind
   if (G.parts.length) {
     for (const p of G.parts) {
       const a = 1 - (t - p.born) / p.ttl;
-      cx.globalAlpha = Math.max(0, a); cx.fillStyle = p.color;
-      cx.beginPath(); cx.arc(p.x, p.y, p.size * (0.4 + 0.6*a), 0, 7); cx.fill();
+      cx.globalAlpha = Math.max(0, a); cx.fillStyle = p.color; cx.strokeStyle = p.color;
+      const sz = p.size * (0.4 + 0.6*a);
+      if (p.kind === 'earth') cx.fillRect(p.x - sz, p.y - sz, sz*2, sz*2);
+      else if (p.kind === 'air') { cx.lineWidth = Math.max(1, sz); cx.beginPath(); cx.moveTo(p.x - p.vx*0.03, p.y - p.vy*0.03); cx.lineTo(p.x, p.y); cx.stroke(); }
+      else if (p.kind === 'water') { cx.beginPath(); cx.ellipse(p.x, p.y, sz, sz*1.7, 0, 0, 7); cx.fill(); }
+      else { cx.beginPath(); cx.arc(p.x, p.y, sz, 0, 7); cx.fill(); }
     }
-    cx.globalAlpha = 1;
+    cx.globalAlpha = 1; cx.lineWidth = 1;
   }
   // popups
   for (const p of G.pops) {
