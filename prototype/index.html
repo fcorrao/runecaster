@@ -569,7 +569,7 @@ function draw(t) {
   // red damage flash
   if (t - G.redFlash < 0.25) { cx.globalAlpha = .28 * (1 - (t - G.redFlash)/0.25); cx.fillStyle = '#ef4444'; cx.fillRect(0, 0, W, H); cx.globalAlpha = 1; }
 
-  if (G.over) overlay('YOU FALL', '#f87171',
+  if (G.over) overlay('STRUCK DOWN', '#f87171',
     `score ${G.score.toLocaleString()}   wave ${G.wave}   max combo x${G.maxCombo}   P ${G.hits.perfect} / G ${G.hits.good} / M ${G.hits.miss}`,
     'click to retry');
 }
