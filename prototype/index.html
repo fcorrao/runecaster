@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Runecaster — prototype v0</title>
+<style>
+  body { margin:0; background:#0b0e14; color:#cbd5e1; font:13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #wrap { max-width:1120px; margin:0 auto; padding:10px 10px 24px; }
+  h1 { font-size:15px; margin:6px 0; color:#e2e8f0; letter-spacing:.5px; }
+  #opts { display:flex; flex-wrap:wrap; gap:10px; padding:8px 0; align-items:flex-start; }
+  fieldset { border:1px solid #2a3346; border-radius:8px; padding:4px 10px 6px; margin:0; }
+  legend { color:#7d8aa5; font-size:10.5px; padding:0 4px; }
+  label { cursor:pointer; white-space:nowrap; }
+  input[type=range] { vertical-align:middle; width:110px; }
+  canvas { display:block; border-radius:12px; background:#0d1220; cursor:pointer; }
+  #help { margin-top:10px; color:#8fa0bd; font-size:12px; }
+  #help b { color:#c9d6ee; }
+  #help li { margin:2px 0; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>RUNECASTER — prototype v0 (home-row slice)</h1>
+  <div id="opts">
+    <fieldset><legend>Beat grid (§5 OPEN)</legend>
+      <label><input type="radio" name="grid" value="A" checked> 1 char = 1 beat</label><br>
+      <label><input type="radio" name="grid" value="B"> word fits 4 beats</label>
+    </fieldset>
+    <fieldset><legend>Space (§3 OPEN)</legend>
+      <label><input type="radio" name="space" value="chan" checked> type space (channel)</label><br>
+      <label><input type="radio" name="space" value="auto"> auto-insert</label>
+    </fieldset>
+    <fieldset><legend>Penalty (§6)</legend>
+      <label><input type="radio" name="pen" value="lenient" checked> lenient (learn)</label><br>
+      <label><input type="radio" name="pen" value="strict"> strict fizzle</label>
+    </fieldset>
+    <fieldset><legend>Key set (§7)</legend>
+      <label><input type="radio" name="keys" value="home" checked> home row</label><br>
+      <label><input type="radio" name="keys" value="top"> + top row</label>
+    </fieldset>
+    <fieldset><legend>Tempo (§5 OPEN)</legend>
+      <input id="bpm" type="range" min="60" max="160" value="90"><span id="bpmv">90</span> bpm<br>
+      <label><input type="checkbox" id="cavalry"> cavalry accel (+5%/spell)</label>
+    </fieldset>
+    <fieldset><legend>Audio delay (§8 OPEN)</legend>
+      <input id="delay" type="range" min="-120" max="120" value="0"><span id="delayv">0</span> ms<br>
+      <span style="color:#66738d">shift click sound vs notes</span>
+    </fieldset>
+    <fieldset><legend>Coach</legend>
+      <label><input type="checkbox" id="guide" checked> highlight next lane</label>
+    </fieldset>
+  </div>
+  <canvas id="game" width="1120" height="680"></canvas>
+  <div id="help">
+    <b>Try these (each answers an [OPEN] question):</b>
+    <ul>
+      <li><b>Beat grid:</b> play a 3-letter word, then a 5-6 letter word, in both grid modes. A = cadence stretches with word length; B = fixed 4-beat volley, characters cram (gap shrinks). Which feels like "the enemy's rhythm"?</li>
+      <li><b>Space:</b> wait for a two-word spell ("sad lad"). Type-space makes the gap a beat you play; auto-insert skips it. Does the channel help or interrupt flow?</li>
+      <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
+      <li><b>Cavalry:</b> enable it and survive 4–5 spells as tempo ramps.</li>
+      <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
+      <li><b>Audio delay:</b> if the click and your keystroke feel offset, slide until they fuse.</li>
+    </ul>
+    Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor.
+  </div>
+</div>
+<script>
+'use strict';
+// ================= finger lanes (the core mechanic, §3) =================
+const LANES = [
+  {id:'LP', name:'L pinky',  el:'air',   color:'#a78bfa', keys:'1 Q A Z'},
+  {id:'LR', name:'L ring',   el:'earth', color:'#4ade80', keys:'2 W S X'},
+  {id:'LM', name:'L mid',    el:'water', color:'#38bdf8', keys:'3 E D C'},
+  {id:'LI', name:'L index',  el:'fire',  color:'#fb923c', keys:'4 5 R T F G V B'},
+  {id:'SP', name:'thumb',    el:'space', color:'#94a3b8', keys:'SPACE'},
+  {id:'RI', name:'R index',  el:'fire',  color:'#f97316', keys:'6 7 Y U H J M N'},
+  {id:'RM', name:'R mid',    el:'water', color:'#0ea5e9', keys:'8 I K ,'},
+  {id:'RR', name:'R ring',   el:'earth', color:'#22c55e', keys:'9 O L .'},
+  {id:'RP', name:'R pinky',  el:'air',   color:'#8b5cf6', keys:'0 P ; \''},
+];
+const LANE = Object.fromEntries(LANES.map(l => [l.id, l]));
+const ELC = {fire:'#f97316', water:'#38bdf8', earth:'#4ade80', air:'#a78bfa', space:'#94a3b8'};
+const KEY2LANE = {};
+for (const [id, ks] of Object.entries({
+  LP:'`~1!@qazQAZ', LR:'2@#wsxWSX', LM:'3$%edcEDC', LI:'45$%rtfgvbRTFGBV',
+  RI:'67^&yuhjmnYUHMN', RM:'8*(ik,<I,K', RR:'9_)ol.>O.L', RP:'0-=_+p;\'`~:"`?P',
+})) for (const c of ks) KEY2LANE[c] = id;
+KEY2LANE[' '] = 'SP';
+
+// ================= geometry =================
+const cv = document.getElementById('game'), cx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const LW = 92, SW = 112, GAP = 14;
+const X0 = (W - (8*LW + SW + 2*GAP)) / 2;
+const LNX = {}; { let x = X0; for (const l of LANES) { const w = l.id==='SP' ? SW : LW; if (l.id==='SP') x += GAP; if (l.id==='RI') x += GAP; LNX[l.id] = x + w/2; x += w; } }
+const HIT_Y = 552, TOP_Y = 100, LOOK = 2.2, PXS = (HIT_Y - TOP_Y) / LOOK;
+const PW = 0.055, GW = 0.14, DMG = 18, REST = 1.2, FIT = 4;
+
+// ================= content =================
+const POOL = {
+  home: ['add','all','ask','dad','fall','falls','flag','flags','flask','gala','gash','glad','had','has','halls','hash','lash','lass','lad','lag','sad','salad','slash','glass'],
+  top:  ['quiet','quite','suite','fruit','type','types','write','quote','your','out','our','try','yet','yes','unit','units','until','right','eight','white','tower','towers','power','route','true','pure','pretty','require'],
+};
+const MULTI = {
+  home: ['sad lad','dad had','add all','gala falls'],
+  top:  ['quiet unit','power out','type right','true quote'],
+};
+let lastWord = '';
+function pickWord() {
+  const set = OPT.keys === 'top' ? 'top' : 'home';
+  const pool = set === 'top' ? POOL.top.concat(POOL.home) : POOL.home;
+  let w = '';
+  if (OPT.space === 'chan' && Math.random() < 0.25) w = MULTI[set][Math.floor(Math.random()*MULTI[set].length)];
+  else w = pool[Math.floor(Math.random()*pool.length)];
+  if (w === lastWord) return pickWord();
+  lastWord = w; return w;
+}
+
+// ================= options =================
+const OPT = {};
+function syncOpts() {
+  OPT.grid = document.querySelector('input[name=grid]:checked').value;
+  OPT.space = document.querySelector('input[name=space]:checked').value;
+  OPT.pen = document.querySelector('input[name=pen]:checked').value;
+  OPT.keys = document.querySelector('input[name=keys]:checked').value;
+  OPT.cavalry = document.getElementById('cavalry').checked;
+  OPT.guide = document.getElementById('guide').checked;
+  OPT.delay = +document.getElementById('delay').value;
+  document.getElementById('delayv').textContent = OPT.delay;
+  // NOTE: never touch G.bpm here — the bpm slider's own input/change
+  // handlers apply it, and a cavalry ramp must survive toggling options.
+}
+document.querySelectorAll('#opts input').forEach(i => i.addEventListener('change', () => {
+  if (i.id === 'bpm') { document.getElementById('bpmv').textContent = i.value; if (G) G.bpm = +i.value; }
+  syncOpts();
+}));
+document.getElementById('bpm').addEventListener('input', () => { document.getElementById('bpmv').textContent = document.getElementById('bpm').value; if (G) G.bpm = +document.getElementById('bpm').value; });
+
+// ================= audio (beat = enemy heartbeat) =================
+let AC = null;
+function beep(t, f, dur, type, vol) {
+  if (!AC || t < AC.currentTime) t = AC.currentTime;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = f;
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(AC.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+function hitSnd(g) { if (AC) { const t = AC.currentTime; beep(t, g==='perfect'?880:620, .07, 'triangle', .18); } }
+function wrongSnd() { if (AC) { const t = AC.currentTime; beep(t, 160, .12, 'square', .12); } }
+function fizzleSnd() { if (AC) { const t = AC.currentTime; const o = AC.createOscillator(), g = AC.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(400,t); o.frequency.exponentialRampToValueAtTime(60,t+.4); g.gain.setValueAtTime(.15,t); g.gain.exponentialRampToValueAtTime(.001,t+.4); o.connect(g).connect(AC.destination); o.start(t); o.stop(t+.45); } }
+function castSnd(el, power) {
+  if (!AC) return; const t = AC.currentTime + 0.02;
+  const base = {fire:196, water:220, earth:165, air:247, space:220}[el] || 220;
+  const vol = 0.06 + 0.12 * power;
+  for (const [i, m] of [1, 1.25, 1.5].entries()) beep(t + i*0.03, base*m, 0.5, 'triangle', vol);
+}
+
+// ================= state =================
+let G = null, started = false;
+function newGame() {
+  G = {
+    bpm: +document.getElementById('bpm').value, hp: 100, score: 0, combo: 0, maxCombo: 0,
+    hits: {perfect:0, good:0, miss:0}, spells: [], nextT0: 0, beatIdx: 0, nextBeat: 0,
+    pops: [], fx: [], flash: null, redFlash: 0, over: false,
+  };
+}
+function startRun() {
+  G.nextBeat = AC.currentTime + 0.1;
+  G.nextT0 = AC.currentTime + Math.max(LOOK + 0.3, 3 * (60/G.bpm));
+}
+function now() { return AC ? AC.currentTime : performance.now()/1000; }
+function activeSpell() { if (!G) return null; for (const s of G.spells) if (!s.done) return s; return null; }
+window.G = () => G; // debug hook
+
+// ================= scheduling =================
+function makeSpell(t0) {
+  if (OPT.cavalry) G.bpm = Math.min(200, G.bpm * 1.05);
+  const word = pickWord(), beat = 60/G.bpm, chars = [...word];
+  const gap = OPT.grid === 'A' ? beat : (FIT * beat) / chars.length;
+  const runes = []; let k = 0;
+  for (const ch of chars) {
+    if (ch === ' ' && OPT.space === 'auto') continue;
+    runes.push({ ch, lane: KEY2LANE[ch], time: t0 + k*gap, status: 'pending', hitAt: 0 });
+    k++;
+  }
+  const last = runes[runes.length-1];
+  const spell = { word, runes, t0, end: last ? last.time : t0, done: false, fizzled: false, power: 1,
+    arrow: { from: t0 - beat, to: (last ? last.time : t0) + GW + 0.12 } };
+  G.spells.push(spell);
+  if (G.spells.length > 6) G.spells = G.spells.filter(s => !s.done || now() < s.end + 1);
+  const total = OPT.grid === 'A' ? k * gap : FIT * beat;
+  G.nextT0 = t0 + total + REST * beat;
+}
+
+// ================= grading / resolution =================
+function popup(text, color, x, y) { G.pops.push({ text, color, x, y, until: now() + 0.8 }); }
+function teachFlash(r) { const l = LANE[r.lane]; G.flash = { text: `'${r.ch === ' ' ? 'SPACE' : r.ch}' → ${l.name}`, color: l.color, until: now() + 1.0 }; }
+
+function fizzle(sp) {
+  sp.done = true; sp.fizzled = true;
+  G.hp -= DMG; G.combo = 0;
+  popup('FIZZLE', '#f87171', W/2, HIT_Y - 60);
+  G.fx.push({ kind:'ring', color:'#f87171', t0: now(), dur: .5, x: W/2, y: HIT_Y });
+  G.redFlash = now(); fizzleSnd();
+  if (G.hp <= 0) { G.hp = 0; G.over = true; }
+}
+function resolveMiss(sp, r) {
+  r.status = 'miss'; r.hitAt = now();
+  G.combo = 0; G.hits.miss++;
+  popup('MISS', '#f87171', LNX[r.lane], HIT_Y - 30);
+  teachFlash(r);
+  if (OPT.pen === 'strict') fizzle(sp);
+}
+function grade(r, g) {
+  r.status = g; r.hitAt = now();
+  G.combo++; G.maxCombo = Math.max(G.maxCombo, G.combo);
+  const mult = 1 + Math.min(3, G.combo/10);
+  G.score += Math.round((g === 'perfect' ? 100 : 50) * mult);
+  G.hits[g]++;
+  popup(g === 'perfect' ? 'PERFECT' : 'good', g === 'perfect' ? '#fbbf24' : '#4ade80', LNX[r.lane], HIT_Y - 30);
+  G.fx.push({ kind:'ring', color: g==='perfect' ? '#fbbf24' : '#4ade80', t0: now(), dur: .25, x: LNX[r.lane], y: HIT_Y });
+  hitSnd(g);
+}
+function resolveCast(sp) {
+  sp.done = true;
+  let p = 0, g = 0;
+  for (const r of sp.runes) { if (r.status === 'perfect') p++; else if (r.status === 'good') g++; }
+  const elCount = {};
+  for (const r of sp.runes) if (r.lane !== 'SP') { const e = LANE[r.lane].el; elCount[e] = (elCount[e]||0)+1; }
+  const el = Object.entries(elCount).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'space';
+  sp.element = el;
+  sp.power = OPT.pen === 'strict' ? 1 : (sp.runes.length ? (p + 0.6*g) / sp.runes.length : 1);
+  const dmg = Math.round(DMG * (1 - sp.power));
+  if (dmg > 0) {
+    G.hp -= dmg; G.redFlash = now();
+    popup('-' + dmg, '#f87171', W/2, HIT_Y - 60);
+    if (G.hp <= 0) { G.hp = 0; G.over = true; }
+  }
+  G.fx.push({ kind:'ring', color: ELC[el], t0: now(), dur: .45 + .35*sp.power, x: W/2, y: HIT_Y, big: sp.power });
+  popup((el.toUpperCase()) + (sp.power > .99 ? ' — FULL POWER' : ` — ${Math.round(sp.power*100)}%`), ELC[el], W/2, HIT_Y - 85);
+  castSnd(el, sp.power);
+}
+
+// ================= input =================
+addEventListener('keydown', e => {
+  if (e.repeat || !started || !G || G.over) return;
+  const k = e.key === ' ' ? ' ' : (e.key.length === 1 ? e.key.toLowerCase() : null);
+  if (k === null) return;
+  if (k === ' ') e.preventDefault();
+  if (k === ' ' && OPT.space === 'auto') return;
+  const sp = activeSpell(); if (!sp) return;
+  const r = sp.runes.find(r => r.status === 'pending'); if (!r) return;
+  const t = now();
+  if (k === r.ch) {
+    if (t < r.time - GW) return; // too early: ignore, rune stays pending (§5: the deadline, not the beat, is the gate)
+    else if (Math.abs(t - r.time) <= PW) grade(r, 'perfect');
+    else grade(r, 'good');
+  } else {
+    G.combo = 0;
+    popup('WRONG', '#f87171', LNX[r.lane], HIT_Y - 30);
+    teachFlash(r); wrongSnd();
+    if (OPT.pen === 'strict') fizzle(sp);
+  }
+});
+cv.addEventListener('click', () => {
+  if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); }
+  AC.resume();
+  if (!started) { started = true; newGame(); syncOpts(); startRun(); }
+  else if (G.over) { newGame(); syncOpts(); startRun(); }
+});
+
+// ================= frame =================
+function frame() {
+  requestAnimationFrame(frame);
+  if (!started || !G) { drawIdle(); return; }
+  const t = now();
+  if (!G.over) {
+    // metronome = enemy heartbeat
+    while (G.nextBeat < t + 0.15) {
+      const at = G.nextBeat + OPT.delay/1000;
+      beep(at, G.beatIdx % 4 === 0 ? 1400 : 900, .04, 'square', G.beatIdx % 4 === 0 ? .1 : .05);
+      G.beatIdx++; G.nextBeat += 60/G.bpm;
+    }
+    while (G.nextT0 < t + LOOK + 0.05) makeSpell(G.nextT0);
+    const sp = activeSpell();
+    if (sp) for (const r of sp.runes) if (r.status === 'pending' && t > r.time + GW) resolveMiss(sp, r);
+    for (const s of G.spells) if (!s.done && s.runes.every(r => r.status !== 'pending')) resolveCast(s);
+  }
+  G.pops = G.pops.filter(p => p.until > t);
+  G.fx = G.fx.filter(f => t < f.t0 + f.dur);
+  if (G.flash && G.flash.until < t) G.flash = null;
+  draw(t);
+}
+requestAnimationFrame(frame);
+
+// ================= drawing =================
+function rr(x, y, w, h, r) { cx.beginPath(); cx.roundRect(x, y, w, h, r); }
+function noteY(r, t) { return HIT_Y - (r.time - t) * PXS; }
+
+function draw(t) {
+  cx.clearRect(0, 0, W, H);
+  const beat = 60/G.bpm, phase = ((t % beat) + beat) % beat / beat;
+
+  // lane columns
+  for (const l of LANES) {
+    const w = l.id === 'SP' ? SW : LW, x = LNX[l.id] - w/2;
+    const sp = activeSpell();
+    const guide = OPT.guide && sp && sp.runes.find(r => r.status === 'pending');
+    const lit = guide && guide.lane === l.id;
+    cx.fillStyle = l.color;
+    cx.globalAlpha = lit ? 0.13 : 0.045;
+    rr(x, TOP_Y - 30, w, H - TOP_Y - 30, 8); cx.fill();
+    cx.globalAlpha = 1;
+    // header: element + finger
+    cx.textAlign = 'center';
+    cx.fillStyle = l.color; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
+    cx.fillText(l.id === 'SP' ? '—' : l.el.toUpperCase(), LNX[l.id], TOP_Y - 42);
+  }
+
+  // hit line (glows on beat)
+  cx.strokeStyle = '#e2e8f0';
+  cx.globalAlpha = 0.9 - 0.35 * phase;
+  cx.lineWidth = 2 + 3 * (1 - phase);
+  cx.beginPath(); cx.moveTo(X0 - 12, HIT_Y); cx.lineTo(X0 + 8*LW + SW + 2*GAP + 12, HIT_Y); cx.stroke();
+  cx.globalAlpha = 1; cx.lineWidth = 1;
+
+  // keycap strip (finger teaching legend)
+  for (const l of LANES) {
+    const w = l.id === 'SP' ? SW : LW, x = LNX[l.id] - w/2;
+    cx.strokeStyle = l.color; cx.globalAlpha = .55;
+    rr(x + 4, HIT_Y + 16, w - 8, 58, 8); cx.stroke();
+    cx.globalAlpha = 1;
+    cx.fillStyle = l.color; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
+    cx.fillText(l.name, LNX[l.id], HIT_Y + 32);
+    cx.fillStyle = '#8fa0bd'; cx.font = '9.5px ui-monospace, Menlo, monospace';
+    cx.fillText(l.keys, LNX[l.id], HIT_Y + 48);
+  }
+
+  // spells: connectors + runes
+  for (const s of G.spells) {
+    cx.strokeStyle = '#3b4763'; cx.lineWidth = 2; cx.beginPath();
+    for (let i = 0; i < s.runes.length - 1; i++) {
+      const a = s.runes[i], b = s.runes[i+1];
+      const ya = noteY(a, t), yb = noteY(b, t);
+      if (ya > -60 && yb < H) { cx.moveTo(LNX[a.lane], ya); cx.lineTo(LNX[b.lane], yb); }
+    }
+    cx.stroke();
+    for (const r of s.runes) {
+      const y = noteY(r, t); if (y < -60 || y > H + 40) continue;
+      const l = LANE[r.lane];
+      if (r.status === 'pending') {
+        cx.fillStyle = l.color;
+        rr(LNX[r.lane] - 26, y - 26, 52, 52, 10); cx.fill();
+        cx.fillStyle = '#0b0e14'; cx.font = 'bold 26px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
+        cx.fillText(r.ch === ' ' ? '␣' : r.ch, LNX[r.lane], y + 9);
+      } else if (r.hitAt && t - r.hitAt < 0.25) {
+        const a = 1 - (t - r.hitAt) / 0.25;
+        cx.globalAlpha = a * .8;
+        cx.strokeStyle = r.status === 'miss' ? '#f87171' : l.color;
+        cx.lineWidth = 3;
+        rr(LNX[r.lane] - 26 - 12*(1-a), y - 26 - 12*(1-a), 52 + 24*(1-a), 52 + 24*(1-a), 10); cx.stroke();
+        cx.globalAlpha = 1; cx.lineWidth = 1;
+      }
+    }
+    // arrow: the volley closing in
+    if (!s.fizzled) {
+      const p = Math.max(0, Math.min(1, (t - s.arrow.from) / (s.arrow.to - s.arrow.from)));
+      const ay = 96 + p * (HIT_Y - 96);
+      cx.strokeStyle = '#f87171'; cx.lineWidth = 2;
+      cx.beginPath(); cx.moveTo(W/2, 96); cx.lineTo(W/2, ay); cx.stroke();
+      cx.fillStyle = '#f87171';
+      cx.beginPath(); cx.moveTo(W/2, ay + 10); cx.lineTo(W/2 - 6, ay - 2); cx.lineTo(W/2 + 6, ay - 2); cx.fill();
+      cx.lineWidth = 1;
+    }
+  }
+
+  // enemy (archer) — pulses on beat
+  const eR = 26 + 6 * (1 - phase);
+  cx.fillStyle = '#38bdf8'; cx.globalAlpha = .25 + .3 * (1 - phase);
+  cx.beginPath(); cx.arc(W/2, 66, eR, 0, 7); cx.fill();
+  cx.globalAlpha = 1;
+  cx.fillStyle = '#e2e8f0'; cx.font = 'bold 12px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
+  cx.fillText('ARCHER', W/2, 70);
+
+  // HUD: health
+  cx.fillStyle = '#1c2536'; rr(16, 16, 240, 18, 6); cx.fill();
+  cx.fillStyle = G.hp > 40 ? '#4ade80' : '#f87171';
+  rr(16, 16, 240 * G.hp/100, 18, 6); cx.fill();
+  cx.strokeStyle = '#2a3346'; rr(16, 16, 240, 18, 6); cx.stroke();
+  cx.fillStyle = '#0b0e14'; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
+  cx.fillText('HP ' + G.hp, 24, 29);
+
+  // HUD: score / combo / bpm
+  cx.textAlign = 'right'; cx.fillStyle = '#e2e8f0'; cx.font = 'bold 14px ui-monospace, Menlo, monospace';
+  cx.fillText(G.score.toLocaleString(), W - 16, 30);
+  if (G.combo > 1) { cx.fillStyle = '#fbbf24'; cx.font = 'bold 18px ui-monospace, Menlo, monospace'; cx.fillText('x' + G.combo, W - 16, 54); }
+  cx.fillStyle = '#66738d'; cx.font = '11px ui-monospace, Menlo, monospace';
+  cx.fillText(Math.round(G.bpm) + ' bpm' + (OPT.cavalry ? ' (cavalry)' : ''), W - 16, 72);
+
+  // current word, graded
+  const sp = activeSpell();
+  if (sp) {
+    cx.textAlign = 'center'; cx.font = 'bold 22px ui-monospace, Menlo, monospace';
+    const col = { pending:'#8fa0bd', perfect:'#fbbf24', good:'#4ade80', miss:'#f87171' };
+    let ri = 0; const segs = [];
+    for (const c of [...sp.word]) {
+      if (c === ' ' && OPT.space === 'auto') { segs.push({ c:'␣', s:'pending' }); continue; }
+      segs.push({ c: c === ' ' ? '␣' : c, s: sp.runes[ri] ? sp.runes[ri].status : 'pending' }); ri++;
+    }
+    const total = segs.reduce((a, s) => a + cx.measureText(s.c).width + 2, 0);
+    let x = W/2 - total/2;
+    for (const s of segs) { const w = cx.measureText(s.c).width; cx.fillStyle = col[s.s]; cx.fillText(s.c, x + w/2, 92); x += w + 2; }
+  }
+
+  // fx rings
+  for (const f of G.fx) {
+    const p = (t - f.t0) / f.dur;
+    cx.globalAlpha = 1 - p; cx.strokeStyle = f.color; cx.lineWidth = 3;
+    cx.beginPath(); cx.arc(f.x, f.y, (f.big ? 40 : 20) + p * (f.big ? 120 : 50), 0, 7); cx.stroke();
+    cx.globalAlpha = 1; cx.lineWidth = 1;
+  }
+  // popups
+  for (const p of G.pops) {
+    const age = (p.until - t) / 0.8;
+    cx.globalAlpha = Math.min(1, age * 1.6);
+    cx.fillStyle = p.color; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
+    cx.fillText(p.text, p.x, p.y - (1 - age) * 26);
+    cx.globalAlpha = 1;
+  }
+  // teach flash
+  if (G.flash) {
+    cx.fillStyle = '#0b0e14'; rr(W/2 - 190, HIT_Y + 88, 380, 34, 8); cx.fill();
+    cx.strokeStyle = G.flash.color; rr(W/2 - 190, HIT_Y + 88, 380, 34, 8); cx.stroke();
+    cx.fillStyle = G.flash.color; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
+    cx.fillText('correct key: ' + G.flash.text, W/2, HIT_Y + 110);
+  }
+  // red damage flash
+  if (t - G.redFlash < 0.25) { cx.globalAlpha = .28 * (1 - (t - G.redFlash)/0.25); cx.fillStyle = '#ef4444'; cx.fillRect(0, 0, W, H); cx.globalAlpha = 1; }
+
+  if (G.over) overlay('YOU FALL', '#f87171',
+    `score ${G.score.toLocaleString()}   max combo x${G.maxCombo}   P ${G.hits.perfect} / G ${G.hits.good} / M ${G.hits.miss}`,
+    'click to retry');
+}
+
+function drawIdle() {
+  cx.clearRect(0, 0, W, H);
+  for (const l of LANES) { cx.fillStyle = l.color; cx.globalAlpha = .1; cx.fillRect(LNX[l.id] - 30, 0, 60, H); }
+  cx.globalAlpha = 1;
+  overlay('RUNECASTER', '#e2e8f0', 'type runes on the beat · lanes are fingers, colors are elements', 'click to start');
+}
+function overlay(title, color, sub, cta) {
+  cx.fillStyle = 'rgba(8,10,16,.82)'; cx.fillRect(0, 0, W, H);
+  cx.textAlign = 'center'; cx.fillStyle = color; cx.font = 'bold 44px ui-monospace, Menlo, monospace';
+  cx.fillText(title, W/2, H/2 - 40);
+  cx.fillStyle = '#8fa0bd'; cx.font = '15px ui-monospace, Menlo, monospace';
+  cx.fillText(sub, W/2, H/2 + 4);
+  cx.fillStyle = '#e2e8f0'; cx.font = 'bold 16px ui-monospace, Menlo, monospace';
+  cx.fillText(cta, W/2, H/2 + 44);
+}
+</script>
+</body>
+</html>
