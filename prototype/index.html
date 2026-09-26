@@ -57,7 +57,7 @@
       <li><b>Beat grid:</b> play a 3-letter word, then a 5-6 letter word, in both grid modes. A = cadence stretches with word length; B = fixed 4-beat volley, characters cram (gap shrinks). Which feels like "the enemy's rhythm"?</li>
       <li><b>Space:</b> wait for a two-word spell ("sad lad"). Type-space makes the gap a beat you play; auto-insert skips it. Does the channel help or interrupt flow?</li>
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
-      <li><b>Cavalry:</b> enable it and survive 4–5 spells as tempo ramps.</li>
+      <li><b>Cast feel:</b> watch the word-bolt hit the archer — does the element color + impact sell "you cast a spell"? Waves tighten +4 bpm each; is the fight loop compelling?</li>
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
       <li><b>Audio delay:</b> if the click and your keystroke feel offset, slide until they fuse.</li>
     </ul>
@@ -95,6 +95,7 @@ const X0 = (W - (8*LW + SW + 2*GAP)) / 2;
 const LNX = {}; { let x = X0; for (const l of LANES) { const w = l.id==='SP' ? SW : LW; if (l.id==='SP') x += GAP; if (l.id==='RI') x += GAP; LNX[l.id] = x + w/2; x += w; } }
 const HIT_Y = 552, TOP_Y = 100, LOOK = 2.2, PXS = (HIT_Y - TOP_Y) / LOOK;
 const PW = 0.055, GW = 0.14, DMG = 18, REST = 1.2, FIT = 4;
+const ENEMY_HP = 24, WAVE_BPM = 4, BOLT_F = 0.38, ARROW_F = 0.45; // casting feel: bolt flight, enemy-arrow flight
 
 // ================= content =================
 const POOL = {
@@ -149,11 +150,30 @@ function beep(t, f, dur, type, vol) {
 function hitSnd(g) { if (AC) { const t = AC.currentTime; beep(t, g==='perfect'?880:620, .07, 'triangle', .18); } }
 function wrongSnd() { if (AC) { const t = AC.currentTime; beep(t, 160, .12, 'square', .12); } }
 function fizzleSnd() { if (AC) { const t = AC.currentTime; const o = AC.createOscillator(), g = AC.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(400,t); o.frequency.exponentialRampToValueAtTime(60,t+.4); g.gain.setValueAtTime(.15,t); g.gain.exponentialRampToValueAtTime(.001,t+.4); o.connect(g).connect(AC.destination); o.start(t); o.stop(t+.45); } }
+const CAST_TIMBRE = { fire:'sawtooth', water:'sine', earth:'triangle', air:'square', space:'triangle' };
 function castSnd(el, power) {
   if (!AC) return; const t = AC.currentTime + 0.02;
   const base = {fire:196, water:220, earth:165, air:247, space:220}[el] || 220;
   const vol = 0.06 + 0.12 * power;
-  for (const [i, m] of [1, 1.25, 1.5].entries()) beep(t + i*0.03, base*m, 0.5, 'triangle', vol);
+  const wave = CAST_TIMBRE[el] || 'triangle';
+  for (const [i, m] of [1, 1.25, 1.5].entries()) beep(t + i*0.03, base*m, 0.5, wave, vol);
+}
+function impactSnd(power) { // bolt landing on the archer
+  if (!AC) return; const t = AC.currentTime;
+  beep(t, 90 + 60*power, 0.16, 'sine', 0.22 + 0.15*power);
+  beep(t + 0.015, 180, 0.07, 'triangle', 0.10);
+}
+function whooshSnd() { // enemy arrow in flight
+  if (!AC) return; const t = AC.currentTime;
+  const len = 0.22, buf = AC.createBuffer(1, AC.sampleRate*len, AC.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * (1 - i/d.length);
+  const src = AC.createBufferSource(), g = AC.createGain(), f = AC.createBiquadFilter();
+  src.buffer = buf; f.type = 'bandpass'; f.frequency.value = 1600; f.Q.value = 0.8;
+  g.gain.value = 0.12; src.connect(f).connect(g).connect(AC.destination); src.start(t);
+}
+function thudSnd() { // enemy arrow hitting you
+  if (!AC) return; const t = AC.currentTime;
+  beep(t, 70, 0.2, 'sine', 0.3); beep(t, 210, 0.09, 'square', 0.08);
 }
 
 // ================= state =================
@@ -163,6 +183,9 @@ function newGame() {
     bpm: +document.getElementById('bpm').value, hp: 100, score: 0, combo: 0, maxCombo: 0,
     hits: {perfect:0, good:0, miss:0}, spells: [], nextT0: 0, beatIdx: 0, nextBeat: 0,
     pops: [], fx: [], flash: null, redFlash: 0, over: false,
+    // effects: enemy with hp/waves, in-flight spell bolts, enemy arrow strikes, particles
+    enemyHp: ENEMY_HP, wave: 1, bolts: [], strikes: [], parts: [],
+    shake: 0, archFlash: 0, lastT: 0,
   };
 }
 function startRun() {
@@ -196,14 +219,23 @@ function makeSpell(t0) {
 // ================= grading / resolution =================
 function popup(text, color, x, y) { G.pops.push({ text, color, x, y, until: now() + 0.8 }); }
 function teachFlash(r) { const l = LANE[r.lane]; G.flash = { text: `'${r.ch === ' ' ? 'SPACE' : r.ch}' → ${l.name}`, color: l.color, until: now() + 1.0 }; }
+function burst(x, y, color, n, spd) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, v = spd * (0.3 + Math.random() * 0.7);
+    G.parts.push({ x, y, vx: Math.cos(a)*v, vy: Math.sin(a)*v, color, size: 1.5 + Math.random()*3, born: now(), ttl: 0.35 + Math.random()*0.4 });
+  }
+  if (G.parts.length > 600) G.parts.splice(0, G.parts.length - 600);
+}
 
 function fizzle(sp) {
   sp.done = true; sp.fizzled = true;
-  G.hp -= DMG; G.combo = 0;
+  G.combo = 0;
   popup('FIZZLE', '#f87171', W/2, HIT_Y - 60);
   G.fx.push({ kind:'ring', color:'#f87171', t0: now(), dur: .5, x: W/2, y: HIT_Y });
-  G.redFlash = now(); fizzleSnd();
-  if (G.hp <= 0) { G.hp = 0; G.over = true; }
+  fizzleSnd();
+  // the archer counters: an arrow flies down; the hit lands when it arrives
+  G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: DMG });
+  whooshSnd();
 }
 function resolveMiss(sp, r) {
   r.status = 'miss'; r.hitAt = now();
@@ -220,6 +252,7 @@ function grade(r, g) {
   G.hits[g]++;
   popup(g === 'perfect' ? 'PERFECT' : 'good', g === 'perfect' ? '#fbbf24' : '#4ade80', LNX[r.lane], HIT_Y - 30);
   G.fx.push({ kind:'ring', color: g==='perfect' ? '#fbbf24' : '#4ade80', t0: now(), dur: .25, x: LNX[r.lane], y: HIT_Y });
+  burst(LNX[r.lane], HIT_Y, g === 'perfect' ? '#fbbf24' : '#4ade80', g === 'perfect' ? 12 : 5, 150);
   hitSnd(g);
 }
 function resolveCast(sp) {
@@ -231,15 +264,48 @@ function resolveCast(sp) {
   const el = Object.entries(elCount).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'space';
   sp.element = el;
   sp.power = OPT.pen === 'strict' ? 1 : (sp.runes.length ? (p + 0.6*g) / sp.runes.length : 1);
-  const dmg = Math.round(DMG * (1 - sp.power));
-  if (dmg > 0) {
-    G.hp -= dmg; G.redFlash = now();
-    popup('-' + dmg, '#f87171', W/2, HIT_Y - 60);
+  // spell quality → effect: power 0 = dead cast, the arrow lands whole (§6);
+  // partial power launches a weak bolt whose guard leak lands on impact
+  if (sp.power <= 0) {
+    popup('FIZZLE', '#f87171', W/2, HIT_Y - 60);
+    fizzleSnd();
+    G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: DMG });
+    whooshSnd();
+  } else {
+    G.bolts.push({ word: sp.word, el, power: sp.power, t0: now(), at: now() + BOLT_F });
+    G.fx.push({ kind:'ring', color: ELC[el], t0: now(), dur: .45 + .35*sp.power, x: W/2, y: HIT_Y, big: sp.power });
+    popup((el.toUpperCase()) + (sp.power > .99 ? ' — FULL POWER' : ` — ${Math.round(sp.power*100)}%`), ELC[el], W/2, HIT_Y - 85);
+    castSnd(el, sp.power);
+  }
+}
+function applyImpact(b) { // spell bolt reached the archer
+  const dmg = Math.round(8 * b.power); // ENEMY_HP/8 = casts-per-wave at full power
+  G.enemyHp -= dmg;
+  G.archFlash = now();
+  G.shake = Math.max(G.shake, 3 + 7*b.power);
+  impactSnd(b.power);
+  burst(W/2, 66, ELC[b.el], 14 + Math.round(22*b.power), 180 + 240*b.power);
+  // a weak counter lets partial damage through — the cast happened, the guard didn't
+  const leak = Math.round(DMG * (1 - b.power));
+  if (leak > 0) {
+    G.hp -= leak; G.redFlash = now();
+    popup('-' + leak, '#f87171', W/2, HIT_Y - 60);
     if (G.hp <= 0) { G.hp = 0; G.over = true; }
   }
-  G.fx.push({ kind:'ring', color: ELC[el], t0: now(), dur: .45 + .35*sp.power, x: W/2, y: HIT_Y, big: sp.power });
-  popup((el.toUpperCase()) + (sp.power > .99 ? ' — FULL POWER' : ` — ${Math.round(sp.power*100)}%`), ELC[el], W/2, HIT_Y - 85);
-  castSnd(el, sp.power);
+  if (G.enemyHp <= 0) { // wave cleared: the line reforms, tempo tightens (§7 curve)
+    G.wave++; G.enemyHp = ENEMY_HP;
+    G.bpm = Math.min(200, G.bpm + WAVE_BPM);
+    popup('WAVE ' + G.wave, '#fbbf24', W/2, 150);
+    burst(W/2, 66, '#fbbf24', 60, 340);
+    G.shake = 12;
+  }
+}
+function applyStrike(s) { // enemy arrow reached you
+  G.hp -= s.dmg; G.redFlash = now();
+  G.shake = Math.max(G.shake, 9);
+  thudSnd();
+  burst(140, 40, '#f87171', 16, 200);
+  if (G.hp <= 0) { G.hp = 0; G.over = true; }
 }
 
 // ================= input =================
@@ -287,6 +353,14 @@ function frame() {
     if (sp) for (const r of sp.runes) if (r.status === 'pending' && t > r.time + GW) resolveMiss(sp, r);
     for (const s of G.spells) if (!s.done && s.runes.every(r => r.status !== 'pending')) resolveCast(s);
   }
+  // effects: dt-driven motion for bolts, arrows, particles, shake
+  const dt = G.lastT ? Math.min(0.05, t - G.lastT) : 0.016; G.lastT = t;
+  if (G.bolts.length) { for (const b of G.bolts) if (t >= b.at) applyImpact(b); G.bolts = G.bolts.filter(b => t < b.at); }
+  if (G.strikes.length) { for (const s of G.strikes) if (t >= s.at) applyStrike(s); G.strikes = G.strikes.filter(s => t < s.at); }
+  const decay = Math.exp(-2.5*dt), drag = Math.exp(-8*dt);
+  for (const p of G.parts) { p.x += p.vx*dt; p.y += p.vy*dt; p.vx *= decay; p.vy *= decay; }
+  if (G.parts.length) G.parts = G.parts.filter(p => t - p.born < p.ttl);
+  if (G.shake > 0.2) G.shake *= drag; else G.shake = 0;
   G.pops = G.pops.filter(p => p.until > t);
   G.fx = G.fx.filter(f => t < f.t0 + f.dur);
   if (G.flash && G.flash.until < t) G.flash = null;
@@ -301,6 +375,8 @@ function noteY(r, t) { return HIT_Y - (r.time - t) * PXS; }
 function draw(t) {
   cx.clearRect(0, 0, W, H);
   const beat = 60/G.bpm, phase = ((t % beat) + beat) % beat / beat;
+  const shaking = G.shake > 0.2;
+  if (shaking) { cx.save(); cx.translate((Math.random()-.5)*2*G.shake, (Math.random()-.5)*2*G.shake); }
 
   // lane columns
   for (const l of LANES) {
@@ -350,8 +426,14 @@ function draw(t) {
       const y = noteY(r, t); if (y < -60 || y > H + 40) continue;
       const l = LANE[r.lane];
       if (r.status === 'pending') {
+        const gr = cx.createLinearGradient(0, y - 78, 0, y - 26); // elemental comet trail
+        gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, l.color + '59');
+        cx.fillStyle = gr;
+        cx.fillRect(LNX[r.lane] - 14, y - 78, 28, 52);
+        cx.shadowColor = l.color; cx.shadowBlur = 16;
         cx.fillStyle = l.color;
         rr(LNX[r.lane] - 26, y - 26, 52, 52, 10); cx.fill();
+        cx.shadowBlur = 0;
         cx.fillStyle = '#0b0e14'; cx.font = 'bold 26px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
         cx.fillText(r.ch === ' ' ? '␣' : r.ch, LNX[r.lane], y + 9);
       } else if (r.hitAt && t - r.hitAt < 0.25) {
@@ -375,13 +457,25 @@ function draw(t) {
     }
   }
 
-  // enemy (archer) — pulses on beat
-  const eR = 26 + 6 * (1 - phase);
+  // enemy (archer) — pulses on beat, flashes when a bolt connects
+  const fl = G.archFlash ? t - G.archFlash : 9;
+  const eR = 26 + 6 * (1 - phase) + (fl < 0.22 ? 10 * (1 - fl/0.22) : 0);
   cx.fillStyle = '#38bdf8'; cx.globalAlpha = .25 + .3 * (1 - phase);
   cx.beginPath(); cx.arc(W/2, 66, eR, 0, 7); cx.fill();
+  if (fl < 0.22) {
+    cx.globalAlpha = 0.9 * (1 - fl/0.22); cx.fillStyle = '#ffffff';
+    cx.beginPath(); cx.arc(W/2, 66, eR - 6, 0, 7); cx.fill();
+  }
   cx.globalAlpha = 1;
   cx.fillStyle = '#e2e8f0'; cx.font = 'bold 12px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
   cx.fillText('ARCHER', W/2, 70);
+
+  // HUD: enemy health + wave (top-right, opposite the player's)
+  cx.fillStyle = '#1c2536'; rr(W - 256, 84, 240, 12, 5); cx.fill();
+  cx.fillStyle = '#f87171'; rr(W - 256, 84, 240 * Math.max(0, G.enemyHp)/ENEMY_HP, 12, 5); cx.fill();
+  cx.strokeStyle = '#2a3346'; rr(W - 256, 84, 240, 12, 5); cx.stroke();
+  cx.fillStyle = '#cbd5e1'; cx.font = 'bold 9.5px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
+  cx.fillText('ARCHER · wave ' + G.wave, W - 250, 93);
 
   // HUD: health
   cx.fillStyle = '#1c2536'; rr(16, 16, 240, 18, 6); cx.fill();
@@ -420,6 +514,39 @@ function draw(t) {
     cx.beginPath(); cx.arc(f.x, f.y, (f.big ? 40 : 20) + p * (f.big ? 120 : 50), 0, 7); cx.stroke();
     cx.globalAlpha = 1; cx.lineWidth = 1;
   }
+  // spell bolts in flight: the cast word streaks up at the archer
+  for (const b of G.bolts) {
+    const p = (t - b.t0) / (b.at - b.t0), e = ELC[b.el];
+    const by = HIT_Y - 26 - p * (HIT_Y - 26 - 78);
+    cx.strokeStyle = e; cx.globalAlpha = .5; cx.lineWidth = 3;
+    cx.beginPath(); cx.moveTo(W/2, HIT_Y - 26); cx.lineTo(W/2, by + 10); cx.stroke();
+    cx.globalAlpha = 1; cx.lineWidth = 1;
+    cx.shadowColor = e; cx.shadowBlur = 18;
+    cx.fillStyle = e; cx.font = 'bold ' + (16 + Math.round(10*b.power)) + 'px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
+    cx.fillText(b.word, W/2, by);
+    cx.shadowBlur = 0;
+  }
+  // enemy arrows in flight (fizzle counterattack) — accelerating toward the HP bar
+  for (const s of G.strikes) {
+    const p = Math.min(1, (t - s.t0) / (s.at - s.t0)), e = p * p;
+    const ax = W/2 + (150 - W/2) * e, ay = 96 + (26 - 96) * e, ang = Math.atan2(26 - 96, 150 - W/2);
+    cx.save(); cx.translate(ax, ay); cx.rotate(ang);
+    cx.strokeStyle = '#f87171'; cx.lineWidth = 3;
+    cx.beginPath(); cx.moveTo(-28, 0); cx.lineTo(4, 0); cx.stroke();
+    cx.fillStyle = '#f87171';
+    cx.beginPath(); cx.moveTo(12, 0); cx.lineTo(2, -5); cx.lineTo(2, 5); cx.fill();
+    cx.beginPath(); cx.moveTo(-28, 0); cx.lineTo(-20, -4); cx.moveTo(-28, 0); cx.lineTo(-20, 4); cx.stroke();
+    cx.restore();
+  }
+  // particles
+  if (G.parts.length) {
+    for (const p of G.parts) {
+      const a = 1 - (t - p.born) / p.ttl;
+      cx.globalAlpha = Math.max(0, a); cx.fillStyle = p.color;
+      cx.beginPath(); cx.arc(p.x, p.y, p.size * (0.4 + 0.6*a), 0, 7); cx.fill();
+    }
+    cx.globalAlpha = 1;
+  }
   // popups
   for (const p of G.pops) {
     const age = (p.until - t) / 0.8;
@@ -435,11 +562,12 @@ function draw(t) {
     cx.fillStyle = G.flash.color; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
     cx.fillText('correct key: ' + G.flash.text, W/2, HIT_Y + 110);
   }
+  if (shaking) cx.restore(); // full-screen overlays draw unshaken
   // red damage flash
   if (t - G.redFlash < 0.25) { cx.globalAlpha = .28 * (1 - (t - G.redFlash)/0.25); cx.fillStyle = '#ef4444'; cx.fillRect(0, 0, W, H); cx.globalAlpha = 1; }
 
   if (G.over) overlay('YOU FALL', '#f87171',
-    `score ${G.score.toLocaleString()}   max combo x${G.maxCombo}   P ${G.hits.perfect} / G ${G.hits.good} / M ${G.hits.miss}`,
+    `score ${G.score.toLocaleString()}   wave ${G.wave}   max combo x${G.maxCombo}   P ${G.hits.perfect} / G ${G.hits.good} / M ${G.hits.miss}`,
     'click to retry');
 }
 
