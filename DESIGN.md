@@ -151,6 +151,15 @@ damage. Different enemies = different rhythms.
    it. The deadline, not the beat, is the gate.
 3. **Speed is the difficulty knob.** Tempo (scroll speed) increases over time.
 
+> **Prototype implementation (verified):** every ruling derives from one
+> quantity, `t − r.time`, against two constants (±55 ms perfect window, ±140 ms
+> gate). Presses before the gate — correct key or typo — are unjudged; presses
+> past the deadline lapse the rune on input (`MISS · late`), so the same press
+> quality always gets the same verdict regardless of frame timing. Rune
+> arrivals are snapped to the metronome click grid, and the perfect window is
+> drawn at its true size as a band above the hit line: what you see is what
+> grades.
+
 **Tempo:** **[OPEN]** — fixed per-spell with a difficulty selector, or
 adaptive? Constrained either way: cavalry (above) accelerates *within* an
 encounter, so the model must support intra-encounter tempo curves.
