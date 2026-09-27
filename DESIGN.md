@@ -331,8 +331,9 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   drops in pitch like slowed tape), so everything is still on the beat when the
   ring closes. **Letters are hidden** while it is open, so slow time is not a
   free read-ahead. The runes keep creeping — that distance is the price of a
-  cast. It won't open while a rune is in its window, and closes itself (free)
-  if one creeps in.
+  cast. Because time is slowed, the ring may open at any moment, even with runes
+  in their windows; it closes itself (free) only when a rune reaches the line,
+  leaving the late half of that rune's window to hit it.
 
   | sigil | name | school | effect | animation |
   |---|---|---|---|---|

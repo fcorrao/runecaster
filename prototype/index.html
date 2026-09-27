@@ -76,7 +76,7 @@
     <ul>
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
-      <li><b>Sigils (thumb):</b> defeating an enemy earns its school's sigil (bosses give 2); three flawless spells earn one too. Press <b>Space</b> and time slows to a crawl (the same slow speed at any tempo; letters are hidden so it can't be used to read ahead), then type the sigil's name from the panel between your hands — <i>wynkai</i> Gale (push the runes back a bar), <i>dunfen</i> Bulwark (block the next strike), <i>moxquo</i> Veil (next 6 runes take any key of the right finger), <i>gamsel</i> Stillwater (next 2 spells 20% slower), <i>vorlum</i> Kindle (next spell at double power). A wrong letter fizzles (charge kept); Space again cancels; if a rune creeps into its window the mode closes itself. The runes keep creeping while you cast — that distance is the price.</li>
+      <li><b>Sigils (thumb):</b> defeating an enemy earns its school's sigil (bosses give 2); three flawless spells earn one too. Press <b>Space</b> and time slows to a crawl (the same slow speed at any tempo; letters are hidden so it can't be used to read ahead), then type the sigil's name from the panel between your hands — <i>wynkai</i> Gale (push the runes back a bar), <i>dunfen</i> Bulwark (block the next strike), <i>moxquo</i> Veil (next 6 runes take any key of the right finger), <i>gamsel</i> Stillwater (next 2 spells 20% slower), <i>vorlum</i> Kindle (next spell at double power). A wrong letter fizzles (charge kept); Space again cancels; the ring can open any time, and closes itself only when a rune reaches the line (you still have the late half of its window to hit it). The runes keep creeping while you cast — that distance is the price.</li>
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
       <li><b>Calibration:</b> if the click doesn't land when the letter crosses the line, slide <i>audio</i>. If your presses sit consistently early/late on the error bar, press "set input from last 20 hits" (or slide <i>input</i>). Both are saved in this browser.</li>
@@ -676,7 +676,7 @@ function grantSigil(key, n, why) {
 function openCast() {
   if (!Object.keys(POWERS).some(k => G.sigils[k] > 0)) { G.castFx = { kind: 'close', at: now(), text: 'no sigils yet — defeat enemies to earn them' }; return; }
   const tg = now() - OPT.inOff / 1000;
-  if (G.spells.some(s => !s.done && s.runes.some(r => r.status === 'pending' && tg >= r.time - GW))) { G.castFx = { kind: 'close', at: now(), text: 'runes in flight — cast between spells' }; return; }
+  if (G.spells.some(s => !s.done && s.runes.some(r => r.status === 'pending' && tg >= r.time))) { G.castFx = { kind: 'close', at: now(), text: 'a rune is on the line — hit it first' }; return; }
   G.cast = { buf: '', at: now(), t: now() };
   castMusicRate(true);
   openSnd();
@@ -830,8 +830,9 @@ function frame(ts) {
       if (r.status === 'pending' && tg > r.time + GW + LAPSE_GRACE) resolveMiss(s, r);
     }
     for (const s of G.spells) if (!s.done && s.runes.every(r => r.status !== 'pending')) resolveCast(s);
-    // cast mode lives in the gaps: it closes itself, free, the moment a rune reaches its window
-    if (G.cast && G.spells.some(s => !s.done && s.runes.some(r => r.status === 'pending' && tg >= r.time - GW))) closeCast('the runes arrive');
+    // time is slowed while casting, so the ring may open any time; it closes itself (free) only when a rune
+    // reaches the line — the late half of that rune's window is still yours to hit it
+    if (G.cast && G.spells.some(s => !s.done && s.runes.some(r => r.status === 'pending' && tg >= r.time))) closeCast('a rune reaches the line');
     if (G.kindle && Math.random() < 0.35) burst(CAST_X, CAST_AY, POWERS.kindle.color, 1, 50, 'fire'); // Kindle smoulders in the hand
   }
   // effects: dt-driven motion for bolts, arrows, particles, shake
