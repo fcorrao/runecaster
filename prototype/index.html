@@ -135,7 +135,7 @@ const HIT_Y = 554, TOP_Y = 138, LOOK = 2.2, PXS = (HIT_Y - TOP_Y) / LOOK;
 // battle stage: bottom quarter of the canvas (under the hit line), sprites live here
 const STAGE_TOP = H - 210, STAGE_H = 210, GROUND_Y = 178, WIZ_X = 190, WIZ_Y = 178, ARC_X = 930, ARC_Y = 178, STAFF_X = 284, STAFF_Y = 28;
 const WIZ_AY = STAGE_TOP + WIZ_Y, ARC_AY = STAGE_TOP + ARC_Y, STAFF_AY = STAGE_TOP + STAFF_Y; // absolute anchors
-const PW = 0.055, GW = 0.14, DMG = 18, REST = 1.2, FIT = 4;
+const PW = 0.055, GW = 0.14, DMG = 18, REST = 1.2, FIT = 4, HEAL = 2;
 const ENEMY_HP = 24, WAVE_BPM = 4, BOLT_F = 0.38, ARROW_F = 0.45; // casting feel: bolt flight, enemy-arrow flight
 
 // ================= content =================
@@ -333,7 +333,8 @@ function grade(r, g, delta) {
   G.score += Math.round((g === 'perfect' ? 100 : 50) * mult);
   G.hits[g]++;
   // tell the learner WHICH way the timing was off (§6: mistakes are lessons)
-  const label = g === 'perfect' ? 'PERFECT' : (delta < 0 ? 'good · early' : 'good · late');
+  let label = g === 'perfect' ? 'PERFECT' : (delta < 0 ? 'good · early' : 'good · late');
+  if (g === 'perfect' && G.hp < 100) { G.hp = Math.min(100, G.hp + HEAL); label += ' +' + HEAL; } // precision heals
   popup(label, g === 'perfect' ? '#fbbf24' : '#4ade80', LNX[r.lane], HIT_Y - 30);
   G.fx.push({ kind:'ring', color: g==='perfect' ? '#fbbf24' : '#4ade80', t0: now(), dur: .25, x: LNX[r.lane], y: HIT_Y });
   burst(LNX[r.lane], HIT_Y, g === 'perfect' ? '#fbbf24' : '#4ade80', g === 'perfect' ? 12 : 5, 150);
@@ -348,9 +349,11 @@ function resolveCast(sp) {
   const el = Object.entries(elCount).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'space';
   sp.element = el;
   sp.power = OPT.pen === 'strict' ? 1 : (sp.runes.length ? (p + 0.6*g) / sp.runes.length : 1);
-  // The enemy's attack is one arrow: a full-power counter deflects it whole,
-  // a weak counter deflects only (power) of it — the rest lands as an arrow
-  // after your bolt connects (§6 penalty ladder, no partial credit fizzle)
+  // Damage model (playtest call): only lapsed runes draw the enemy's arrow —
+  // goods cost spell power, never health; perfects heal. Partial lapses
+  // counter for the missed share of DMG, proportional to how many lapsed.
+  const missed = sp.runes.length - p - g;
+  const counter = Math.round(DMG * missed / (sp.runes.length || 1));
   G.wizCast = { el, until: now() + 0.5 }; // caster raises his staff
   if (sp.power <= 0) {
     popup('FIZZLE', '#f87171', W/2, HIT_Y - 60);
@@ -363,8 +366,8 @@ function resolveCast(sp) {
     G.fx.push({ kind:'ring', color: ELC[el], t0: now(), dur: .45 + .35*sp.power, x: W/2, y: HIT_Y, big: sp.power });
     popup((el.toUpperCase()) + (sp.power > .99 ? ' — FULL POWER' : ` — ${Math.round(sp.power*100)}%`), ELC[el], W/2, HIT_Y - 85);
     castSnd(el, sp.power);
-    const leak = Math.round(DMG * (1 - sp.power));
-    if (leak > 0) G.strikes.push({ t0: now() + BOLT_F, at: now() + BOLT_F + ARROW_F, dmg: leak, why: 'SLOPPY TIMING' });
+    if (counter > 0) G.strikes.push({ t0: now() + BOLT_F, at: now() + BOLT_F + ARROW_F,
+      dmg: counter, why: missed + (missed > 1 ? ' RUNES MISSED' : ' RUNE MISSED') });
   }
 }
 function applyImpact(b) { // spell bolt reached the archer

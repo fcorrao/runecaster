@@ -191,6 +191,14 @@ levels are lenient (fizzle disabled — see penalty ladder 2); later levels are
 harsh (full fizzle, strong enemies). The difficulty curve isn't just "faster
 notes" — it's also "harsher penalties."
 
+> **Prototype decision (playtested):** the damage model is **miss-only,
+> proportional, with perfects healing**. Goods cost spell power but never
+> health ("all good" = zero damage); each lapsed rune draws its share of the
+> enemy's arrow (full lapse = 18, one of four = 5); every perfect *heals* 2.
+> A leaky "sloppy timing" arrow — punishing tempo while the learner is still
+> accuracy-focused — tested hostile and was removed. Perfect-heal makes the
+> accuracy gradient pay directly in survival.
+
 ---
 
 ## 7. Progression
