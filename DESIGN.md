@@ -295,6 +295,15 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   offset, or "set from last 20 hits"). Open: a guided first-run calibration step.
 - **Visual design** — lane rendering, hit line, enemy animation, spell effects,
   element color language.
+
+  > **Prototype answer (art direction): retro-wizard synthwave**, set by the
+  > key art (`prototype/art/splash.jpg`, also the splash screen). Palette
+  > sampled from it: night navy/indigo sky, violet and magenta haze, hot-pink
+  > striped sun behind a gothic castle, neon elements (fire orange, water cyan,
+  > earth green, air violet — the art's Q/W/E/R rune colors). Runes are glowing
+  > element rings with serif glyphs, the hit line a magenta laser, the stage a
+  > vista with a perspective-grid floor, and the enemies an undead host
+  > (skeleton archer, skeletal knight on a spectral horse, crowned lich).
 - **Audio** — the "beat" of the enemy's attack; how is it conveyed (SFX, music,
   screen pulse)?
 

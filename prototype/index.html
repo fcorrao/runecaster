@@ -4,17 +4,20 @@
 <meta charset="utf-8">
 <title>Runecaster — prototype v0</title>
 <style>
-  body { margin:0; background:#0b0e14; color:#cbd5e1; font:13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  body { margin:0; background:#07030f radial-gradient(ellipse at 50% -10%, #2a0f55 0%, #07030f 60%) no-repeat; color:#d9c8f0; font:13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; min-height:100vh; }
   #wrap { max-width:1120px; margin:0 auto; padding:10px 10px 24px; }
-  h1 { font-size:15px; margin:6px 0; color:#e2e8f0; letter-spacing:.5px; }
+  h1 { font:italic 900 18px/1.2 "Trebuchet MS", "Arial Black", sans-serif; margin:6px 0; color:#f3a5e6; letter-spacing:2px; text-shadow:0 0 8px #d225d1, 0 0 18px #5c15bd; }
   #opts { display:flex; flex-wrap:wrap; gap:10px; padding:8px 0; align-items:flex-start; }
-  fieldset { border:1px solid #2a3346; border-radius:8px; padding:4px 10px 6px; margin:0; }
-  legend { color:#7d8aa5; font-size:10.5px; padding:0 4px; }
+  fieldset { border:1px solid #3a1a5e; border-radius:8px; padding:4px 10px 6px; margin:0; background:rgba(20,8,44,.55); box-shadow:inset 0 0 12px rgba(210,37,209,.08); }
+  legend { color:#c77dff; font-size:10.5px; padding:0 4px; text-shadow:0 0 6px #5c15bd; }
   label { cursor:pointer; white-space:nowrap; }
-  input[type=range] { vertical-align:middle; width:110px; }
-  canvas { display:block; border-radius:12px; background:#0d1220; cursor:pointer; }
-  #help { margin-top:10px; color:#8fa0bd; font-size:12px; }
-  #help b { color:#c9d6ee; }
+  input[type=range] { vertical-align:middle; width:110px; accent-color:#d225d1; }
+  input[type=radio], input[type=checkbox] { accent-color:#d225d1; }
+  select, button { background:#14082c; color:#f3a5e6; border:1px solid #5c15bd; border-radius:6px; font:inherit; padding:1px 6px; }
+  button { cursor:pointer; } button:hover { box-shadow:0 0 8px #d225d1; }
+  canvas { display:block; border-radius:12px; background:#07030f; cursor:pointer; box-shadow:0 0 0 1px #3a1a5e, 0 0 40px rgba(210,37,209,.22); }
+  #help { margin-top:12px; color:#a993c9; font-size:12px; }
+  #help b { color:#f3a5e6; }
   #help li { margin:2px 0; }
 </style>
 </head>
@@ -68,18 +71,21 @@
 'use strict';
 // ================= finger lanes (the core mechanic, §3) =================
 const LANES = [
-  {id:'LP', name:'L pinky',  el:'air',   color:'#a78bfa', keys:'1 Q A Z', sym:'`~ 1!'},
-  {id:'LR', name:'L ring',   el:'earth', color:'#4ade80', keys:'2 W S X', sym:'2 @'},
-  {id:'LM', name:'L mid',    el:'water', color:'#38bdf8', keys:'3 E D C', sym:'3 #'},
-  {id:'LI', name:'L index',  el:'fire',  color:'#fb923c', keys:'4 5 R T F G V B', sym:'4$ 5%'},
-  {id:'SP', name:'thumb',    el:'space', color:'#94a3b8', keys:'SPACE', sym:'SPACE'},
-  {id:'RI', name:'R index',  el:'fire',  color:'#f97316', keys:'6 7 Y U H J M N', sym:'6^ 7&'},
-  {id:'RM', name:'R mid',    el:'water', color:'#0ea5e9', keys:'8 I K ,', sym:'8* <'},
-  {id:'RR', name:'R ring',   el:'earth', color:'#22c55e', keys:'9 O L .', sym:'9) >'},
-  {id:'RP', name:'R pinky',  el:'air',   color:'#8b5cf6', keys:'0 P ; \'' , sym:'0) -_ =+ :\' /?'},
+  {id:'LP', name:'L pinky',  el:'air',   color:'#b36bff', keys:'1 Q A Z', sym:'`~ 1!'},
+  {id:'LR', name:'L ring',   el:'earth', color:'#3cf0a0', keys:'2 W S X', sym:'2 @'},
+  {id:'LM', name:'L mid',    el:'water', color:'#38c8ff', keys:'3 E D C', sym:'3 #'},
+  {id:'LI', name:'L index',  el:'fire',  color:'#ff6a3d', keys:'4 5 R T F G V B', sym:'4$ 5%'},
+  {id:'SP', name:'thumb',    el:'space', color:'#f3a5e6', keys:'SPACE', sym:'SPACE'},
+  {id:'RI', name:'R index',  el:'fire',  color:'#ff8a3d', keys:'6 7 Y U H J M N', sym:'6^ 7&'},
+  {id:'RM', name:'R mid',    el:'water', color:'#2fa8ff', keys:'8 I K ,', sym:'8* <'},
+  {id:'RR', name:'R ring',   el:'earth', color:'#22d88a', keys:'9 O L .', sym:'9) >'},
+  {id:'RP', name:'R pinky',  el:'air',   color:'#9b5cff', keys:'0 P ; \'' , sym:'0) -_ =+ :\' /?'},
 ];
 const LANE = Object.fromEntries(LANES.map(l => [l.id, l]));
-const ELC = {fire:'#f97316', water:'#38bdf8', earth:'#4ade80', air:'#a78bfa', space:'#94a3b8'};
+const ELC = {fire:'#ff6a3d', water:'#38c8ff', earth:'#3cf0a0', air:'#b36bff', space:'#f3a5e6'};
+// retro-wizard synthwave palette, sampled from art/splash.jpg
+const PAL = { void:'#07030f', night:'#0c0a3a', indigo:'#1b1280', violet:'#5c15bd', magenta:'#d225d1', pink:'#f96999',
+  blush:'#f3a5e6', wine:'#650a44', crimson:'#d5263f', cyan:'#32b3cd', gold:'#ffcf6b', good:'#3cf0a0', bad:'#ff4d7d', ink:'#0b0618', text:'#e9dcff', dim:'#a993c9' };
 const KEY2LANE = {};
 for (const [id, ks] of Object.entries({
   LP:'`~1!qazQAZ', LR:'2@wsxWSX', LM:'3#edcEDC', LI:'45$%rtfgvbRTFGBV',
@@ -124,8 +130,8 @@ const X0 = (W - (8*LW + SW + 2*GAP)) / 2;
 const LNX = {}; { let x = X0; for (const l of LANES) { const w = l.id==='SP' ? SW : LW; if (l.id==='SP') x += GAP; if (l.id==='RI') x += GAP; LNX[l.id] = x + w/2; x += w; } }
 const HIT_Y = 554, TOP_Y = 138, LOOK = 2.2, PXS = (HIT_Y - TOP_Y) / LOOK;
 // battle stage: bottom quarter of the canvas (under the hit line), sprites live here
-const STAGE_TOP = H - 210, STAGE_H = 210, GROUND_Y = 178, WIZ_X = 190, WIZ_Y = 178, ARC_X = 930, ARC_Y = 178, STAFF_X = 284, STAFF_Y = 28;
-const WIZ_AY = STAGE_TOP + WIZ_Y, ARC_AY = STAGE_TOP + ARC_Y, STAFF_AY = STAGE_TOP + STAFF_Y; // absolute anchors
+const STAGE_TOP = H - 210, STAGE_H = 210, GROUND_Y = 178, WIZ_X = 190, WIZ_Y = 178, ARC_X = 930, ARC_Y = 178, CAST_X = WIZ_X + 64, CAST_Y = WIZ_Y - 88;
+const WIZ_AY = STAGE_TOP + WIZ_Y, ARC_AY = STAGE_TOP + ARC_Y, CAST_AY = STAGE_TOP + CAST_Y; // absolute anchors (CAST = the caster's spell hand)
 const PW = 0.055, GW = 0.14, DMG = 18, REST = 1.2, HEAL = 2;
 const LAPSE_GRACE = 0.05; // frame lapse waits this long past the window so a queued in-window keypress is graded by its own timestamp first
 const EARLY_SHOW = 0.6;   // correct key up to this far before the window says EARLY (with ms); earlier presses are strays
@@ -204,9 +210,9 @@ function chapterAt(ci) { // past the last chapter the Archmage loop repeats, 4 b
 // archers: steady volleys (learn accuracy) · cavalry: the charge accelerates every spell (speed)
 // · boss: incantations follow rhythm patterns, off-beats included (rhythm) — §5 enemy structures
 const ENEMIES = {
-  archer:  { label: 'Archer',  hp: ci => 12 + 4 * ci, dmg: 18, color: '#f87171' },
-  cavalry: { label: 'Cavalry', hp: ci => 18 + 4 * ci, dmg: 18, color: '#fb923c', ramp: 1.04 },
-  boss:    { label: 'Boss',    hp: ci => 28 + 6 * ci, dmg: 24, color: '#c084fc' },
+  archer:  { label: 'Archer',  hp: ci => 12 + 4 * ci, dmg: 18, color: '#ff3d6e' },
+  cavalry: { label: 'Cavalry', hp: ci => 18 + 4 * ci, dmg: 18, color: '#ff8a3d', ramp: 1.04 },
+  boss:    { label: 'Boss',    hp: ci => 28 + 6 * ci, dmg: 24, color: '#c77dff' },
 };
 // boss bars: beat positions inside one 4-beat bar
 const BOSS_BARS = [
@@ -486,8 +492,8 @@ function burst(x, y, color, n, spd, kind) {
 function fizzle(sp) {
   sp.done = true; sp.fizzled = true;
   G.combo = 0;
-  popup('FIZZLE', '#f87171', W/2, HIT_Y - 60);
-  G.fx.push({ kind:'ring', color:'#f87171', t0: now(), dur: .5, x: W/2, y: HIT_Y });
+  popup('FIZZLE', PAL.bad, W/2, HIT_Y - 60);
+  G.fx.push({ kind:'ring', color:PAL.bad, t0: now(), dur: .5, x: W/2, y: HIT_Y });
   fizzleSnd();
   // the archer counters: an arrow flies down; the hit lands when it arrives
   G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: G.enemy.dmg, why: sp.fizzledWrong ? 'WRONG KEY' : 'MISSED RUNE' });
@@ -496,7 +502,7 @@ function fizzle(sp) {
 function resolveMiss(sp, r, note) {
   r.status = 'miss'; r.hitAt = now();
   G.combo = 0; G.hits.miss++;
-  judge(r.lane, 'MISS', note || 'lapsed', '#f87171');
+  judge(r.lane, 'MISS', note || 'lapsed', PAL.bad);
   teachFlash(r);
   if (OPT.pen === 'strict') fizzle(sp);
 }
@@ -509,13 +515,13 @@ function grade(r, g, delta, raw) {
   G.deltas.push({ d: delta, raw, g }); if (G.deltas.length > 200) G.deltas.shift();
   showCalib();
   // tell the learner WHICH way and HOW FAR the timing was off (§6: mistakes are lessons)
-  judge(r.lane, g === 'perfect' ? 'PERFECT' : 'GOOD', fmtMs(delta), g === 'perfect' ? '#fbbf24' : '#4ade80');
+  judge(r.lane, g === 'perfect' ? 'PERFECT' : 'GOOD', fmtMs(delta), g === 'perfect' ? PAL.gold : PAL.good);
   if (g === 'perfect' && G.hp < 100) { // precision heals
     G.hp = Math.min(100, G.hp + HEAL);
-    popup('+' + HEAL + ' HP · PERFECT', '#4ade80', WIZ_X + 30, WIZ_AY - 120);
+    popup('+' + HEAL + ' HP · PERFECT', PAL.good, WIZ_X + 30, WIZ_AY - 120);
   }
-  G.fx.push({ kind:'ring', color: g==='perfect' ? '#fbbf24' : '#4ade80', t0: now(), dur: .25, x: LNX[r.lane], y: HIT_Y });
-  burst(LNX[r.lane], HIT_Y, g === 'perfect' ? '#fbbf24' : '#4ade80', g === 'perfect' ? 12 : 5, 150);
+  G.fx.push({ kind:'ring', color: g==='perfect' ? PAL.gold : PAL.good, t0: now(), dur: .25, x: LNX[r.lane], y: HIT_Y });
+  burst(LNX[r.lane], HIT_Y, g === 'perfect' ? PAL.gold : PAL.good, g === 'perfect' ? 12 : 5, 150);
   hitSnd(g);
 }
 function resolveCast(sp) {
@@ -534,13 +540,13 @@ function resolveCast(sp) {
   const counter = Math.round(G.enemy.dmg * missed / (sp.runes.length || 1));
   G.wizCast = { el, until: now() + 0.5 }; // caster raises his staff
   if (sp.power <= 0) {
-    popup('FIZZLE', '#f87171', W/2, HIT_Y - 60);
+    popup('FIZZLE', PAL.bad, W/2, HIT_Y - 60);
     fizzleSnd();
     G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: G.enemy.dmg, why: 'ALL RUNES LAPSED' });
     whooshSnd();
   } else {
     G.bolts.push({ word: sp.word, el, power: sp.power, t0: now(), at: now() + BOLT_F,
-      x0: STAFF_X, y0: STAFF_AY, x1: ARC_X, y1: ARC_AY - 44, arc: 70 + 60 * sp.power });
+      x0: CAST_X, y0: CAST_AY, x1: ARC_X, y1: ARC_AY - 44, arc: 70 + 60 * sp.power });
     G.fx.push({ kind:'ring', color: ELC[el], t0: now(), dur: .45 + .35*sp.power, x: W/2, y: HIT_Y, big: sp.power });
     popup((el.toUpperCase()) + (sp.power > .99 ? ' — FULL POWER' : ` — ${Math.round(sp.power*100)}%`), ELC[el], W/2, HIT_Y - 85);
     castSnd(el, sp.power);
@@ -555,8 +561,8 @@ function applyImpact(b) { // spell bolt reached the enemy
   G.foeFlash = now();
   burst(ARC_X, ARC_AY - 44, ELC[b.el], 14 + Math.round(22*b.power), 180 + 240*b.power, b.el);
   if (G.enemy.hp <= 0) { // encounter cleared: the enemy falls, the run advances (§7)
-    popup(G.enemy.name.toUpperCase() + ' DEFEATED', '#fbbf24', W/2, 150);
-    burst(ARC_X, ARC_AY - 40, '#fbbf24', 60, 340);
+    popup(G.enemy.name.toUpperCase() + ' DEFEATED', PAL.gold, W/2, 150);
+    burst(ARC_X, ARC_AY - 40, PAL.gold, 60, 340);
     G.shake = 12;
     G.foeDead = now(); G.foeEnter = now() + 0.9;
     G.strikes = []; // a fallen enemy's counters never land
@@ -568,8 +574,8 @@ function applyStrike(s) { // enemy arrow reached the caster — the counter's sh
   G.wizHurt = now();
   G.shake = Math.max(G.shake, 3 + 6 * (s.dmg/DMG));
   thudSnd();
-  burst(WIZ_X + 26, WIZ_AY - 56, '#f87171', 8 + Math.round(10 * s.dmg/DMG), 140 + 120*s.dmg/DMG);
-  popup('-' + s.dmg + (s.why ? ' · ' + s.why : ''), '#f87171', WIZ_X + 30, WIZ_AY - 120);
+  burst(WIZ_X + 26, WIZ_AY - 56, PAL.bad, 8 + Math.round(10 * s.dmg/DMG), 140 + 120*s.dmg/DMG);
+  popup('-' + s.dmg + (s.why ? ' · ' + s.why : ''), PAL.bad, WIZ_X + 30, WIZ_AY - 120);
   if (G.hp <= 0) { G.hp = 0; G.over = true; }
 }
 
@@ -598,11 +604,11 @@ addEventListener('keydown', e => {
   else if (same && d > GW) resolveMiss(same.s, same.r, fmtMs(d)); // past due but not yet lapsed: same press, same verdict
   else if (near) { // a different rune was live: wrong key
     G.combo = 0;
-    judge(near.r.lane, 'WRONG', `'${k === ' ' ? '␣' : k}' ≠ '${near.r.ch === ' ' ? '␣' : near.r.ch}'`, '#f87171');
+    judge(near.r.lane, 'WRONG', `'${k === ' ' ? '␣' : k}' ≠ '${near.r.ch === ' ' ? '␣' : near.r.ch}'`, PAL.bad);
     teachFlash(near.r); wrongSnd();
     if (OPT.pen === 'strict') { near.s.fizzledWrong = true; fizzle(near.s); }
   }
-  else if (same && d >= -GW - EARLY_SHOW) judge(same.r.lane, 'EARLY', fmtMs(d), '#8fa0bd'); // not judged: rune stays live
+  else if (same && d >= -GW - EARLY_SHOW) judge(same.r.lane, 'EARLY', fmtMs(d), PAL.dim); // not judged: rune stays live
   // anything else touched no live rune: no reward, no punishment
 });
 cv.addEventListener('click', () => {
@@ -672,48 +678,68 @@ function nextCharge(t) { // staff crystal tracks the next rune: element + charge
   }
   return null;
 }
-function drawWizard(t, phase) {
+function drawWizard(t, phase) { // long-haired caster, rune-trimmed cloak streaming back, spell hand toward the enemy
   const hurt = t - G.wizHurt, casting = G.wizCast && t < G.wizCast.until;
-  const cp = casting ? 1 - (G.wizCast.until - t) / 0.5 : -1; // 0..1 cast sweep progress
+  const cp = casting ? 1 - (G.wizCast.until - t) / 0.5 : -1; // 0..1 cast thrust progress
   cx.save();
   cx.translate(WIZ_X + (hurt < 0.3 ? -7 * (1 - hurt/0.3) : 0), WIZ_Y + Math.sin(t * 2.2) * 2);
   if (G.over) { cx.translate(-10, 26); cx.rotate(-0.5); } // struck down
-  const castEl = casting ? G.wizCast.el : null;
-  const trim = ELC[castEl] || '#7dd3fc';
-  cx.fillStyle = 'rgba(0,0,0,.4)'; cx.beginPath(); cx.ellipse(0, 3, 38, 7, 0, 0, 7); cx.fill();
-  // staff: snaps up, then sweeps toward the enemy as the bolt flies
-  const sa = cp < 0 ? 0 : (cp < 0.3 ? -0.5 * (cp / 0.3) : -0.5 + 1.05 * ((cp - 0.3) / 0.7));
-  cx.save();
-  cx.translate(10, -40); cx.rotate(sa);
-  cx.strokeStyle = '#6b4f2a'; cx.lineWidth = 5;
-  cx.beginPath(); cx.moveTo(-14, 46); cx.lineTo(94, -146); cx.stroke(); cx.lineWidth = 1;
-  const ch = nextCharge(t);
-  const orbC = ELC[castEl] || ELC[ch && ch.el] || '#7dd3fc';
-  const orbR = 6 + (cp >= 0 ? 9 * Math.sin(Math.min(1, cp * 1.35) * Math.PI) : 2 + 3 * (1 - phase) + (ch ? 3 * ch.c : 0));
-  cx.shadowColor = orbC; cx.shadowBlur = 14 + 12 * (ch ? ch.c : 0) + (cp >= 0 ? 16 : 0);
-  cx.fillStyle = orbC; cx.beginPath(); cx.arc(94, -146, Math.max(2, orbR), 0, 7); cx.fill();
-  cx.shadowBlur = 0;
+  const ch = nextCharge(t), castEl = casting ? G.wizCast.el : null;
+  const orbC = ELC[castEl] || ELC[ch && ch.el] || PAL.pink;
+  const wave = Math.sin(t * 3), wave2 = Math.sin(t * 3 + 1.3);
+  cx.fillStyle = 'rgba(0,0,0,.5)'; cx.beginPath(); cx.ellipse(0, 3, 44, 7, 0, 0, 7); cx.fill();
+  // cloak streaming behind, with the neon rune band of the splash art
+  cx.fillStyle = '#140a2a';
+  cx.beginPath(); cx.moveTo(-4, -80);
+  cx.bezierCurveTo(-40, -76 + wave * 3, -74, -50 + wave * 5, -80, -14 + wave2 * 4);
+  cx.lineTo(-58, 2); cx.lineTo(14, 2); cx.lineTo(10, -60); cx.closePath(); cx.fill();
+  cx.save(); cx.clip();
+  cx.strokeStyle = PAL.magenta; cx.shadowColor = PAL.magenta; cx.shadowBlur = 6; cx.lineWidth = 1.6; cx.globalAlpha = .9;
+  for (let i = 0; i < 5; i++) { // alternating triangles and diamonds along the hem
+    const x = -66 + i * 15, y = -18 + i * 3 + wave2 * 2;
+    cx.beginPath();
+    if (i % 2) { cx.moveTo(x, y - 6); cx.lineTo(x + 6, y); cx.lineTo(x, y + 6); cx.lineTo(x - 6, y); cx.closePath(); }
+    else { cx.moveTo(x - 6, y + 5); cx.lineTo(x, y - 6); cx.lineTo(x + 6, y + 5); cx.closePath(); }
+    cx.stroke();
+  }
+  cx.beginPath(); cx.moveTo(-84, -30 + wave2 * 3); cx.lineTo(10, -4); cx.stroke();
   cx.restore();
-  // robe
-  cx.fillStyle = '#272e52';
-  cx.beginPath();
-  cx.moveTo(-4, -64); cx.bezierCurveTo(-14, -50, -28, -16, -32, 2);
-  cx.lineTo(30, 2); cx.bezierCurveTo(26, -16, 12, -50, 4, -64);
-  cx.closePath(); cx.fill();
-  cx.strokeStyle = trim; cx.globalAlpha = .7; cx.lineWidth = 2.5; // elemental trim
-  cx.beginPath(); cx.moveTo(-32, 2); cx.lineTo(30, 2); cx.stroke();
-  cx.beginPath(); cx.moveTo(-1, -58); cx.lineTo(-11, -8); cx.stroke();
-  cx.globalAlpha = 1; cx.lineWidth = 1;
-  // hood + face void
-  cx.fillStyle = '#272e52';
-  cx.beginPath();
-  cx.moveTo(0, -60); cx.bezierCurveTo(-17, -60, -18, -88, 0, -94);
-  cx.bezierCurveTo(18, -88, 17, -60, 0, -60);
-  cx.closePath(); cx.fill();
-  cx.fillStyle = '#05070c'; cx.beginPath(); cx.ellipse(3, -76, 8, 10, 0, 0, 7); cx.fill();
+  // legs in a casting stance
+  cx.strokeStyle = '#0e0720'; cx.lineCap = 'round'; cx.lineWidth = 9;
+  cx.beginPath(); cx.moveTo(-6, -40); cx.lineTo(-20, 0); cx.moveTo(8, -40); cx.lineTo(24, 0); cx.stroke();
+  // coat
+  cx.fillStyle = '#1d1036';
+  cx.beginPath(); cx.moveTo(-12, -82); cx.lineTo(14, -82); cx.lineTo(18, -36); cx.lineTo(-14, -36); cx.closePath(); cx.fill();
+  cx.strokeStyle = '#3a1a5e'; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(-14, -46); cx.lineTo(18, -46); cx.stroke();
+  // back arm, then hair streaming left
+  cx.strokeStyle = '#1d1036'; cx.lineWidth = 7; cx.beginPath(); cx.moveTo(-4, -76); cx.lineTo(-18, -54); cx.stroke();
+  for (let i = 0; i < 5; i++) {
+    const y0 = -100 + i * 3, sway = Math.sin(t * 3.4 + i) * 4;
+    cx.strokeStyle = i % 2 ? '#1a0f2e' : '#24143d'; cx.lineWidth = 5 - i * 0.5;
+    cx.beginPath(); cx.moveTo(2, y0); cx.bezierCurveTo(-16, y0 - 6 + sway, -30, y0 + 6 - sway, -46 - i * 3, y0 + 10 + sway); cx.stroke();
+  }
+  // head in profile
+  cx.fillStyle = '#24143d'; cx.beginPath(); cx.arc(4, -92, 9, 0, 7); cx.fill();
+  // spell arm: thrusts forward on a cast
+  const reach = cp >= 0 ? Math.sin(Math.min(1, cp * 1.6) * Math.PI) * 8 : 0;
+  const hx = 64 + reach, hy = -88;
+  cx.strokeStyle = '#1d1036'; cx.lineWidth = 7; cx.beginPath(); cx.moveTo(8, -78); cx.lineTo(hx - 4, hy + 2); cx.stroke();
+  cx.lineCap = 'butt';
+  // neon rim light along the front edge (backlit by the synthwave sun)
+  cx.strokeStyle = orbC; cx.globalAlpha = .55; cx.lineWidth = 1.5;
+  cx.beginPath(); cx.arc(4, -92, 9, -1.2, 1.0); cx.moveTo(14, -82); cx.lineTo(18, -36); cx.moveTo(8, -78); cx.lineTo(hx - 4, hy + 2); cx.stroke();
+  cx.globalAlpha = 1;
+  // the spell orb in the hand: element of the next rune, swelling as it nears; a rune ring turns around it
+  const orbR = 6 + (cp >= 0 ? 9 * Math.sin(Math.min(1, cp * 1.35) * Math.PI) : 2 + 3 * (1 - phase) + (ch ? 3 * ch.c : 0));
+  cx.shadowColor = orbC; cx.shadowBlur = 16 + 12 * (ch ? ch.c : 0) + (cp >= 0 ? 16 : 0);
+  cx.fillStyle = orbC; cx.beginPath(); cx.arc(hx, hy, Math.max(2, orbR), 0, 7); cx.fill();
+  cx.fillStyle = '#fff'; cx.beginPath(); cx.arc(hx, hy, Math.max(1, orbR * 0.45), 0, 7); cx.fill();
+  cx.strokeStyle = orbC; cx.lineWidth = 1.5; cx.globalAlpha = .7;
+  cx.beginPath(); cx.arc(hx, hy, orbR + 7, t * 2, t * 2 + 4.6); cx.stroke();
+  cx.globalAlpha = 1; cx.shadowBlur = 0; cx.lineWidth = 1;
   if (hurt < 0.25) { // red rim on hit
-    cx.globalAlpha = .5 * (1 - hurt/0.25); cx.strokeStyle = '#f87171'; cx.lineWidth = 3;
-    cx.beginPath(); cx.ellipse(-1, -40, 40, 58, 0, 0, 7); cx.stroke();
+    cx.globalAlpha = .5 * (1 - hurt/0.25); cx.strokeStyle = PAL.crimson; cx.lineWidth = 3;
+    cx.beginPath(); cx.ellipse(-4, -48, 44, 60, 0, 0, 7); cx.stroke();
     cx.globalAlpha = 1; cx.lineWidth = 1;
   }
   cx.restore();
@@ -739,147 +765,208 @@ function drawEnemy(t) {
   }
   cx.restore();
 }
-function drawRider(t, pull) { // cavalry: a galloping horse and a couched lance
-  const g = t * 10, bob = Math.sin(g * 2) * 2.5;
-  cx.fillStyle = 'rgba(0,0,0,.4)'; cx.beginPath(); cx.ellipse(0, 3, 52, 7, 0, 0, 7); cx.fill();
-  cx.strokeStyle = '#2b201b'; cx.lineWidth = 5; cx.lineCap = 'round';
+// undead host of the splash art: bone, tattered violet cloth, eyes and weapons lit in the enemy's color
+const BONE = '#e6dcf5', BONE_SH = '#9d8fc0', RAG = '#1a0f2e';
+function drawSkull(x, y, r, eye) { // facing left
+  cx.fillStyle = BONE; cx.beginPath(); cx.arc(x, y, r, 0, 7); cx.fill();
+  cx.beginPath(); cx.moveTo(x - r * 0.9, y + r * 0.3); cx.lineTo(x - r * 0.2, y + r * 1.25); cx.lineTo(x + r * 0.5, y + r * 0.8); cx.fill(); // jaw
+  cx.fillStyle = '#0b0618'; cx.beginPath(); cx.ellipse(x - r * 0.35, y - r * 0.05, r * 0.3, r * 0.36, 0, 0, 7); cx.fill();
+  cx.fillStyle = eye; cx.shadowColor = eye; cx.shadowBlur = 8;
+  cx.beginPath(); cx.arc(x - r * 0.35, y - r * 0.02, r * 0.13, 0, 7); cx.fill(); cx.shadowBlur = 0;
+  cx.strokeStyle = BONE_SH; cx.lineWidth = 1; cx.beginPath(); cx.moveTo(x - r * 0.7, y + r * 0.75); cx.lineTo(x - r * 0.1, y + r * 0.95); cx.stroke();
+}
+function drawRibs(x, y, w, h) {
+  cx.strokeStyle = BONE; cx.lineWidth = 1.6;
+  cx.beginPath(); cx.moveTo(x, y); cx.lineTo(x, y + h); cx.stroke(); // spine
+  for (let i = 0; i < 4; i++) { const yy = y + 4 + i * (h - 6) / 4; cx.beginPath(); cx.ellipse(x, yy, w * (1 - i * 0.12), 3, 0, Math.PI * 0.05, Math.PI * 0.95); cx.stroke(); }
+}
+function drawRider(t, pull) { // cavalry: a skeletal knight on a spectral horse with a burning mane
+  const g = t * 10, bob = Math.sin(g * 2) * 2.5, c = G.enemy.color;
+  cx.fillStyle = 'rgba(0,0,0,.5)'; cx.beginPath(); cx.ellipse(0, 3, 52, 7, 0, 0, 7); cx.fill();
+  cx.strokeStyle = '#150a28'; cx.lineWidth = 5; cx.lineCap = 'round';
   for (const [hx, ph] of [[-26, 0], [-18, Math.PI], [22, Math.PI * 0.5], [30, Math.PI * 1.5]]) { // legs
     const a = Math.sin(g + ph) * 0.55;
     cx.beginPath(); cx.moveTo(hx, -30 + bob); cx.lineTo(hx + Math.sin(a) * 24, -30 + bob + Math.cos(a) * 30); cx.stroke();
   }
   cx.lineCap = 'butt';
-  cx.fillStyle = '#3a2a22';
+  cx.fillStyle = '#150a28'; cx.strokeStyle = c; cx.lineWidth = 1.5; cx.globalAlpha = 1;
   cx.beginPath(); cx.ellipse(2, -38 + bob, 40, 15, 0, 0, 7); cx.fill();                                   // body
   cx.beginPath(); cx.moveTo(-30, -44 + bob); cx.lineTo(-50, -70 + bob); cx.lineTo(-40, -74 + bob); cx.lineTo(-18, -48 + bob); cx.fill(); // neck
   cx.beginPath(); cx.ellipse(-52, -70 + bob, 12, 7, -0.4, 0, 7); cx.fill();                              // head
-  cx.strokeStyle = '#1a1310'; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(38, -44 + bob); cx.quadraticCurveTo(54, -40 + bob, 50, -22 + bob); cx.stroke(); // tail
-  // rider
-  cx.fillStyle = '#4b2430';
-  cx.beginPath(); cx.moveTo(-4, -50 + bob); cx.lineTo(14, -50 + bob); cx.lineTo(10, -84 + bob); cx.lineTo(0, -84 + bob); cx.fill();
-  cx.beginPath(); cx.arc(4, -92 + bob, 9, 0, 7); cx.fill();
-  cx.fillStyle = '#05070c'; cx.beginPath(); cx.ellipse(1, -92 + bob, 4, 5, 0, 0, 7); cx.fill();
-  // lance: lowers onto the caster as the counter loads
+  cx.globalAlpha = .55; cx.beginPath(); cx.ellipse(2, -38 + bob, 40, 15, 0, Math.PI * 1.1, Math.PI * 1.9); cx.stroke(); cx.globalAlpha = 1; // spectral rim
+  cx.fillStyle = c; cx.shadowColor = c; cx.shadowBlur = 10;
+  cx.beginPath(); cx.arc(-56, -72 + bob, 2, 0, 7); cx.fill();                                            // eye
+  for (let i = 0; i < 5; i++) { // burning mane
+    const fx = -44 + i * 5, fy = -72 + i * 5 + bob, fl = 8 + Math.sin(t * 14 + i) * 3;
+    cx.fillStyle = i % 2 ? '#ffb86b' : c; cx.beginPath(); cx.moveTo(fx - 3, fy); cx.lineTo(fx + 3, fy); cx.lineTo(fx + 4, fy - fl); cx.fill();
+  }
+  cx.shadowBlur = 0;
+  // skeletal rider in a tattered cloak
+  cx.fillStyle = RAG;
+  cx.beginPath(); cx.moveTo(-6, -48 + bob); cx.lineTo(18, -48 + bob); cx.lineTo(24 + Math.sin(t * 6) * 3, -58 + bob); cx.lineTo(12, -84 + bob); cx.lineTo(-2, -84 + bob); cx.fill();
+  drawRibs(4, -82 + bob, 7, 26);
+  drawSkull(3, -93 + bob, 8, c);
+  // lance lowers onto the caster as the counter loads
   const tipY = -76 + bob + pull * 18;
-  cx.strokeStyle = '#cbd5e1'; cx.lineWidth = 3;
+  cx.strokeStyle = BONE_SH; cx.lineWidth = 3;
   cx.beginPath(); cx.moveTo(16, -72 + bob); cx.lineTo(-92, tipY); cx.stroke();
-  cx.fillStyle = pull > 0.15 ? '#fb923c' : '#94a3b8';
-  if (pull > 0.15) { cx.shadowColor = '#fb923c'; cx.shadowBlur = 10; }
+  cx.fillStyle = pull > 0.15 ? c : BONE;
+  if (pull > 0.15) { cx.shadowColor = c; cx.shadowBlur = 12; }
   cx.beginPath(); cx.moveTo(-104, tipY - 1); cx.lineTo(-90, tipY - 5); cx.lineTo(-90, tipY + 4); cx.fill();
   cx.shadowBlur = 0; cx.lineWidth = 1;
 }
-function drawBoss(t, pull) { // boss: a towering robed caster, its school's roots orbiting it
+function drawBoss(t, pull) { // boss: a crowned lich, its school's roots orbiting it
   const hover = Math.sin(t * 1.6) * 3, eye = G.enemy.color;
-  cx.fillStyle = 'rgba(0,0,0,.45)'; cx.beginPath(); cx.ellipse(0, 3, 50, 8, 0, 0, 7); cx.fill();
+  cx.fillStyle = 'rgba(0,0,0,.5)'; cx.beginPath(); cx.ellipse(0, 3, 50, 8, 0, 0, 7); cx.fill();
   cx.save(); cx.translate(0, hover);
-  cx.fillStyle = '#241634'; // robe
-  cx.beginPath(); cx.moveTo(-6, -120); cx.bezierCurveTo(-26, -90, -46, -30, -50, 0); cx.lineTo(46, 0); cx.bezierCurveTo(42, -30, 22, -90, 6, -120); cx.closePath(); cx.fill();
-  cx.strokeStyle = eye; cx.globalAlpha = .6; cx.lineWidth = 2.5;
-  cx.beginPath(); cx.moveTo(-50, 0); cx.lineTo(46, 0); cx.moveTo(-2, -112); cx.lineTo(-14, -8); cx.stroke();
-  cx.globalAlpha = 1;
-  cx.fillStyle = '#241634'; // hood + horns
-  cx.beginPath(); cx.moveTo(0, -112); cx.bezierCurveTo(-26, -112, -28, -150, 0, -158); cx.bezierCurveTo(28, -150, 26, -112, 0, -112); cx.fill();
-  cx.strokeStyle = '#3b2a4f'; cx.lineWidth = 5; cx.lineCap = 'round';
-  cx.beginPath(); cx.moveTo(-14, -148); cx.quadraticCurveTo(-34, -168, -26, -182); cx.moveTo(14, -148); cx.quadraticCurveTo(34, -168, 26, -182); cx.stroke();
-  cx.lineCap = 'butt';
-  cx.fillStyle = '#05070c'; cx.beginPath(); cx.ellipse(-3, -134, 11, 13, 0, 0, 7); cx.fill();
-  cx.fillStyle = eye; cx.shadowColor = eye; cx.shadowBlur = 10; // eyes
-  cx.beginPath(); cx.arc(-8, -136, 2.5, 0, 7); cx.arc(2, -136, 2.5, 0, 7); cx.fill(); cx.shadowBlur = 0;
+  const aura = cx.createRadialGradient(0, -80, 10, 0, -80, 110); aura.addColorStop(0, eye + '44'); aura.addColorStop(1, eye + '00');
+  cx.fillStyle = aura; cx.fillRect(-110, -190, 220, 200);
+  cx.fillStyle = '#1a0b33'; // robe, tattered hem
+  cx.beginPath(); cx.moveTo(-6, -120); cx.bezierCurveTo(-26, -90, -46, -30, -50, 0);
+  for (let i = 0; i <= 8; i++) cx.lineTo(-50 + i * 12, i % 2 ? -8 + Math.sin(t * 4 + i) * 2 : 0);
+  cx.bezierCurveTo(42, -30, 22, -90, 6, -120); cx.closePath(); cx.fill();
+  cx.strokeStyle = eye; cx.globalAlpha = .7; cx.lineWidth = 2; cx.shadowColor = eye; cx.shadowBlur = 6;
+  cx.beginPath(); cx.moveTo(-2, -112); cx.lineTo(-14, -8); cx.stroke();
+  for (let i = 0; i < 3; i++) { const y = -90 + i * 26; cx.beginPath(); cx.moveTo(-10 - i * 3, y - 6); cx.lineTo(-4 - i * 3, y); cx.lineTo(-10 - i * 3, y + 6); cx.lineTo(-16 - i * 3, y); cx.closePath(); cx.stroke(); } // rune sigils
+  cx.globalAlpha = 1; cx.shadowBlur = 0;
+  cx.fillStyle = '#1a0b33'; // hood
+  cx.beginPath(); cx.moveTo(0, -112); cx.bezierCurveTo(-28, -112, -30, -152, 0, -160); cx.bezierCurveTo(30, -152, 28, -112, 0, -112); cx.fill();
+  drawSkull(-2, -134, 11, eye);
+  cx.fillStyle = PAL.gold; cx.shadowColor = PAL.gold; cx.shadowBlur = 8; // crown
+  cx.beginPath(); cx.moveTo(-14, -148);
+  for (let i = 0; i < 5; i++) { cx.lineTo(-14 + i * 7 + 3.5, -162 - (i % 2 ? 4 : 8)); cx.lineTo(-14 + (i + 1) * 7, -150); }
+  cx.lineTo(-14, -148); cx.fill(); cx.shadowBlur = 0;
   // staff rises with the counter
   cx.save(); cx.translate(-30, -70); cx.rotate(-0.25 - pull * 0.5);
-  cx.strokeStyle = '#3b2a4f'; cx.lineWidth = 5; cx.beginPath(); cx.moveTo(0, 60); cx.lineTo(0, -80); cx.stroke();
+  cx.strokeStyle = BONE_SH; cx.lineWidth = 4; cx.beginPath(); cx.moveTo(0, 60); cx.lineTo(0, -80); cx.stroke();
   cx.fillStyle = eye; cx.shadowColor = eye; cx.shadowBlur = 14 + 20 * pull;
   cx.beginPath(); cx.arc(0, -86, 7 + 5 * pull, 0, 7); cx.fill(); cx.shadowBlur = 0;
   cx.restore();
   // the school's roots circle it: the words this boss answers to
   const roots = Object.keys(SCHOOLS[G.enemy.school]);
-  cx.font = 'bold 13px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
+  cx.font = 'bold 14px Georgia, "Times New Roman", serif'; cx.textAlign = 'center';
   roots.concat(roots).forEach((r, i, a) => {
     const ang = t * 0.9 + i * (Math.PI * 2 / a.length);
     cx.globalAlpha = .45 + .35 * Math.sin(ang);
-    cx.fillStyle = eye; cx.fillText(r, Math.cos(ang) * 62, -80 + Math.sin(ang) * 20);
+    cx.fillStyle = eye; cx.shadowColor = eye; cx.shadowBlur = 8; cx.fillText(r, Math.cos(ang) * 62, -80 + Math.sin(ang) * 20);
   });
-  cx.globalAlpha = 1; cx.lineWidth = 1;
+  cx.shadowBlur = 0; cx.globalAlpha = 1; cx.lineWidth = 1;
   cx.restore();
 }
-function drawArcher(pull) {
-  cx.fillStyle = 'rgba(0,0,0,.4)'; cx.beginPath(); cx.ellipse(0, 3, 32, 6, 0, 0, 7); cx.fill();
+function drawArcher(pull) { // skeleton archer in tattered cloth
+  const c = G.enemy.color;
+  cx.fillStyle = 'rgba(0,0,0,.5)'; cx.beginPath(); cx.ellipse(0, 3, 32, 6, 0, 0, 7); cx.fill();
+  cx.save(); cx.rotate(-pull * 0.1); // lean into the draw
+  cx.strokeStyle = BONE; cx.lineWidth = 3; cx.lineCap = 'round'; // legs
+  cx.beginPath(); cx.moveTo(-5, -34); cx.lineTo(-11, 0); cx.moveTo(6, -34); cx.lineTo(11, 0); cx.stroke();
+  cx.lineCap = 'butt';
+  cx.fillStyle = RAG; // tattered skirt
+  cx.beginPath(); cx.moveTo(-14, -42); cx.lineTo(16, -42); cx.lineTo(20, -16); cx.lineTo(12, -22); cx.lineTo(6, -12); cx.lineTo(-2, -20); cx.lineTo(-10, -12); cx.lineTo(-16, -20); cx.closePath(); cx.fill();
+  cx.strokeStyle = '#6b4f2a'; cx.lineWidth = 4; cx.beginPath(); cx.moveTo(14, -70); cx.lineTo(26, -38); cx.stroke(); // quiver
+  cx.strokeStyle = BONE_SH; cx.lineWidth = 1; cx.beginPath(); cx.moveTo(13, -72); cx.lineTo(16, -78); cx.moveTo(17, -70); cx.lineTo(21, -76); cx.stroke();
+  drawRibs(0, -68, 9, 26);
+  cx.fillStyle = RAG; cx.beginPath(); cx.moveTo(-12, -70); cx.lineTo(12, -72); cx.lineTo(16, -62); cx.lineTo(-14, -60); cx.fill(); // pauldrons
+  drawSkull(0, -80, 9, c);
+  cx.restore();
   // bow arm + recurve bow (drawn toward the caster)
   cx.save();
-  cx.translate(-14, -48); cx.rotate(pull * 0.18);
-  cx.strokeStyle = '#7a4f2b'; cx.lineWidth = 4;
+  cx.translate(-14, -54); cx.rotate(pull * 0.18);
+  cx.strokeStyle = '#3a2140'; cx.lineWidth = 4;
   cx.beginPath(); cx.arc(0, 0, 30, Math.PI * 0.62, Math.PI * 1.38); cx.stroke();
-  const px = Math.cos(Math.PI * 0.62) * 30, py = Math.sin(Math.PI * 0.62) * 30;
-  const nx = -10 * pull; // string pulled back
-  cx.strokeStyle = '#cbd5e1'; cx.lineWidth = 1.5;
+  const px = Math.cos(Math.PI * 0.62) * 30, py = Math.sin(Math.PI * 0.62) * 30, nx = -10 * pull; // string pulled back
+  cx.strokeStyle = pull > 0.15 ? c : BONE_SH; cx.lineWidth = 1.5;
   cx.beginPath(); cx.moveTo(px, py); cx.lineTo(nx, 0); cx.lineTo(px, -py); cx.stroke();
-  if (pull > 0.15) { // nocked arrow glowing red
-    cx.strokeStyle = '#f87171'; cx.lineWidth = 2.5;
-    cx.beginPath(); cx.moveTo(nx, 0); cx.lineTo(-64, 0); cx.stroke();
-    cx.shadowColor = '#f87171'; cx.shadowBlur = 8;
-    cx.beginPath(); cx.moveTo(-64, 0); cx.lineTo(-56, -4); cx.moveTo(-64, 0); cx.lineTo(-56, 4); cx.stroke();
+  cx.strokeStyle = BONE; cx.lineWidth = 2.5; cx.beginPath(); cx.moveTo(8, -12); cx.lineTo(-2, 0); cx.stroke(); // bony hand
+  if (pull > 0.15) { // nocked arrow glowing
+    cx.strokeStyle = c; cx.lineWidth = 2.5; cx.shadowColor = c; cx.shadowBlur = 10;
+    cx.beginPath(); cx.moveTo(nx, 0); cx.lineTo(-64, 0); cx.moveTo(-64, 0); cx.lineTo(-56, -4); cx.moveTo(-64, 0); cx.lineTo(-56, 4); cx.stroke();
     cx.shadowBlur = 0;
+    cx.globalAlpha = .35 * pull; cx.fillStyle = c; cx.beginPath(); cx.ellipse(-30, 0, 26, 14, 0, 0, 7); cx.fill(); cx.globalAlpha = 1;
   }
   cx.lineWidth = 1;
   cx.restore();
-  // body: lean into the draw
-  cx.rotate(-pull * 0.1);
-  cx.fillStyle = '#4b2430';
-  cx.beginPath();
-  cx.moveTo(2, -58); cx.bezierCurveTo(12, -44, 24, -14, 26, 2);
-  cx.lineTo(-18, 2); cx.bezierCurveTo(-16, -18, -8, -46, -2, -58);
-  cx.closePath(); cx.fill();
-  cx.strokeStyle = '#f87171'; cx.globalAlpha = .5; cx.lineWidth = 2;
-  cx.beginPath(); cx.moveTo(-18, 2); cx.lineTo(26, 2); cx.stroke();
-  cx.globalAlpha = 1; cx.lineWidth = 1;
-  // hood + face void (facing left) + quiver
-  cx.fillStyle = '#4b2430';
-  cx.beginPath();
-  cx.moveTo(0, -56); cx.bezierCurveTo(-15, -56, -16, -80, 0, -86);
-  cx.bezierCurveTo(15, -80, 15, -56, 0, -56);
-  cx.closePath(); cx.fill();
-  cx.fillStyle = '#05070c'; cx.beginPath(); cx.ellipse(-3, -70, 7, 9, 0, 0, 7); cx.fill();
-  cx.strokeStyle = '#6b4f2a'; cx.lineWidth = 4;
-  cx.beginPath(); cx.moveTo(16, -52); cx.lineTo(30, -22); cx.stroke(); cx.lineWidth = 1;
-  cx.strokeStyle = '#cbd5e1';
-  cx.beginPath(); cx.moveTo(15, -55); cx.lineTo(19, -60); cx.moveTo(20, -52); cx.lineTo(25, -58); cx.stroke();
-  if (pull > 0.15) { // charge glow on the archer while winding up
-    cx.globalAlpha = .35 * pull; cx.fillStyle = '#f87171';
-    cx.beginPath(); cx.ellipse(-40, -48, 26, 18, 0, 0, 7); cx.fill();
-    cx.globalAlpha = 1;
+}
+// ---- static backdrops, painted once: the lanes' night sky and the stage's synthwave vista
+let BG = null, STAGE_BG = null;
+function paintBackdrops() {
+  const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; };
+  let rnd = 7; const rand = () => (rnd = (rnd * 16807) % 2147483647) / 2147483647; // seeded: same sky every run
+  // lanes: deep night with nebula haze and stars
+  const [bg, b] = mk(W, H);
+  const sky = b.createLinearGradient(0, 0, 0, STAGE_TOP);
+  sky.addColorStop(0, '#0c0a3a'); sky.addColorStop(.55, '#140a2e'); sky.addColorStop(1, '#07030f');
+  b.fillStyle = sky; b.fillRect(0, 0, W, H);
+  for (const [x, y, r, c] of [[140, 120, 260, '#d225d1'], [990, 220, 300, '#5c15bd'], [560, 40, 360, '#1b1280']]) {
+    const n = b.createRadialGradient(x, y, 0, x, y, r); n.addColorStop(0, c + '30'); n.addColorStop(1, c + '00');
+    b.fillStyle = n; b.fillRect(0, 0, W, H);
   }
+  for (let i = 0; i < 170; i++) { b.globalAlpha = .25 + rand() * .7; b.fillStyle = rand() < .15 ? PAL.blush : '#ffffff'; b.fillRect(rand() * W, rand() * STAGE_TOP, rand() < .9 ? 1 : 2, rand() < .9 ? 1 : 2); }
+  b.globalAlpha = 1;
+  // stage: striped sun behind a gothic castle, violet ranges, ruins, neon grid floor
+  const [st, s] = mk(W, STAGE_H), hz = GROUND_Y;
+  const ss = s.createLinearGradient(0, 0, 0, hz);
+  ss.addColorStop(0, '#1b1280'); ss.addColorStop(.6, '#5c15bd'); ss.addColorStop(1, '#d225d1');
+  s.fillStyle = ss; s.fillRect(0, 0, W, hz);
+  for (let i = 0; i < 40; i++) { s.globalAlpha = .3 + rand() * .6; s.fillStyle = '#fff'; s.fillRect(rand() * W, rand() * hz * .5, 1, 1); }
+  s.globalAlpha = 1;
+  const glow = s.createRadialGradient(560, hz - 20, 20, 560, hz - 20, 260); glow.addColorStop(0, '#f9699980'); glow.addColorStop(1, '#f9699900');
+  s.fillStyle = glow; s.fillRect(0, 0, W, hz);
+  const [sunC, u] = mk(200, 200); // sun with synthwave slats
+  const sg = u.createLinearGradient(0, 0, 0, 200); sg.addColorStop(0, '#ffb86b'); sg.addColorStop(.5, '#f96999'); sg.addColorStop(1, '#d225d1');
+  u.fillStyle = sg; u.beginPath(); u.arc(100, 100, 96, 0, 7); u.fill();
+  u.globalCompositeOperation = 'destination-out';
+  for (let y = 104, k = 1; y < 200; y += 12 + k, k++) u.fillRect(0, y, 200, 2 + k * 0.9);
+  s.drawImage(sunC, 460, hz - 182);
+  const range = (base, amp, col, seed) => { s.fillStyle = col; s.beginPath(); s.moveTo(0, hz);
+    for (let x = 0; x <= W; x += 30) s.lineTo(x, base - amp * Math.abs(Math.sin(x * 0.011 + seed) + 0.5 * Math.sin(x * 0.031 + seed * 2)));
+    s.lineTo(W, hz); s.closePath(); s.fill(); };
+  range(hz - 30, 44, '#3b1470', 1.3); range(hz - 8, 30, '#24104a', 4.1);
+  s.fillStyle = '#120826'; // castle silhouette on the sun
+  const tower = (x, w, h, spire) => { s.fillRect(x, hz - h, w, h); s.beginPath(); s.moveTo(x - 2, hz - h); s.lineTo(x + w / 2, hz - h - spire); s.lineTo(x + w + 2, hz - h); s.fill(); };
+  [[500, 14, 60, 22], [520, 10, 84, 30], [534, 18, 104, 44], [556, 12, 128, 58], [572, 18, 100, 40], [594, 10, 78, 28], [608, 16, 58, 20], [488, 150, 30, 0]].forEach(a => tower(...a));
+  s.fillStyle = '#ff9a4d'; for (const [x, y] of [[540, 80], [560, 104], [578, 70], [526, 60], [600, 52]]) s.fillRect(x, hz - y, 2, 3);
+  s.fillStyle = '#140a2a'; // broken columns framing the field
+  for (const [x, w, h] of [[18, 26, 120], [54, 16, 70], [1060, 28, 140], [1030, 14, 60]]) {
+    s.fillRect(x, hz - h, w, h); s.beginPath(); s.moveTo(x, hz - h); s.lineTo(x + w * .4, hz - h - 10); s.lineTo(x + w, hz - h + 4); s.fill();
+    s.fillStyle = PAL.magenta + '66'; s.fillRect(x + w - 2, hz - h, 2, h); s.fillStyle = '#140a2a';
+  }
+  s.fillStyle = '#0a010a'; s.fillRect(0, hz, W, STAGE_H - hz);
+  s.strokeStyle = PAL.magenta; s.lineWidth = 1; // perspective grid
+  for (let k = 1; k < 8; k++) { s.globalAlpha = .12 + k * .04; const y = hz + (k * k) * 0.55; s.beginPath(); s.moveTo(0, y); s.lineTo(W, y); s.stroke(); }
+  for (let k = -14; k <= 14; k++) { s.globalAlpha = .25; s.beginPath(); s.moveTo(560 + k * 8, hz); s.lineTo(560 + k * 80, STAGE_H); s.stroke(); }
+  s.globalAlpha = 1;
+  BG = bg; STAGE_BG = st;
 }
 function drawStage(t, beat, phase) {
   cx.save(); cx.translate(0, STAGE_TOP);
-  const sky = cx.createLinearGradient(0, 0, 0, STAGE_H);
-  sky.addColorStop(0, '#0c1222'); sky.addColorStop(.72, '#111827'); sky.addColorStop(1, '#0a0f1a');
-  cx.fillStyle = sky; cx.fillRect(0, 0, W, STAGE_H);
-  cx.fillStyle = 'rgba(203,213,225,.045)'; cx.beginPath(); cx.arc(560, 46, 100, 0, 7); cx.fill(); // moon haze
-  cx.fillStyle = '#121a2b'; // ridges
-  cx.beginPath(); cx.ellipse(180, GROUND_Y + 4, 320, 74, 0, Math.PI, Math.PI * 2); cx.fill();
-  cx.fillStyle = '#0f1626';
-  cx.beginPath(); cx.ellipse(880, GROUND_Y + 4, 420, 96, 0, Math.PI, Math.PI * 2); cx.fill();
-  cx.beginPath(); cx.ellipse(560, GROUND_Y + 4, 260, 52, 0, Math.PI, Math.PI * 2); cx.fill();
-  cx.fillStyle = '#070a12'; cx.fillRect(0, GROUND_Y, W, STAGE_H - GROUND_Y); // ground
-  cx.strokeStyle = '#7dd3fc'; cx.globalAlpha = .06 + .22 * (1 - phase); cx.lineWidth = 2; // horizon pulses on beat
+  cx.drawImage(STAGE_BG, 0, 0);
+  cx.strokeStyle = PAL.pink; cx.globalAlpha = .25 + .5 * (1 - phase); cx.lineWidth = 2; // horizon pulses on the beat
+  cx.shadowColor = PAL.magenta; cx.shadowBlur = 10;
   cx.beginPath(); cx.moveTo(0, GROUND_Y); cx.lineTo(W, GROUND_Y); cx.stroke();
-  cx.globalAlpha = 1; cx.lineWidth = 1;
+  cx.shadowBlur = 0; cx.globalAlpha = 1; cx.lineWidth = 1;
+  cx.fillStyle = '#1e0f3a'; // floating debris drifting up past the ruins
+  for (let i = 0; i < 9; i++) {
+    const x = (i * 131 + 40) % W, y = GROUND_Y - ((t * (6 + i % 4 * 3) + i * 37) % 170), r = 3 + (i % 3) * 2, a = t * (0.5 + i * 0.1);
+    cx.save(); cx.translate(x, y); cx.rotate(a); cx.fillRect(-r, -r * 0.7, r * 2, r * 1.4); cx.restore();
+  }
   // aim arc: the enemy's intent, drawn while a spell is live
   const asp = activeSpell();
   if (asp && !G.over) {
     const mx = (WIZ_X + ARC_X) / 2, my = 40;
-    cx.strokeStyle = '#f87171'; cx.globalAlpha = .14; cx.lineWidth = 2; cx.setLineDash([3, 9]);
+    cx.strokeStyle = G.enemy.color; cx.globalAlpha = .2; cx.lineWidth = 2; cx.setLineDash([3, 9]);
     cx.beginPath(); cx.moveTo(WIZ_X + 40, WIZ_Y - 70);
     cx.quadraticCurveTo(mx, my - 26, ARC_X - 34, ARC_Y - 46); cx.stroke();
     cx.setLineDash([]); cx.globalAlpha = 1; cx.lineWidth = 1;
   }
   drawWizard(t, phase);
   drawEnemy(t);
-  cx.strokeStyle = '#1e293b'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(0, 0); cx.lineTo(W, 0); cx.stroke(); cx.lineWidth = 1;
+  cx.strokeStyle = '#3a1a5e'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(0, 0); cx.lineTo(W, 0); cx.stroke(); cx.lineWidth = 1;
   cx.restore();
 }
 
 function draw(t) {
-  cx.clearRect(0, 0, W, H);
+  if (!BG) paintBackdrops();
+  cx.drawImage(BG, 0, 0);
   const beat = segAt(t).beat, phase = beatPhase(t); // pulse peaks on the clicks (tempo map), not on t % beat
   const shaking = G.shake > 0.2;
   if (shaking) { cx.save(); cx.translate((Math.random()-.5)*2*G.shake, (Math.random()-.5)*2*G.shake); }
@@ -892,50 +979,55 @@ function draw(t) {
     const guide = OPT.guide && sp && sp.runes.find(r => r.status === 'pending');
     const lit = guide && guide.lane === l.id;
     cx.fillStyle = l.color;
-    cx.globalAlpha = lit ? 0.13 : 0.045;
+    cx.globalAlpha = lit ? 0.12 : 0.035;
     rr(x, TOP_Y - 30, w, STAGE_TOP - 6 - (TOP_Y - 30), 8); cx.fill();
+    cx.globalAlpha = lit ? 0.45 : 0.14; cx.strokeStyle = l.color; // neon lane edges
+    cx.beginPath(); cx.moveTo(x + .5, TOP_Y - 24); cx.lineTo(x + .5, STAGE_TOP - 12); cx.moveTo(x + w - .5, TOP_Y - 24); cx.lineTo(x + w - .5, STAGE_TOP - 12); cx.stroke();
     cx.globalAlpha = 1;
     // header: element + finger
     cx.textAlign = 'center';
-    cx.fillStyle = l.color; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
+    cx.fillStyle = l.color; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.shadowColor = l.color; cx.shadowBlur = 8;
     cx.fillText(l.id === 'SP' ? '—' : l.el.toUpperCase(), LNX[l.id], TOP_Y - 42);
+    cx.shadowBlur = 0;
   }
 
-  // receptor slots: the tile's target is to FILL its slot — tile center on the hit line
+  // receptor rings: the rune's target is to FILL its ring — rune center on the hit line
   for (const l of LANES) {
-    cx.strokeStyle = l.color; cx.lineWidth = 2; cx.globalAlpha = .3 + .25 * (1 - phase);
-    rr(LNX[l.id] - 27, HIT_Y - 27, 54, 54, 11); cx.stroke();
+    cx.strokeStyle = l.color; cx.lineWidth = 2; cx.globalAlpha = .3 + .3 * (1 - phase);
+    cx.beginPath(); cx.arc(LNX[l.id], HIT_Y, 27, 0, 7); cx.stroke();
+    cx.globalAlpha = .12; cx.beginPath(); cx.arc(LNX[l.id], HIT_Y, 21, 0, 7); cx.stroke();
   }
   cx.globalAlpha = 1; cx.lineWidth = 1;
 
   // keycap strip (finger teaching legend)
   for (const l of LANES) {
     const w = l.id === 'SP' ? SW : LW, x = LNX[l.id] - w/2;
-    cx.strokeStyle = l.color; cx.globalAlpha = .55;
+    cx.fillStyle = 'rgba(12,6,30,.75)'; rr(x + 4, HIT_Y + 28, w - 8, 42, 8); cx.fill();
+    cx.strokeStyle = l.color; cx.globalAlpha = .5;
     rr(x + 4, HIT_Y + 28, w - 8, 42, 8); cx.stroke();
     cx.globalAlpha = 1;
     cx.fillStyle = l.color; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
     cx.fillText(l.name, LNX[l.id], HIT_Y + 42);
-    cx.fillStyle = '#8fa0bd'; cx.font = '9.5px ui-monospace, Menlo, monospace';
+    cx.fillStyle = PAL.dim; cx.font = '9.5px ui-monospace, Menlo, monospace';
     cx.fillText(chapterAt(G.ci).tier >= 4 ? l.sym : l.keys, LNX[l.id], HIT_Y + 56);
   }
 
   // health bars in the band under the hit line, each on its fighter's side
   const BAR_Y = HIT_Y + 74, BAR_H = 16, HALF = (W/2 - X0) - 24;
-  cx.fillStyle = '#1c2536'; rr(X0, BAR_Y, HALF, BAR_H, 6); cx.fill();
-  cx.fillStyle = G.hp > 40 ? '#4ade80' : '#f87171'; rr(X0, BAR_Y, HALF * Math.max(0, G.hp)/100, BAR_H, 6); cx.fill();
-  cx.strokeStyle = '#2a3346'; rr(X0, BAR_Y, HALF, BAR_H, 6); cx.stroke();
-  cx.fillStyle = '#0b0e14'; cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
-  cx.fillText('CASTER ' + G.hp, X0 + 8, BAR_Y + 12);
-  cx.fillStyle = '#1c2536'; rr(W/2 + 24, BAR_Y, HALF, BAR_H, 6); cx.fill();
-  cx.fillStyle = G.enemy.color; rr(W/2 + 24, BAR_Y, HALF * Math.max(0, G.enemy.hp)/G.enemy.max, BAR_H, 6); cx.fill();
-  cx.strokeStyle = '#2a3346'; rr(W/2 + 24, BAR_Y, HALF, BAR_H, 6); cx.stroke();
-  cx.fillStyle = '#0b0e14'; cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
-  cx.fillText(G.enemy.name.toUpperCase() + '  ' + Math.max(0, G.enemy.hp), W/2 + 32, BAR_Y + 12);
+  const bar = (x, frac, c1, c2, label) => { // neon gauge
+    cx.fillStyle = '#14082c'; rr(x, BAR_Y, HALF, BAR_H, 6); cx.fill();
+    const g = cx.createLinearGradient(x, 0, x + HALF, 0); g.addColorStop(0, c1); g.addColorStop(1, c2);
+    cx.fillStyle = g; cx.shadowColor = c2; cx.shadowBlur = 10; rr(x, BAR_Y, HALF * Math.max(0, frac), BAR_H, 6); cx.fill(); cx.shadowBlur = 0;
+    cx.strokeStyle = '#3a1a5e'; rr(x, BAR_Y, HALF, BAR_H, 6); cx.stroke();
+    cx.fillStyle = '#fff'; cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
+    cx.shadowColor = '#000'; cx.shadowBlur = 4; cx.fillText(label, x + 8, BAR_Y + 12); cx.shadowBlur = 0;
+  };
+  bar(X0, G.hp / 100, G.hp > 40 ? PAL.cyan : PAL.crimson, G.hp > 40 ? '#3cf0a0' : PAL.pink, 'CASTER ' + G.hp);
+  bar(W/2 + 24, G.enemy.hp / G.enemy.max, PAL.wine, G.enemy.color, G.enemy.name.toUpperCase() + '  ' + Math.max(0, G.enemy.hp));
 
   // spells: connectors + runes
   for (const s of G.spells) {
-    cx.strokeStyle = '#3b4763'; cx.lineWidth = 2; cx.beginPath();
+    cx.strokeStyle = '#4a2a78'; cx.lineWidth = 2; cx.beginPath();
     for (let i = 0; i < s.runes.length - 1; i++) {
       const a = s.runes[i], b = s.runes[i+1];
       const ya = noteY(a, t), yb = noteY(b, t);
@@ -946,38 +1038,42 @@ function draw(t) {
       const y = noteY(r, t); if (y < -60 || y > STAGE_TOP - 4) continue;
       const l = LANE[r.lane];
       if (r.status === 'pending') {
-        const gr = cx.createLinearGradient(0, y - 78, 0, y - 26); // elemental comet trail
-        gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, l.color + '59');
+        const cxr = LNX[r.lane];
+        const gr = cx.createLinearGradient(0, y - 78, 0, y - 20); // elemental comet trail
+        gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, l.color + '66');
         cx.fillStyle = gr;
-        cx.fillRect(LNX[r.lane] - 14, y - 78, 28, 52);
+        cx.fillRect(cxr - 12, y - 78, 24, 56);
+        // rune ring: dark core, glowing element ring, serif glyph — the rune circles of the splash art
+        cx.fillStyle = PAL.ink; cx.beginPath(); cx.arc(cxr, y, 25, 0, 7); cx.fill();
         cx.shadowColor = l.color; cx.shadowBlur = 16;
-        cx.fillStyle = l.color;
-        rr(LNX[r.lane] - 26, y - 26, 52, 52, 10); cx.fill();
+        cx.strokeStyle = l.color; cx.lineWidth = 3; cx.beginPath(); cx.arc(cxr, y, 24, 0, 7); cx.stroke();
+        cx.lineWidth = 1; cx.globalAlpha = .55; cx.beginPath(); cx.arc(cxr, y, 19, 0, 7); cx.stroke(); cx.globalAlpha = 1;
+        cx.fillStyle = '#ffffff'; cx.font = 'bold 25px Georgia, "Times New Roman", serif'; cx.textAlign = 'center';
+        cx.fillText(r.ch === ' ' ? '␣' : r.ch, cxr, y + 8);
         cx.shadowBlur = 0;
-        cx.fillStyle = '#0b0e14'; cx.font = 'bold 26px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
-        cx.fillText(r.ch === ' ' ? '␣' : r.ch, LNX[r.lane], y + 9);
-        // travel cue: dot = finger stays home, triangle = direction the finger moves
+        // travel cue: dot = finger stays home, triangle = direction the finger moves (on the ring)
         const d = r.ch === ' ' ? [0, 0] : KEYDIR[r.ch];
         if (d) {
-          cx.fillStyle = 'rgba(11,14,20,.85)';
-          if (!d[0] && !d[1]) { cx.beginPath(); cx.arc(LNX[r.lane], y + 16, 3, 0, 7); cx.fill(); }
+          cx.fillStyle = l.color;
+          if (!d[0] && !d[1]) { cx.beginPath(); cx.arc(cxr, y + 17, 2.5, 0, 7); cx.fill(); }
           else {
             const L = Math.hypot(d[0], d[1]);
-            cx.save(); cx.translate(LNX[r.lane] + d[0] / L * 15, y + d[1] / L * 15); cx.rotate(Math.atan2(d[1], d[0]));
-            cx.beginPath(); cx.moveTo(7, 0); cx.lineTo(-3, -5); cx.lineTo(-3, 5); cx.closePath(); cx.fill();
+            cx.save(); cx.translate(cxr + d[0] / L * 24, y + d[1] / L * 24); cx.rotate(Math.atan2(d[1], d[0]));
+            cx.fillStyle = PAL.ink; cx.beginPath(); cx.arc(0, 0, 6, 0, 7); cx.fill();
+            cx.fillStyle = l.color; cx.beginPath(); cx.moveTo(5, 0); cx.lineTo(-3, -4.5); cx.lineTo(-3, 4.5); cx.closePath(); cx.fill();
             cx.restore();
           }
         }
         if (SHIFT.has(r.ch)) { // shift is the OTHER hand's job — flag it
-          cx.fillStyle = 'rgba(11,14,20,.85)'; cx.font = 'bold 14px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
-          cx.fillText('\u21E7', LNX[r.lane] + 15, y - 12);
+          cx.fillStyle = PAL.blush; cx.font = 'bold 13px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
+          cx.fillText('\u21E7', cxr + 17, y - 13);
         }
       } else if (r.hitAt && t - r.hitAt < 0.25) {
         const a = 1 - (t - r.hitAt) / 0.25;
-        cx.globalAlpha = a * .8;
-        cx.strokeStyle = r.status === 'miss' ? '#f87171' : l.color;
-        cx.lineWidth = 3;
-        rr(LNX[r.lane] - 26 - 12*(1-a), y - 26 - 12*(1-a), 52 + 24*(1-a), 52 + 24*(1-a), 10); cx.stroke();
+        cx.globalAlpha = a * .85;
+        cx.strokeStyle = r.status === 'miss' ? PAL.crimson : l.color;
+        cx.lineWidth = 3; cx.shadowColor = cx.strokeStyle; cx.shadowBlur = 12;
+        cx.beginPath(); cx.arc(LNX[r.lane], y, 25 + 14 * (1 - a), 0, 7); cx.stroke(); cx.shadowBlur = 0;
         cx.globalAlpha = 1; cx.lineWidth = 1;
       }
     }
@@ -985,7 +1081,7 @@ function draw(t) {
     if (!s.fizzled) {
       const p = Math.max(0, Math.min(1, (t - s.arrow.from) / (s.arrow.to - s.arrow.from)));
       const ay = (STAGE_TOP - 10) - p * (STAGE_TOP - HIT_Y - 20);
-      cx.fillStyle = '#f87171';
+      cx.fillStyle = G.enemy.color;
       cx.beginPath(); cx.moveTo(W/2, ay - 10); cx.lineTo(W/2 - 6, ay + 2); cx.lineTo(W/2 + 6, ay + 2); cx.fill();
       cx.lineWidth = 1;
     }
@@ -994,38 +1090,46 @@ function draw(t) {
   // timing overlay drawn OVER the tiles, so it is visible at the moment of judgment:
   // dashed gold lines = PERFECT window (±PW), white line = the beat (pulses on the clicks)
   const LX0 = X0 - 12, LX1 = X0 + 8*LW + SW + 2*GAP + 12, band = PW * PXS;
-  cx.fillStyle = 'rgba(255,255,255,.10)'; cx.fillRect(LX0, HIT_Y - band, LX1 - LX0, 2 * band);
-  cx.strokeStyle = '#fbbf24'; cx.globalAlpha = .6; cx.setLineDash([6, 5]);
+  cx.fillStyle = 'rgba(255,207,107,.07)'; cx.fillRect(LX0, HIT_Y - band, LX1 - LX0, 2 * band);
+  cx.strokeStyle = PAL.gold; cx.globalAlpha = .6; cx.setLineDash([6, 5]);
   cx.beginPath(); cx.moveTo(LX0, HIT_Y - band); cx.lineTo(LX1, HIT_Y - band); cx.moveTo(LX0, HIT_Y + band); cx.lineTo(LX1, HIT_Y + band); cx.stroke();
   cx.setLineDash([]);
-  cx.strokeStyle = '#ffffff'; cx.globalAlpha = 0.95 - 0.4 * phase; cx.lineWidth = 1.5 + 2.5 * (1 - phase);
+  // the hit line: a magenta laser with a white core, pulsing on the clicks
+  cx.strokeStyle = PAL.magenta; cx.globalAlpha = 0.35 + 0.45 * (1 - phase); cx.lineWidth = 3 + 5 * (1 - phase);
+  cx.shadowColor = PAL.magenta; cx.shadowBlur = 14;
+  cx.beginPath(); cx.moveTo(LX0, HIT_Y); cx.lineTo(LX1, HIT_Y); cx.stroke();
+  cx.shadowBlur = 0; cx.strokeStyle = '#ffffff'; cx.globalAlpha = 0.95; cx.lineWidth = 1.5;
   cx.beginPath(); cx.moveTo(LX0, HIT_Y); cx.lineTo(LX1, HIT_Y); cx.stroke();
   cx.globalAlpha = 1; cx.lineWidth = 1;
   drawErrorBar();
 
   // HUD: score / combo / bpm
-  cx.textAlign = 'left'; cx.fillStyle = '#e2e8f0'; cx.font = 'bold 16px ui-monospace, Menlo, monospace';
+  cx.textAlign = 'left'; cx.fillStyle = PAL.text; cx.font = 'bold 16px ui-monospace, Menlo, monospace';
+  cx.shadowColor = PAL.magenta; cx.shadowBlur = 8;
   cx.fillText(G.score.toLocaleString(), 16, 62);
-  if (G.combo > 1) { cx.fillStyle = '#fbbf24'; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.fillText('combo x' + G.combo, 16, 84); }
-  cx.fillStyle = '#66738d'; cx.font = '11px ui-monospace, Menlo, monospace';
+  if (G.combo > 1) { cx.fillStyle = PAL.gold; cx.shadowColor = PAL.gold; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.fillText('combo x' + G.combo, 16, 84); }
+  cx.shadowBlur = 0;
+  cx.fillStyle = PAL.dim; cx.font = '11px ui-monospace, Menlo, monospace';
   const playing = Math.round(60 / segAt(t).beat), queued = Math.round(G.bpm);
   cx.fillText(playing + ' bpm' + (queued !== playing ? ' → ' + queued : ''), 16, 102);
   const chh = chapterAt(G.ci);
-  cx.fillStyle = '#8fa0bd'; cx.fillText(`ch.${G.ci + 1} ${chh.name} · ${G.ei + 1}/${chh.encs.length}`, 16, 120);
+  cx.fillStyle = PAL.blush; cx.fillText(`ch.${G.ci + 1} ${chh.name} · ${G.ei + 1}/${chh.encs.length}`, 16, 120);
 
   // current word, graded
   const sp = activeSpell();
   if (sp) {
-    cx.textAlign = 'center'; cx.font = 'bold 22px ui-monospace, Menlo, monospace';
-    const col = { pending:'#8fa0bd', perfect:'#fbbf24', good:'#4ade80', miss:'#f87171' };
+    cx.textAlign = 'center'; cx.font = 'bold 24px Georgia, "Times New Roman", serif';
+    const col = { pending: PAL.text, perfect: PAL.gold, good: '#3cf0a0', miss: PAL.crimson };
     let ri = 0; const segs = [];
     for (const c of [...sp.word]) {
       segs.push({ c: c === ' ' ? '␣' : c, s: sp.runes[ri] ? sp.runes[ri].status : 'pending' }); ri++;
     }
     const total = segs.reduce((a, s) => a + cx.measureText(s.c).width + 2, 0);
     let x = W/2 - total/2;
-    for (const s of segs) { const w = cx.measureText(s.c).width; cx.fillStyle = col[s.s]; cx.fillText(s.c, x + w/2, 30); x += w + 2; }
-    cx.font = 'italic 12px ui-monospace, Menlo, monospace'; cx.fillStyle = '#7d8aa5'; // what you're casting
+    cx.shadowBlur = 10;
+    for (const s of segs) { const w = cx.measureText(s.c).width; cx.fillStyle = col[s.s]; cx.shadowColor = s.s === 'pending' ? PAL.magenta : col[s.s]; cx.fillText(s.c, x + w/2, 30); x += w + 2; }
+    cx.shadowBlur = 0;
+    cx.font = 'italic 12px Georgia, "Times New Roman", serif'; cx.fillStyle = PAL.dim; // what you're casting
     cx.fillText(sp.gloss, W/2, 50);
   }
 
@@ -1091,44 +1195,46 @@ function draw(t) {
   for (const p of G.pops) {
     if (p.judge) { // lane judgment: a pill over the keycap box, holds then fades
       const a = Math.min(1, (p.until - t) / 0.2);
-      cx.globalAlpha = a; cx.fillStyle = 'rgba(8,10,16,.92)'; rr(p.x - 43, p.y - 20, 86, 40, 8); cx.fill();
-      cx.strokeStyle = p.color; cx.lineWidth = 1.5; rr(p.x - 43, p.y - 20, 86, 40, 8); cx.stroke(); cx.lineWidth = 1;
+      cx.globalAlpha = a; cx.fillStyle = 'rgba(10,4,24,.94)'; rr(p.x - 43, p.y - 20, 86, 40, 8); cx.fill();
+      cx.strokeStyle = p.color; cx.lineWidth = 1.5; cx.shadowColor = p.color; cx.shadowBlur = 10; rr(p.x - 43, p.y - 20, 86, 40, 8); cx.stroke(); cx.lineWidth = 1;
       cx.textAlign = 'center'; cx.fillStyle = p.color; cx.font = 'bold 14px ui-monospace, Menlo, monospace';
-      cx.fillText(p.text, p.x, p.y - 2);
-      cx.fillStyle = '#cbd5e1'; cx.font = '10.5px ui-monospace, Menlo, monospace';
+      cx.fillText(p.text, p.x, p.y - 2); cx.shadowBlur = 0;
+      cx.fillStyle = PAL.text; cx.font = '10.5px ui-monospace, Menlo, monospace';
       cx.fillText(p.sub, p.x, p.y + 13);
       cx.globalAlpha = 1;
       continue;
     }
     const age = (p.until - t) / 0.8;
     cx.globalAlpha = Math.min(1, age * 1.6);
-    cx.fillStyle = p.color; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
+    cx.fillStyle = p.color; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.textAlign = 'center'; cx.shadowColor = p.color; cx.shadowBlur = 8;
     cx.fillText(p.text, p.x, p.y - (1 - age) * 26);
-    cx.globalAlpha = 1;
+    cx.globalAlpha = 1; cx.shadowBlur = 0;
   }
   // teach flash
   if (G.flash) {
-    cx.fillStyle = '#0b0e14'; rr(W/2 - 190, 44, 380, 34, 8); cx.fill();
-    cx.strokeStyle = G.flash.color; rr(W/2 - 190, 44, 380, 34, 8); cx.stroke();
+    cx.fillStyle = 'rgba(10,4,24,.94)'; rr(W/2 - 190, 44, 380, 34, 8); cx.fill();
+    cx.strokeStyle = G.flash.color; cx.shadowColor = G.flash.color; cx.shadowBlur = 10; rr(W/2 - 190, 44, 380, 34, 8); cx.stroke();
     cx.fillStyle = G.flash.color; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
-    cx.fillText('correct key: ' + G.flash.text, W/2, 66);
+    cx.fillText('correct key: ' + G.flash.text, W/2, 66); cx.shadowBlur = 0;
   }
   if (shaking) cx.restore(); // full-screen overlays draw unshaken
   // encounter / chapter banner: fades in and out over the lanes
   if (G.banner && t < G.banner.until) {
     const left = G.banner.until - t, a = Math.min(1, left / 0.5, (2.2 - left) / 0.25);
-    cx.globalAlpha = Math.max(0, a) * .9; cx.fillStyle = '#080a10'; rr(W/2 - 330, 250, 660, 84, 12); cx.fill();
+    cx.globalAlpha = Math.max(0, a) * .92; cx.fillStyle = 'rgba(10,4,24,.94)'; rr(W/2 - 330, 250, 660, 84, 12); cx.fill();
+    cx.strokeStyle = G.enemy.color; cx.globalAlpha = Math.max(0, a) * .6; rr(W/2 - 330, 250, 660, 84, 12); cx.stroke();
     cx.globalAlpha = Math.max(0, a); cx.textAlign = 'center';
-    cx.fillStyle = G.enemy.color; cx.font = 'bold 28px ui-monospace, Menlo, monospace'; cx.fillText(G.banner.title, W/2, 290);
-    cx.fillStyle = '#cbd5e1'; cx.font = '14px ui-monospace, Menlo, monospace'; cx.fillText(G.banner.sub, W/2, 316);
+    cx.fillStyle = G.enemy.color; cx.shadowColor = G.enemy.color; cx.shadowBlur = 16;
+    cx.font = 'italic 900 30px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(G.banner.title, W/2, 291);
+    cx.shadowBlur = 0; cx.fillStyle = PAL.text; cx.font = '14px ui-monospace, Menlo, monospace'; cx.fillText(G.banner.sub, W/2, 317);
     cx.globalAlpha = 1;
   }
   // red damage flash
-  if (t - G.redFlash < 0.25) { cx.globalAlpha = .28 * (1 - (t - G.redFlash)/0.25); cx.fillStyle = '#ef4444'; cx.fillRect(0, 0, W, H); cx.globalAlpha = 1; }
+  if (t - G.redFlash < 0.25) { cx.globalAlpha = .28 * (1 - (t - G.redFlash)/0.25); cx.fillStyle = PAL.crimson; cx.fillRect(0, 0, W, H); cx.globalAlpha = 1; }
 
   if (G.over) {
     const s = timingStats(200, false);
-    overlay('STRUCK DOWN', '#f87171', [
+    overlay('STRUCK DOWN', PAL.crimson, [
       `score ${G.score.toLocaleString()}   chapter ${G.ci + 1} (${chapterAt(G.ci).name}) · ${G.cleared} enemies felled   max combo x${G.maxCombo}   P ${G.hits.perfect} / G ${G.hits.good} / M ${G.hits.miss}`,
       s ? `timing over ${s.n} hits: avg ${Math.round(Math.abs(s.mean))}ms ${s.mean < 0 ? 'early' : 'late'} · spread ±${Math.round(s.sd)}ms` +
           (Math.abs(s.mean) > 25 && s.sd < 45 ? '  — consistent offset: calibrate input' : '') : 'no judged hits',
@@ -1138,44 +1244,57 @@ function draw(t) {
 // hit-error meter: last 20 judged presses on the ±GW scale (gold = PERFECT zone), ▲ = average
 function drawErrorBar() {
   const cxm = W/2, y = STAGE_TOP + 36, half = 180, sx = half / GW; // below the health bars, above the fighters
-  cx.fillStyle = 'rgba(8,10,16,.75)'; rr(cxm - half - 58, y - 13, 2*half + 116, 26, 7); cx.fill();
-  cx.fillStyle = 'rgba(74,222,128,.22)'; cx.fillRect(cxm - half, y - 5, 2*half, 10);
-  cx.fillStyle = 'rgba(251,191,36,.45)'; cx.fillRect(cxm - PW*sx, y - 5, 2*PW*sx, 10);
+  cx.fillStyle = 'rgba(10,4,24,.82)'; rr(cxm - half - 58, y - 13, 2*half + 116, 46, 7); cx.fill(); // tall enough for the stats line
+  cx.strokeStyle = '#3a1a5e'; rr(cxm - half - 58, y - 13, 2*half + 116, 46, 7); cx.stroke();
+  cx.fillStyle = 'rgba(60,240,160,.2)'; cx.fillRect(cxm - half, y - 5, 2*half, 10);
+  cx.fillStyle = 'rgba(255,207,107,.45)'; cx.fillRect(cxm - PW*sx, y - 5, 2*PW*sx, 10);
   cx.fillStyle = '#ffffff'; cx.fillRect(cxm - 1, y - 9, 2, 18);
-  cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillStyle = '#8fa0bd';
+  cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillStyle = PAL.dim;
   cx.textAlign = 'right'; cx.fillText('early', cxm - half - 8, y + 4);
   cx.textAlign = 'left'; cx.fillText('late', cxm + half + 8, y + 4);
   const xs = G.deltas.slice(-20);
   xs.forEach((x, i) => {
     const px = cxm + Math.max(-GW, Math.min(GW, x.d)) * sx, newest = i === xs.length - 1;
     cx.globalAlpha = 0.25 + 0.75 * (i + 1) / xs.length;
-    cx.fillStyle = x.g === 'perfect' ? '#fbbf24' : '#4ade80';
+    cx.fillStyle = x.g === 'perfect' ? PAL.gold : '#3cf0a0';
     cx.fillRect(px - (newest ? 1.5 : 1), y - (newest ? 11 : 8), newest ? 3 : 2, newest ? 22 : 16);
   });
   cx.globalAlpha = 1;
   const s = timingStats(20, false);
   if (s) {
     const mx = cxm + Math.max(-GW, Math.min(GW, s.mean / 1000)) * sx;
-    cx.fillStyle = '#e2e8f0'; cx.beginPath(); cx.moveTo(mx, y + 7); cx.lineTo(mx - 5, y + 15); cx.lineTo(mx + 5, y + 15); cx.fill();
-    cx.textAlign = 'center'; cx.fillStyle = '#8fa0bd';
+    cx.fillStyle = PAL.text; cx.beginPath(); cx.moveTo(mx, y + 7); cx.lineTo(mx - 5, y + 15); cx.lineTo(mx + 5, y + 15); cx.fill();
+    cx.textAlign = 'center'; cx.fillStyle = PAL.dim;
     cx.fillText(`avg ${Math.round(Math.abs(s.mean))}ms ${s.mean < 0 ? 'early' : 'late'} · spread ±${Math.round(s.sd)}ms`, cxm, y + 28);
   }
 }
 
+// splash: the key art fills the canvas (same 4:3 as the game); its title is painted in, so only the call to action is drawn
+const SPLASH = new Image(); SPLASH.src = 'art/splash.jpg';
 function drawIdle() {
-  cx.clearRect(0, 0, W, H);
-  for (const l of LANES) { cx.fillStyle = l.color; cx.globalAlpha = .1; cx.fillRect(LNX[l.id] - 30, 0, 60, H); }
-  cx.globalAlpha = 1;
-  overlay('RUNECASTER', '#e2e8f0', 'type runes on the beat · lanes are fingers, colors are elements', 'click to start');
+  const p = performance.now() / 1000;
+  if (SPLASH.complete && SPLASH.naturalWidth) cx.drawImage(SPLASH, 0, 0, W, H);
+  else { cx.fillStyle = PAL.void; cx.fillRect(0, 0, W, H); }
+  const fade = cx.createLinearGradient(0, H - 190, 0, H); fade.addColorStop(0, 'rgba(7,3,15,0)'); fade.addColorStop(1, 'rgba(7,3,15,.9)');
+  cx.fillStyle = fade; cx.fillRect(0, H - 190, W, 190);
+  const pulse = 0.5 + 0.5 * Math.sin(p * 3);
+  cx.fillStyle = 'rgba(10,4,24,.85)'; rr(W/2 - 150, H - 96, 300, 44, 22); cx.fill();
+  cx.strokeStyle = PAL.pink; cx.lineWidth = 2; cx.shadowColor = PAL.magenta; cx.shadowBlur = 10 + 14 * pulse;
+  rr(W/2 - 150, H - 96, 300, 44, 22); cx.stroke();
+  cx.fillStyle = '#fff'; cx.textAlign = 'center'; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif';
+  cx.fillText('CLICK TO BEGIN', W/2, H - 67); cx.shadowBlur = 0; cx.lineWidth = 1;
+  cx.fillStyle = PAL.blush; cx.font = '13px ui-monospace, Menlo, monospace';
+  cx.fillText('type runes on the beat · lanes are fingers, colors are elements', W/2, H - 24);
 }
 function overlay(title, color, sub, cta) {
-  cx.fillStyle = 'rgba(8,10,16,.82)'; cx.fillRect(0, 0, W, H);
-  cx.textAlign = 'center'; cx.fillStyle = color; cx.font = 'bold 44px ui-monospace, Menlo, monospace';
-  cx.fillText(title, W/2, H/2 - 40);
-  cx.fillStyle = '#8fa0bd'; cx.font = '15px ui-monospace, Menlo, monospace';
+  cx.fillStyle = 'rgba(10,3,22,.86)'; cx.fillRect(0, 0, W, H);
+  cx.textAlign = 'center'; cx.fillStyle = color; cx.shadowColor = color; cx.shadowBlur = 24;
+  cx.font = 'italic 900 52px "Trebuchet MS", "Arial Black", sans-serif';
+  cx.fillText(title, W/2, H/2 - 40); cx.shadowBlur = 0;
+  cx.fillStyle = PAL.dim; cx.font = '15px ui-monospace, Menlo, monospace';
   for (const [i, line] of (Array.isArray(sub) ? sub : [sub]).entries()) cx.fillText(line, W/2, H/2 + 4 + i * 22);
-  cx.fillStyle = '#e2e8f0'; cx.font = 'bold 16px ui-monospace, Menlo, monospace';
-  cx.fillText(cta, W/2, H/2 + 44 + (Array.isArray(sub) ? (sub.length - 1) * 22 : 0));
+  cx.fillStyle = PAL.blush; cx.font = 'bold 16px ui-monospace, Menlo, monospace'; cx.shadowColor = PAL.magenta; cx.shadowBlur = 10;
+  cx.fillText(cta, W/2, H/2 + 44 + (Array.isArray(sub) ? (sub.length - 1) * 22 : 0)); cx.shadowBlur = 0;
 }
 </script>
 </body>
