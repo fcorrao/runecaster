@@ -76,7 +76,7 @@
     <ul>
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
-      <li><b>Sigils (thumb):</b> defeating an enemy earns its school's sigil (bosses give 2); three flawless spells earn one too. Between spells press <b>Space</b>, type the sigil's name from the panel between your hands — <i>wynkai</i> Gale (push the runes back a bar), <i>dunfen</i> Bulwark (block the next strike), <i>moxquo</i> Veil (next 6 runes take any key of the right finger), <i>gamsel</i> Stillwater (next 2 spells 20% slower), <i>vorlum</i> Kindle (next spell at double power). A wrong letter fizzles (charge kept); Space again cancels; the mode closes itself when runes arrive.</li>
+      <li><b>Sigils (thumb):</b> defeating an enemy earns its school's sigil (bosses give 2); three flawless spells earn one too. Press <b>Space</b> and time slows to a crawl (the same slow speed at any tempo; letters are hidden so it can't be used to read ahead), then type the sigil's name from the panel between your hands — <i>wynkai</i> Gale (push the runes back a bar), <i>dunfen</i> Bulwark (block the next strike), <i>moxquo</i> Veil (next 6 runes take any key of the right finger), <i>gamsel</i> Stillwater (next 2 spells 20% slower), <i>vorlum</i> Kindle (next spell at double power). A wrong letter fizzles (charge kept); Space again cancels; if a rune creeps into its window the mode closes itself. The runes keep creeping while you cast — that distance is the price.</li>
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
       <li><b>Calibration:</b> if the click doesn't land when the letter crosses the line, slide <i>audio</i>. If your presses sit consistently early/late on the error bar, press "set input from last 20 hits" (or slide <i>input</i>). Both are saved in this browser.</li>
@@ -659,6 +659,9 @@ const POWERS = {
   kindle:  { name: 'vorlum', label: 'KINDLE',     school: 'flame',  color: '#ff6a3d', glyph: '✦', desc: 'next spell at double power' },
 };
 const SIGIL_MAX = 3, VEIL_RUNES = 6, STILL_SPELLS = 2, STILL_RATE = 0.8;
+// cast mode slows the whole rhythm to a fixed crawl — runes, clicks and music together, so everything is
+// still on the beat when it closes. The runes keep creeping (the cost of casting) with their letters hidden.
+const CAST_PXS = 36, CAST_K = CAST_PXS / PXS; // field speed while casting, px/s — the same at any tempo
 const powerOfSchool = school => Object.keys(POWERS).find(k => POWERS[k].school === school);
 function grantSigil(key, n, why) {
   const had = G.sigils[key] || 0, got = Math.min(SIGIL_MAX, had + n) - had;
@@ -674,24 +677,50 @@ function openCast() {
   if (!Object.keys(POWERS).some(k => G.sigils[k] > 0)) { G.castFx = { kind: 'close', at: now(), text: 'no sigils yet — defeat enemies to earn them' }; return; }
   const tg = now() - OPT.inOff / 1000;
   if (G.spells.some(s => !s.done && s.runes.some(r => r.status === 'pending' && tg >= r.time - GW))) { G.castFx = { kind: 'close', at: now(), text: 'runes in flight — cast between spells' }; return; }
-  G.cast = { buf: '', at: now() };
+  G.cast = { buf: '', at: now(), t: now() };
+  castMusicRate(true);
   openSnd();
 }
-function closeCast(text) { G.cast = null; G.castFx = { kind: 'close', at: now(), text }; }
+// the rhythm timeline slips `sh` seconds later: every future rune, rest, spell start, tempo change and click
+function dilate(sh) {
+  if (sh <= 0) return;
+  const tg = now() - OPT.inOff / 1000;
+  for (const s of G.spells) {
+    if (s.done) continue;
+    for (const r of s.runes) if (r.status === 'pending') { r.time += sh; if (r.shiftAt) r.fromTime += sh; }
+    s.rests = s.rests.map(x => x > tg - GW ? x + sh : x);
+    if (s.t0 > tg) { s.t0 += sh; s.arrow.from += sh; }
+    s.end = Math.max(...s.runes.map(r => r.time)); s.arrow.to = s.end + GW + 0.12;
+  }
+  const cur = segAt(tg), curPast = cur.t0 <= tg; // the grid in force slips too; its anchor steps back by whole beats to stay in the past
+  for (const sg of G.segs) if (sg.t0 > tg) sg.t0 += sh;
+  if (curPast) { cur.t0 += sh; while (cur.t0 > tg) cur.t0 -= cur.beat; }
+  G.nextT0 += sh; G.nextBeat += sh;
+}
+function castTick() { const t = now(); dilate((t - G.cast.t) * (1 - CAST_K)); G.cast.t = t; } // called every frame while casting
+function castMusicRate(slow) { // the soundtrack slows with the rhythm (tape-style pitch drop), then re-locks
+  if (!musicSrc) return;
+  const pr = musicSrc.playbackRate, a = AC.currentTime;
+  if (!musicSrc.meta) { pr.cancelScheduledValues(a); pr.setValueAtTime(slow ? CAST_K : 1, a); return; }
+  if (slow) { pr.cancelScheduledValues(a); pr.setValueAtTime(musicRate(segAt(a).beat) * CAST_K, a); }
+  else rescheduleMusicRates();
+}
+function leaveCast() { castTick(); G.cast = null; castMusicRate(false); }
+function closeCast(text) { leaveCast(); G.castFx = { kind: 'close', at: now(), text }; }
 function castLetter(k) {
   const buf = G.cast.buf + k;
   const owned = Object.keys(POWERS).filter(p => G.sigils[p] > 0);
   const fits = owned.filter(p => POWERS[p].name.startsWith(buf));
   if (!fits.length) { // fizzle: the mode closes, the charge is kept
     const known = Object.keys(POWERS).find(p => POWERS[p].name.startsWith(buf));
-    G.cast = null;
+    leaveCast();
     G.castFx = { kind: 'fizzle', at: now(), buf, text: known ? `no ${POWERS[known].label} charges` : `"${buf}" is no sigil` };
     fizzleSnd(); return;
   }
   G.cast.buf = buf;
   const done = fits.find(p => POWERS[p].name === buf);
   if (!done) { tickSnd(buf.length); return; }
-  G.sigils[done]--; G.cast = null;
+  G.sigils[done]--; leaveCast();
   G.castFx = { kind: 'cast', key: done, at: now() };
   SIGIL_EFFECT[done]();
   castSigilSnd(done);
@@ -781,6 +810,7 @@ function frame(ts) {
   if (!started || !G) { drawIdle(); return; }
   const t = now();
   if (!G.over) {
+    if (G.cast) castTick(); // cast mode: the rhythm crawls (runes, clicks, music) until the ring closes
     // metronome = enemy heartbeat, on the tempo map; each volley opens on an accented click
     const ahead = AC.currentTime + 0.15 + Math.max(0, -OPT.delay / 1000);
     while (G.nextBeat < ahead) {
@@ -1221,10 +1251,10 @@ function draw(t) {
         cx.strokeStyle = l.color; cx.lineWidth = 3; cx.beginPath(); cx.arc(cxr, y, 24, 0, 7); cx.stroke();
         cx.lineWidth = 1; cx.globalAlpha = .55; cx.beginPath(); cx.arc(cxr, y, 19, 0, 7); cx.stroke(); cx.globalAlpha = 1;
         cx.fillStyle = '#ffffff'; cx.font = 'bold 25px Georgia, "Times New Roman", serif'; cx.textAlign = 'center';
-        cx.fillText(r.ch, cxr, y + 8);
+        if (!G.cast) cx.fillText(r.ch, cxr, y + 8); // letters are hidden while casting: slow time is not a free look
         cx.shadowBlur = 0;
         // travel cue: dot = finger stays home, triangle = direction the finger moves (on the ring)
-        const d = KEYDIR[r.ch];
+        const d = G.cast ? null : KEYDIR[r.ch];
         if (d) {
           cx.fillStyle = l.color;
           if (!d[0] && !d[1]) { cx.beginPath(); cx.arc(cxr, y + 17, 2.5, 0, 7); cx.fill(); }
@@ -1236,7 +1266,7 @@ function draw(t) {
             cx.restore();
           }
         }
-        if (SHIFT.has(r.ch)) { // shift is the OTHER hand's job — flag it
+        if (!G.cast && SHIFT.has(r.ch)) { // shift is the OTHER hand's job — flag it
           cx.fillStyle = PAL.blush; cx.font = 'bold 13px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
           cx.fillText('\u21E7', cxr + 17, y - 13);
         }
@@ -1309,7 +1339,7 @@ function draw(t) {
     let ri = 0; const segs = [];
     for (const c of [...sp.word]) {
       if (c === ' ') { segs.push({ c: ' ', s: 'pending' }); continue; } // word break: no rune
-      segs.push({ c, s: sp.runes[ri] ? sp.runes[ri].status : 'pending' }); ri++;
+      segs.push({ c: G.cast ? '•' : c, s: sp.runes[ri] ? sp.runes[ri].status : 'pending' }); ri++;
     }
     const total = segs.reduce((a, s) => a + cx.measureText(s.c).width + 2, 0);
     let x = W/2 - total/2;
@@ -1317,7 +1347,7 @@ function draw(t) {
     for (const s of segs) { const w = cx.measureText(s.c).width; cx.fillStyle = col[s.s]; cx.shadowColor = s.s === 'pending' ? PAL.magenta : col[s.s]; cx.fillText(s.c, x + w/2, 30); x += w + 2; }
     cx.shadowBlur = 0;
     cx.font = 'italic 12px Georgia, "Times New Roman", serif'; cx.fillStyle = PAL.dim; // what you're casting
-    cx.fillText(sp.gloss, W/2, 50);
+    cx.fillText(G.cast ? 'time slows · the runes are veiled while you cast' : sp.gloss, W/2, 50);
   }
 
   // fx rings

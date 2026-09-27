@@ -322,9 +322,17 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   sigil; max 3 charges each. Cast: **Space opens cast mode, you type the
   sigil's name** — a noun of its school + a verb of the tongue, prefix-free so
   it fires on the last letter. A letter that fits no owned name **fizzles**
-  (mode closes, charge kept); Space again cancels. Cast mode lives in the gaps
-  between spells: it won't open while a rune is in its window and closes
-  itself (free) when one arrives, so casting never costs runes.
+  (mode closes, charge kept); Space again cancels.
+
+  **Decided (playtest): cast mode slows time.** Typing a name in the gap between
+  spells was too tight, worse as the pace rose. Now opening cast mode slows the
+  whole rhythm to a fixed crawl (the field creeps at 36 px/s — ~19% speed — at
+  any tempo): runes, tempo map, metronome and soundtrack together (the music
+  drops in pitch like slowed tape), so everything is still on the beat when the
+  ring closes. **Letters are hidden** while it is open, so slow time is not a
+  free read-ahead. The runes keep creeping — that distance is the price of a
+  cast. It won't open while a rune is in its window, and closes itself (free)
+  if one creeps in.
 
   | sigil | name | school | effect | animation |
   |---|---|---|---|---|
