@@ -81,10 +81,10 @@ truth that symbols are a two-hand chord, not a key.)
 They arrive **staggered** (one at a time) with a subtle connector showing the
 word boundary.
 
-**Space key:** thumbs have no lane. Recommendation: a **central space
-channel** between the two hand groups — fits the keyboard-split metaphor, and
-for learning, typing space matters. **[OPEN]** — channel vs. auto-insert for
-early levels.
+**Space key:** thumbs have no lane; a **central space channel** sits between
+the two hand groups — fits the keyboard-split metaphor, and for learning,
+typing space matters. **Decided (playtest):** spaces are always typed; every
+incantation is at least two words, so the thumb plays from the first spell.
 
 **Finger enforcement:** the game can't detect *which* finger you actually use
 (unless you have a per-key-pressure keyboard), so it **guides** rather than
@@ -94,11 +94,19 @@ enforces. The lanes teach; you learn by using them.
 
 ## 4. The Spellcaster Theme
 
-- **Characters are runes.** You type incantations (real words) to cast spells.
+- **Characters are runes.** You type incantations to cast spells.
 - **Elements are the lanes.** Fire, water, earth, air — mapped to finger
   positions (see §3).
-- **Spells are words.** The word you type *is* the spell. Real words, so you
-  learn to type real text.
+- **Spells are incantations in an invented tongue.** **Decided (playtest):**
+  not real words, but not random letters either — random letter salad read as
+  "a jump of random stuff". Spells are phrases in one small invented language:
+  a verb (`kai` strike, `sel` bind, `fen` ward, `quo` silence …) plus nouns
+  from the encounter's *school* (flame `vor`/`pyr`, storm `zar`/`wyn`, stone
+  `dun`/`bry`, tide `gam`/`cyl`, shadow `mox`/`jex`), grown by suffixes
+  (`-a` great, `-en` many, `-eth` ancient, `-ium` circle of …). The lexicon
+  covers every letter a–z; one school per encounter means words repeat and
+  become learnable; a gloss under the word says what you're casting
+  ("kai voreth" — strike · ancient flame).
 - **Enemies have elemental weaknesses.** A fire creature is weak to water
   spells. You need to know which spell is water, and cast it at the right
   creature. This makes the elements meaningful beyond decoration.
@@ -130,14 +138,22 @@ damage. Different enemies = different rhythms.
 - **Cavalry** — a speed variant. The charge *accelerates* (the rhythm speeds
   up). Tests speed once accuracy is down.
 
+> **Prototype implementation:** all three are encounters. Archers space runes
+> evenly; cavalry crams one extra rune per bar and raises the tempo 4% every
+> spell (reset when the encounter ends); a boss places runes on rhythm
+> patterns drawn per bar (off-beat eighths, gaps before the next phrase), hits
+> harder (24 vs 18) and has its own school — its roots orbit it on stage.
+
 **Timing model (fixed rhythm for now):**
 - **One word per volley.** The enemy attacks once (a volley); you type a whole
   word to counter. The word's characters scroll down in the rhythm. More
   "spell-casting" feel than one-key-per-beat.
-- **Per-character beat grid — [OPEN].** Words vary in length but the enemy
-  cadence is fixed: does the volley stretch to fit the word (rhythm becomes
-  word-dependent), do multiple runes share a beat, or does scroll speed
-  compensate? Core scheduling problem; unresolved.
+- **Per-character beat grid — decided (playtest): the incantation fills
+  whole bars.** "Word fits 4 beats" flowed better than one char per beat, but
+  cramming long words into one bar was too hard. So a spell spans as many
+  4-beat bars as it needs, runes spread evenly across them, with a
+  per-chapter cap on runes per bar (5 → 7). The spell always starts on a
+  bar-aligned click and the next spell follows after whole beats of rest.
 - **Per-character grading, per-spell outcome.** Each rune is graded
   perfect / good / miss as you go; the word casts or fizzles as a whole.
 
@@ -236,11 +252,31 @@ notes" — it's also "harsher penalties."
 - **Phase 3 — Mastery.** Fast tempo. You need speed *and* accuracy. The rhythm
   game really kicks in.
 
-**Key progression:** home row → top row → bottom row → numbers → symbols. The
-lanes never change; the characters in them just grow. A clean learning curve.
+**Key progression — decided (playtest):** all 26 letters and space from the
+first spell (home-row-only drills read as random and dull); **numbers join at
+chapter 4, symbols at chapter 5**. Within letters, progression is *longer
+magic words*, not new keys. The lanes never change.
 
 **Enemy progression:** archers (learn accuracy) → boss (learn rhythm) →
-cavalry (learn speed). Maps to the three phases.
+cavalry (learn speed), as encounter types that coexist rather than eras.
+
+> **Prototype run structure (playtest: "waves go on too long; always an
+> archer"):** a run is a sequence of **chapters of 3–5 short encounters**,
+> each ending in a named boss. Enemy HP is small early (archer 12 = two
+> full-power casts, ~15 s) and grows per chapter; a bar of rest separates
+> encounters and a banner names the next enemy and its school.
+>
+> | ch | name | incantations | runes/bar | tempo | encounters |
+> |---|---|---|---|---|---|
+> | 1 | Apprentice | verb + root ("kai vor") | 5 | start | archer, archer, boss |
+> | 2 | Adept | + suffixes ("kai vora") | 5 | +4 | archer, cavalry, boss |
+> | 3 | Magus | + ancient suffixes, three words | 6 | +8 | archer, cavalry, archer, boss |
+> | 4 | Numerist | + digits ("kai 3 voren") | 6 | +10 | archer, cavalry, boss |
+> | 5 | Glyphwright | + symbols ("tor! dunen", "sel dun-bry") | 7 | +12 | archer, cavalry, archer, boss |
+> | 6+ | Archmage | four-word invocations | 7 | +16, +4/loop | archer, cavalry, boss, cavalry, boss |
+>
+> 65% of spells use the chapter's newest templates, the rest earlier ones, so
+> difficulty rises without every spell being the hardest.
 
 ---
 
@@ -248,17 +284,12 @@ cavalry (learn speed). Maps to the three phases.
 
 These are the seams where a full design doc would live. **[OPEN]** throughout.
 
-- **Space key handling** (central space channel — recommended in §3 — vs.
-  auto-insert for early levels).
-- **Tempo model** (fixed per-spell vs. adaptive; must support
-  intra-encounter acceleration for cavalry).
-- **Spell content** — how are words generated? Real-word dictionary? Difficulty
-  tiers by word length/keys? Procedural or curated? Constraint: early words
-  use only learned keys (§7 key progression).
+- **Tempo model** — prototype: start tempo + a per-chapter offset; cavalry
+  accelerates within its encounter via the tempo map (§5).
+- **Spell content** — prototype answer: the invented tongue (§4). Open: a
+  larger lexicon, per-school verbs, meaning that matters in play.
 - **Elemental weakness system** — only the aggregation rule is open (a spell's
   element is derived from its letters, §4): majority element, first letter, …
-- **Per-character beat grid** — how variable-length words map onto a fixed
-  enemy cadence (see §5).
 - **Timing windows & latency calibration** — perfect/good/miss thresholds are
   playable in the prototype (§5); calibration is manual (audio delay + input
   offset, or "set from last 20 hits"). Open: a guided first-run calibration step.
@@ -267,11 +298,12 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
 - **Audio** — the "beat" of the enemy's attack; how is it conveyed (SFX, music,
   screen pulse)?
 
-  > **Prototype answer (soundtrack):** three ACE-Step-generated loops (tribal /
-  > orchestral / synthwave) at a 90 BPM reference; `playbackRate` tracks the
-  > game's bpm, so the music literally runs at the speed of the letters and
-  > rides wave/cavalry ramps pitch-intact. The metronome stays as the enemy's
-  > heartbeat under the track.
+  > **Prototype answer (soundtrack):** ACE-Step-generated loops. Tribal drums
+  > were cut (didn't fit); synthwave fit, so three darker arcane synthwave
+  > tracks were generated and picked from 16 candidates for beat stability.
+  > Each track is started on a click at its measured first beat and time-scaled
+  > so its beat is the game's beat (resampling, so pitch follows tempo). The
+  > metronome stays as the enemy's heartbeat under the track.
 - **Meta-progression** — spellbook, unlockable elements/areas, score/rank,
   replay.
 - **Controls & input** — key event handling, input buffering, key-rollover for

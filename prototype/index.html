@@ -20,28 +20,15 @@
 </head>
 <body>
 <div id="wrap">
-  <h1>RUNECASTER — prototype v0 (home-row slice)</h1>
+  <h1>RUNECASTER — prototype v0</h1>
   <div id="opts">
-    <fieldset><legend>Beat grid (§5 OPEN)</legend>
-      <label><input type="radio" name="grid" value="A" checked> 1 char = 1 beat</label><br>
-      <label><input type="radio" name="grid" value="B"> word fits 4 beats</label>
-    </fieldset>
-    <fieldset><legend>Space (§3 OPEN)</legend>
-      <label><input type="radio" name="space" value="chan" checked> type space (channel)</label><br>
-      <label><input type="radio" name="space" value="auto"> auto-insert</label>
-    </fieldset>
     <fieldset><legend>Penalty (§6)</legend>
       <label><input type="radio" name="pen" value="lenient" checked> lenient (learn)</label><br>
       <label><input type="radio" name="pen" value="strict"> strict fizzle</label>
     </fieldset>
-    <fieldset><legend>Key set (§7)</legend>
-      <label><input type="radio" name="keys" value="home" checked> home row</label><br>
-      <label><input type="radio" name="keys" value="top"> + top row</label><br>
-      <label><input type="radio" name="keys" value="num"> + numbers &amp; symbols</label>
-    </fieldset>
-    <fieldset><legend>Tempo (§5 OPEN)</legend>
-      <input id="bpm" type="range" min="60" max="160" value="90"><span id="bpmv">90</span> bpm<br>
-      <label><input type="checkbox" id="cavalry"> cavalry accel (+5%/spell)</label>
+    <fieldset><legend>Run (§7)</legend>
+      start tempo <input id="bpm" type="range" min="60" max="140" value="84"><span id="bpmv">84</span> bpm<br>
+      start at <select id="chapter"></select>
     </fieldset>
     <fieldset><legend>Timing calibration (§8)</legend>
       audio <input id="delay" type="range" min="-300" max="300" value="0"><span id="delayv">0</span> ms
@@ -55,26 +42,26 @@
     </fieldset>
     <fieldset><legend>Soundtrack (§8 OPEN)</legend>
       <select id="music">
-        <option value="a" selected>tribal drums</option>
-        <option value="b">dark orchestral (no beat — free-running)</option>
+        <option value="e" selected>mystic synthwave</option>
+        <option value="d">arcane synthwave</option>
+        <option value="f">arcane battle</option>
         <option value="c">synthwave</option>
+        <option value="b">dark orchestral (no beat — free-running)</option>
         <option value="off">off</option>
       </select>
     </fieldset>
   </div>
   <canvas id="game" width="1120" height="840"></canvas>
   <div id="help">
-    <b>Try these (each answers an [OPEN] question):</b>
+    <b>How a run goes:</b> chapters of short encounters — archers (steady volleys), cavalry (the charge speeds up each spell), and a boss (its incantations follow a rhythm pattern, off-beat runes included). Clear a chapter and the incantations grow: short two-word spells → longer derived words → three-word invocations → numbers → symbols. Spells are phrases in one invented tongue (the gloss under the word says what you're casting), and each encounter keeps to one school of words, so they repeat and become learnable.
     <ul>
-      <li><b>Beat grid:</b> play a 3-letter word, then a 5-6 letter word, in both grid modes. A = cadence stretches with word length; B = fixed 4-beat volley, characters cram (gap shrinks). Which feels like "the enemy's rhythm"?</li>
-      <li><b>Space:</b> wait for a two-word spell ("sad lad"). Type-space makes the gap a beat you play; auto-insert skips it. Does the channel help or interrupt flow?</li>
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
-      <li><b>Cast feel:</b> watch the word-bolt hit the archer — does the element color + impact sell "you cast a spell"? Waves tighten +4 bpm each; is the fight loop compelling?</li>
+      <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
       <li><b>Calibration:</b> if the click doesn't land when the letter crosses the line, slide <i>audio</i>. If your presses sit consistently early/late on the error bar, press "set input from last 20 hits" (or slide <i>input</i>). Both are saved in this browser.</li>
     </ul>
-    Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. Soundtrack runs at the speed of the letters (try the cavalry ramp); music needs an http server — file:// plays silent.
+    Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. Soundtrack is locked to the beat and runs at the speed of the letters; music needs an http server — file:// plays silent.
   </div>
 </div>
 <script>
@@ -139,41 +126,110 @@ const HIT_Y = 554, TOP_Y = 138, LOOK = 2.2, PXS = (HIT_Y - TOP_Y) / LOOK;
 // battle stage: bottom quarter of the canvas (under the hit line), sprites live here
 const STAGE_TOP = H - 210, STAGE_H = 210, GROUND_Y = 178, WIZ_X = 190, WIZ_Y = 178, ARC_X = 930, ARC_Y = 178, STAFF_X = 284, STAFF_Y = 28;
 const WIZ_AY = STAGE_TOP + WIZ_Y, ARC_AY = STAGE_TOP + ARC_Y, STAFF_AY = STAGE_TOP + STAFF_Y; // absolute anchors
-const PW = 0.055, GW = 0.14, DMG = 18, REST = 1.2, FIT = 4, HEAL = 2;
+const PW = 0.055, GW = 0.14, DMG = 18, REST = 1.2, HEAL = 2;
 const LAPSE_GRACE = 0.05; // frame lapse waits this long past the window so a queued in-window keypress is graded by its own timestamp first
 const EARLY_SHOW = 0.6;   // correct key up to this far before the window says EARLY (with ms); earlier presses are strays
-const ENEMY_HP = 24, WAVE_BPM = 4, BOLT_F = 0.38, ARROW_F = 0.45; // casting feel: bolt flight, enemy-arrow flight
+const BOLT_F = 0.38, ARROW_F = 0.45; // casting feel: bolt flight, enemy-arrow flight
 
-// ================= content =================
-const POOL = {
-  home: ['add','all','ask','dad','fall','falls','flag','flags','flask','gala','gash','glad','had','has','halls','hash','lash','lass','lad','lag','sad','salad','slash','glass'],
-  top:  ['quiet','quite','suite','fruit','type','types','write','quote','your','out','our','try','yet','yes','unit','units','until','right','eight','white','tower','towers','power','route','true','pure','pretty','require'],
-  num:  ['f1re','w2ter','h3al','s0ul','v0lt','z3ro','4air','hi!','go?','1+1','3=3','x^2','2*3','9>5','6<7','50%','a&b','4!'],
+// ================= content: the runic tongue (§8 spell content) =================
+// Incantations are phrases in one small invented language, not random letters:
+// a verb + nouns from the encounter's school, grown by suffixes as the run goes on.
+// Every letter a–z appears in the lexicon; each encounter speaks one school, so
+// its words repeat and become learnable.
+const VERBS = { kai:'strike', sel:'bind', lum:'kindle', tor:'break', fen:'ward', rin:'call', hal:'mend', quo:'silence' };
+const SCHOOLS = {
+  flame:  { vor:'flame', pyr:'ember' },
+  storm:  { zar:'storm', wyn:'wind' },
+  stone:  { dun:'stone', bry:'thorn' },
+  tide:   { gam:'tide', cyl:'frost' },
+  shadow: { mox:'shadow', jex:'hex' },
 };
-const MULTI = {
-  home: ['sad lad','dad had','add all','gala falls'],
-  top:  ['quiet unit','power out','type right','true quote'],
-  num:  ['f1re! f1re!','g0 g0 g0','2 h3al 1 s0ul'],
+const plural = g => g + (/[sx]$/.test(g) ? 'es' : 's');
+const SUF2 = { a: g => 'great ' + g, en: plural, is: g => 'of ' + g };                                    // tier 2+
+const SUF3 = { eth: g => 'ancient ' + g, ara: g => 'bright ' + g, ondo: g => 'endless ' + g, ium: g => 'circle of ' + g }; // tier 3+
+const pick = o => { const k = Object.keys(o); return k[Math.floor(Math.random() * k.length)]; };
+const word = (text, gloss) => ({ text, gloss });
+function noun(school, suf, not) { // root noun, optionally suffixed; `not` = a word already in the phrase
+  const roots = Object.keys(SCHOOLS[school]).filter(r => !not || !not.text.startsWith(r));
+  const n = roots[Math.floor(Math.random() * roots.length)], g = SCHOOLS[school][n];
+  if (!suf) return word(n, g);
+  const s = pick(suf); return word(n + s, suf[s](g));
+}
+const verb = () => { const v = pick(VERBS); return word(v, VERBS[v]); };
+const digit = () => { const d = 2 + Math.floor(Math.random() * 8); return word(String(d), String(d)); };
+// phrase templates per tier: numbers arrive at tier 4, symbols at tier 5 (§7)
+const TEMPLATES = {
+  1: [s => [verb(), noun(s)]],                                                   // kai vor
+  2: [s => [verb(), noun(s, SUF2)]],                                             // kai vora
+  3: [s => [verb(), noun(s, SUF3)], s => { const a = noun(s); return [verb(), a, noun(s, SUF2, a)]; }],   // kai voreth · kai vor pyren
+  4: [s => { const n = noun(s); return [verb(), digit(), word(n.text + 'en', plural(n.gloss))]; },         // kai 3 voren
+      s => [verb(), noun(s, SUF3), digit()]],                                                               // fen dunium 4
+  5: [s => { const v = verb(); return [word(v.text + '!', v.gloss + '!'), noun(s, SUF2)]; },               // tor! dunen
+      s => { const a = noun(s), b = noun(s, null, a); return [verb(), word(a.text + '-' + b.text, a.gloss + '-' + b.gloss)]; }, // sel dun-bry
+      s => { const n = noun(s); return [word(n.text + "'s", n.gloss + "'s"), verb()]; },                   // vor's fen
+      s => { const n = noun(s); return [verb(), word(`(${n.text})`, `(${n.gloss})`), noun(s, SUF3, n)]; }, // quo (mox) jexeth
+      s => { const a = noun(s), b = noun(s, null, a); return [verb(), word(a.text + '+' + b.text, a.gloss + ' + ' + b.gloss)]; }, // rin zar+wyn
+      s => { const n = noun(s, SUF2); return [verb(), word(n.text + '?', n.gloss + '?')]; }],                // tor moxa?
+  6: [s => [verb(), noun(s, SUF3), verb(), noun(s, SUF2)],                       // kai voreth sel pyra
+      s => { const a = noun(s); return [verb(), digit(), noun(s, SUF3, a), a]; },
+      s => { const v = verb(), a = noun(s), b = noun(s, SUF3, a); return [word(v.text + ':', v.gloss + ':'), word(a.text + '-' + b.text, a.gloss + '-' + b.gloss)]; }], // kai: vor-pyreth
 };
-let lastWord = '';
-function pickWord() {
-  const set = OPT.keys === 'num' ? 'num' : (OPT.keys === 'top' ? 'top' : 'home');
-  const pool = set === 'num' ? POOL.num.concat(POOL.home) : set === 'top' ? POOL.top.concat(POOL.home) : POOL.home;
-  let w = '';
-  if (OPT.space === 'chan' && Math.random() < 0.25) w = MULTI[set][Math.floor(Math.random()*MULTI[set].length)];
-  else w = pool[Math.floor(Math.random()*pool.length)];
-  if (w === lastWord) return pickWord();
-  lastWord = w; return w;
+let lastPhrase = '';
+function makeIncantation(tier, school) {
+  // mostly the current tier, sometimes an earlier one: difficulty rises without every spell being the hardest
+  const t = Math.random() < 0.65 || tier === 1 ? tier : 1 + Math.floor(Math.random() * (tier - 1));
+  const ts = TEMPLATES[Math.min(6, t)];
+  const words = ts[Math.floor(Math.random() * ts.length)](school);
+  const text = words.map(w => w.text).join(' ');
+  if (text === lastPhrase) return makeIncantation(tier, school);
+  lastPhrase = text;
+  return { text, gloss: words.map(w => w.gloss).join(' · ') };
+}
+
+// ================= progression (§7): chapters of short encounters =================
+// dens = max runes per 4-beat bar (a spell spans as many bars as it needs, runes spread
+// evenly across them); tier = incantation templates; bpm = offset from the start tempo.
+const CHAPTERS = [
+  { name: 'Apprentice',  tier: 1, dens: 5, bpm: 0,  encs: ['archer', 'archer', 'boss'],                     boss: 'Stone Warden',     bossSchool: 'stone' },
+  { name: 'Adept',       tier: 2, dens: 5, bpm: 4,  encs: ['archer', 'cavalry', 'boss'],                    boss: 'Storm Hierophant', bossSchool: 'storm' },
+  { name: 'Magus',       tier: 3, dens: 6, bpm: 8,  encs: ['archer', 'cavalry', 'archer', 'boss'],          boss: 'Tide Lich',        bossSchool: 'tide' },
+  { name: 'Numerist',    tier: 4, dens: 6, bpm: 10, encs: ['archer', 'cavalry', 'boss'],                    boss: 'Counting Wraith',  bossSchool: 'shadow' },
+  { name: 'Glyphwright', tier: 5, dens: 7, bpm: 12, encs: ['archer', 'cavalry', 'archer', 'boss'],          boss: 'Glyph Tyrant',     bossSchool: 'flame' },
+  { name: 'Archmage',    tier: 6, dens: 7, bpm: 16, encs: ['archer', 'cavalry', 'boss', 'cavalry', 'boss'], boss: 'Shadow Archon',    bossSchool: 'shadow' },
+];
+function chapterAt(ci) { // past the last chapter the Archmage loop repeats, 4 bpm faster each time
+  const last = CHAPTERS.length - 1, c = CHAPTERS[Math.min(ci, last)];
+  return ci <= last ? c : { ...c, name: c.name + ' ' + (ci - last + 1), bpm: c.bpm + 4 * (ci - last) };
+}
+// archers: steady volleys (learn accuracy) · cavalry: the charge accelerates every spell (speed)
+// · boss: incantations follow rhythm patterns, off-beats included (rhythm) — §5 enemy structures
+const ENEMIES = {
+  archer:  { label: 'Archer',  hp: ci => 12 + 4 * ci, dmg: 18, color: '#f87171' },
+  cavalry: { label: 'Cavalry', hp: ci => 18 + 4 * ci, dmg: 18, color: '#fb923c', ramp: 1.04 },
+  boss:    { label: 'Boss',    hp: ci => 28 + 6 * ci, dmg: 24, color: '#c084fc' },
+};
+// boss bars: beat positions inside one 4-beat bar
+const BOSS_BARS = [
+  [0, 1, 2, 3], [0, 1, 2, 2.5, 3], [0, 0.5, 1, 2, 3], [0, 1, 1.5, 2, 3], [0, 1, 2, 3, 3.5],
+  [0, 0.5, 1, 2, 2.5, 3], [0, 1, 1.5, 2, 3, 3.5], [0, 0.5, 1, 1.5, 2, 3, 3.5], [0, 1, 2], [0, 1.5, 3],
+];
+function bossPositions(n, dens) { // beat offsets for n runes, bar by bar
+  const fits = BOSS_BARS.filter(b => b.length <= dens), out = [];
+  for (let bar = 0; out.length < n; bar++) {
+    const left = n - out.length;
+    const exact = fits.filter(b => b.length === left);
+    const pool = exact.length ? exact : left < Math.max(...fits.map(b => b.length)) ? fits.filter(b => b.length > left) : fits.filter(b => b.length >= 4);
+    const b = pool[Math.floor(Math.random() * pool.length)];
+    for (const p of b.slice(0, left)) out.push(bar * 4 + p);
+  }
+  return out;
 }
 
 // ================= options =================
 const OPT = {};
 function syncOpts() {
-  OPT.grid = document.querySelector('input[name=grid]:checked').value;
-  OPT.space = document.querySelector('input[name=space]:checked').value;
   OPT.pen = document.querySelector('input[name=pen]:checked').value;
-  OPT.keys = document.querySelector('input[name=keys]:checked').value;
-  OPT.cavalry = document.getElementById('cavalry').checked;
+  OPT.startCh = +document.getElementById('chapter').value;
   OPT.guide = document.getElementById('guide').checked;
   OPT.music = document.getElementById('music').value;
   OPT.delay = +document.getElementById('delay').value;
@@ -182,22 +238,20 @@ function syncOpts() {
   document.getElementById('inoffv').textContent = OPT.inOff;
   localStorage.setItem('runecaster.delay', OPT.delay);
   localStorage.setItem('runecaster.inoff', OPT.inOff);
-  // NOTE: never touch G.bpm here — the bpm slider's own input/change
-  // handlers apply it, and a cavalry ramp must survive toggling options.
 }
+document.getElementById('chapter').innerHTML = CHAPTERS.map((c, i) => `<option value="${i}">${i + 1} · ${c.name}</option>`).join('');
 // calibration is per device: restore it before the first sync
 for (const [id, key] of [['delay', 'runecaster.delay'], ['inoff', 'runecaster.inoff']]) {
   const v = localStorage.getItem(key); if (v !== null) document.getElementById(id).value = v;
 }
 syncOpts();
-document.querySelectorAll('#opts input').forEach(i => i.addEventListener('change', () => {
-  if (i.id === 'bpm') { document.getElementById('bpmv').textContent = i.value; if (G) G.bpm = +i.value; }
+document.querySelectorAll('#opts input, #opts select').forEach(i => i.addEventListener('change', () => {
   syncOpts();
   if (i.id === 'delay' && started && G && !G.over) musicPlay(OPT.music); // music is scheduled against the delay: re-lock it
+  if (i.id === 'music' && started && G && !G.over) musicPlay(OPT.music);
 }));
 for (const id of ['delay', 'inoff']) document.getElementById(id).addEventListener('input', syncOpts);
-document.getElementById('music').addEventListener('change', () => { syncOpts(); if (started && G && !G.over) musicPlay(OPT.music); });
-document.getElementById('bpm').addEventListener('input', () => { document.getElementById('bpmv').textContent = document.getElementById('bpm').value; if (G) G.bpm = +document.getElementById('bpm').value; });
+document.getElementById('bpm').addEventListener('input', () => { document.getElementById('bpmv').textContent = document.getElementById('bpm').value; }); // start tempo: applies to the next run
 document.getElementById('calib').addEventListener('click', () => {
   const s = G && timingStats(20, true); if (!s) return;
   document.getElementById('inoff').value = Math.max(-150, Math.min(150, Math.round(s.mean)));
@@ -252,13 +306,39 @@ function newGame() {
     hits: {perfect:0, good:0, miss:0}, spells: [], nextT0: 0, beatIdx: 0, nextBeat: 0,
     segs: [],   // tempo map: [{t0, beat}] — clicks, pulse and music follow the tempo of the spell being played
     deltas: [], // judged presses: {d, raw, g} seconds (d = graded error, raw = before input offset)
-    pops: [], fx: [], flash: null, redFlash: 0, over: false,
-    // effects: enemy with hp/waves, in-flight spell bolts, enemy arrow strikes, particles
-    enemyHp: ENEMY_HP, wave: 1, bolts: [], strikes: [], parts: [],
-    shake: 0, archFlash: 0, lastT: 0,
+    pops: [], fx: [], flash: null, redFlash: 0, over: false, banner: null,
+    // run progression: chapter index, encounter index within it, the enemy being fought
+    baseBpm: +document.getElementById('bpm').value, ci: OPT.startCh, ei: 0, enemy: null, cleared: 0, lastSchool: null,
+    // effects: in-flight spell bolts, enemy strikes, particles
+    bolts: [], strikes: [], parts: [],
+    shake: 0, foeFlash: 0, lastT: 0,
     // stage sprite state (all timestamp-driven poses, no animation loop needed)
-    wizCast: null, wizHurt: -9, arcEnter: -9, arcDead: -9,
+    wizCast: null, wizHurt: -9, foeEnter: -9, foeDead: -9,
   };
+  startEncounter();
+}
+function startEncounter() {
+  const ch = chapterAt(G.ci), kind = ch.encs[G.ei], E = ENEMIES[kind];
+  // each encounter speaks one school of words; bosses have their own, others rotate
+  const schools = Object.keys(SCHOOLS).filter(s => s !== G.lastSchool);
+  const school = kind === 'boss' ? ch.bossSchool : schools[Math.floor(Math.random() * schools.length)];
+  G.lastSchool = school;
+  G.enemy = { kind, name: kind === 'boss' ? ch.boss : E.label, hp: E.hp(G.ci), max: E.hp(G.ci), dmg: E.dmg, color: E.color, school };
+  G.bpm = Math.min(200, G.baseBpm + ch.bpm); // cavalry ramps reset with every new encounter
+  const newCh = G.ei === 0;
+  G.banner = {
+    title: newCh ? `CHAPTER ${G.ci + 1} — ${ch.name.toUpperCase()}` : G.enemy.name.toUpperCase(),
+    sub: newCh ? `${G.enemy.name} · ${['', 'two-word spells', 'longer words', 'three-word invocations', 'numbers join the runes', 'symbols join the runes', 'the full tongue'][Math.min(6, ch.tier)]}`
+               : `${{ archer: 'steady volleys', cavalry: 'the charge speeds up every spell', boss: 'follow its rhythm' }[kind]} · school of ${school}`,
+    until: now() + 2.2,
+  };
+}
+function nextEncounter() { // the enemy fell: advance the run
+  G.cleared++;
+  G.ei++;
+  if (G.ei >= chapterAt(G.ci).encs.length) { G.ci++; G.ei = 0; }
+  startEncounter();
+  G.nextT0 += 4 * segAt(G.nextT0).beat; // one bar of breath before the next enemy's first spell (stays on the grid)
 }
 function startRun() {
   G.nextBeat = AC.currentTime + 0.1;
@@ -284,9 +364,12 @@ function beatPhase(t) { const s = segAt(t), p = ((t - s.t0) / s.beat) % 1; retur
 // tempo changes and loop seams. Resampling shifts pitch with tempo.
 // bpm/off measured from the files (onset phase fit, stable to ±25 ms across the file).
 const MUSIC = {
-  a: { bpm: 89.775, off: 0.394, bars: 21 },
   b: null, // no stable pulse: free-running at native speed, never implies a beat
   c: { bpm: 102.08, off: 0.286, bars: 25 },
+  // ACE-Step generations, picked from 16 for beat stability; bpm/off = folded-kick fit on the encoded file
+  d: { bpm: 97.065, off: 0.361, bars: 22 },
+  e: { bpm: 97.06,  off: 0.381, bars: 22 },
+  f: { bpm: 97.105, off: 0.366, bars: 22 },
 };
 const musicBufs = {};
 let musicSrc = null, musicGain = null;
@@ -340,28 +423,28 @@ window.G = () => G; // debug hook
 
 // ================= scheduling =================
 function makeSpell(t0) {
-  if (OPT.cavalry) G.bpm = Math.min(200, G.bpm * 1.05);
-  const word = pickWord(), beat = 60/G.bpm, chars = [...word];
+  const ch = chapterAt(G.ci), foe = G.enemy;
+  if (foe.kind === 'cavalry') G.bpm = Math.min(200, G.bpm * ENEMIES.cavalry.ramp);
+  const inc = makeIncantation(ch.tier, foe.school), beat = 60/G.bpm, chars = [...inc.text];
   // t0 is a click (previous spell spans whole beats); this spell's tempo starts here
   if (Math.abs(segAt(t0).beat - beat) > 1e-9) {
     G.segs.push({ t0, beat });
     if (musicSrc && musicSrc.meta) musicSrc.playbackRate.setValueAtTime(musicRate(beat), t0 + OPT.delay / 1000);
   }
   while (G.segs.length > 1 && G.segs[1].t0 < Math.min(now(), G.nextBeat) - 1) G.segs.shift();
-  const gap = OPT.grid === 'A' ? beat : (FIT * beat) / chars.length;
-  const runes = []; let k = 0;
-  for (const ch of chars) {
-    if (ch === ' ' && OPT.space === 'auto') continue;
-    runes.push({ ch, lane: KEY2LANE[ch], time: t0 + k*gap, status: 'pending', hitAt: 0 });
-    k++;
-  }
+  // runes fill whole 4-beat bars: evenly spread (archers, cavalry — who crams one more per bar),
+  // or on a boss's rhythm pattern; density per bar is capped by the chapter
+  const n = chars.length, dens = ch.dens + (foe.kind === 'cavalry' ? 1 : 0);
+  let bars, offs;
+  if (foe.kind === 'boss') { offs = bossPositions(n, ch.dens); bars = Math.floor(offs[n - 1] / 4) + 1; }
+  else { bars = Math.ceil(n / dens); offs = chars.map((_, i) => i * bars * 4 / n); }
+  const runes = chars.map((c, i) => ({ ch: c, lane: KEY2LANE[c], time: t0 + offs[i] * beat, status: 'pending', hitAt: 0 }));
   const last = runes[runes.length-1];
-  const spell = { word, runes, t0, end: last ? last.time : t0, done: false, fizzled: false, power: 1,
-    arrow: { from: t0 - beat, to: (last ? last.time : t0) + GW + 0.12 } };
+  const spell = { word: inc.text, gloss: inc.gloss, runes, t0, end: last.time, done: false, fizzled: false, power: 1,
+    arrow: { from: t0 - beat, to: last.time + GW + 0.12 } };
   G.spells.push(spell);
   if (G.spells.length > 6) G.spells = G.spells.filter(s => !s.done || now() < s.end + 1);
-  const beats = OPT.grid === 'A' ? k : FIT;
-  G.nextT0 = t0 + Math.ceil(beats + REST - 1e-9) * beat; // whole beats: the next spell starts on a click
+  G.nextT0 = t0 + Math.ceil(bars * 4 + REST - 1e-9) * beat; // whole beats: the next spell starts on a click
 }
 
 // ================= grading / resolution =================
@@ -407,7 +490,7 @@ function fizzle(sp) {
   G.fx.push({ kind:'ring', color:'#f87171', t0: now(), dur: .5, x: W/2, y: HIT_Y });
   fizzleSnd();
   // the archer counters: an arrow flies down; the hit lands when it arrives
-  G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: DMG, why: sp.fizzledWrong ? 'WRONG KEY' : 'MISSED RUNE' });
+  G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: G.enemy.dmg, why: sp.fizzledWrong ? 'WRONG KEY' : 'MISSED RUNE' });
   whooshSnd();
 }
 function resolveMiss(sp, r, note) {
@@ -448,12 +531,12 @@ function resolveCast(sp) {
   // goods cost spell power, never health; perfects heal. Partial lapses
   // counter for the missed share of DMG, proportional to how many lapsed.
   const missed = sp.runes.length - p - g;
-  const counter = Math.round(DMG * missed / (sp.runes.length || 1));
+  const counter = Math.round(G.enemy.dmg * missed / (sp.runes.length || 1));
   G.wizCast = { el, until: now() + 0.5 }; // caster raises his staff
   if (sp.power <= 0) {
     popup('FIZZLE', '#f87171', W/2, HIT_Y - 60);
     fizzleSnd();
-    G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: DMG, why: 'ALL RUNES LAPSED' });
+    G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: G.enemy.dmg, why: 'ALL RUNES LAPSED' });
     whooshSnd();
   } else {
     G.bolts.push({ word: sp.word, el, power: sp.power, t0: now(), at: now() + BOLT_F,
@@ -465,18 +548,19 @@ function resolveCast(sp) {
       dmg: counter, why: missed + (missed > 1 ? ' RUNES MISSED' : ' RUNE MISSED') });
   }
 }
-function applyImpact(b) { // spell bolt reached the archer
-  const dmg = Math.round(8 * b.power); // ENEMY_HP/8 = casts-per-wave at full power
-  G.enemyHp -= dmg;
-  G.archFlash = now();
+function applyImpact(b) { // spell bolt reached the enemy
+  if (G.enemy.hp <= 0) return; // already falling: the next enemy isn't on stage yet
+  const dmg = Math.round(8 * b.power); // hp/8 = full-power casts to clear an encounter
+  G.enemy.hp -= dmg;
+  G.foeFlash = now();
   burst(ARC_X, ARC_AY - 44, ELC[b.el], 14 + Math.round(22*b.power), 180 + 240*b.power, b.el);
-  if (G.enemyHp <= 0) { // wave cleared: the archer falls, a new one enters, tempo tightens (§7)
-    G.wave++; G.enemyHp = ENEMY_HP;
-    G.bpm = Math.min(200, G.bpm + WAVE_BPM);
-    popup('WAVE ' + G.wave, '#fbbf24', W/2, 150);
+  if (G.enemy.hp <= 0) { // encounter cleared: the enemy falls, the run advances (§7)
+    popup(G.enemy.name.toUpperCase() + ' DEFEATED', '#fbbf24', W/2, 150);
     burst(ARC_X, ARC_AY - 40, '#fbbf24', 60, 340);
     G.shake = 12;
-    G.arcDead = now(); G.arcEnter = now() + 0.55;
+    G.foeDead = now(); G.foeEnter = now() + 0.9;
+    G.strikes = []; // a fallen enemy's counters never land
+    nextEncounter();
   }
 }
 function applyStrike(s) { // enemy arrow reached the caster — the counter's shortfall lands
@@ -495,7 +579,6 @@ addEventListener('keydown', e => {
   const k = e.key === ' ' ? ' ' : (e.key.length === 1 ? e.key.toLowerCase() : null);
   if (k === null) return;
   if (k === ' ') e.preventDefault();
-  if (k === ' ' && OPT.space === 'auto') return;
   // when the key went down (event timestamp, not handler time), on the heard clock
   const raw = heardAt(e.timeStamp), t = raw - OPT.inOff / 1000;
   // route the press to the nearest pending rune with that character; separately
@@ -635,16 +718,90 @@ function drawWizard(t, phase) {
   }
   cx.restore();
 }
-function drawArcher(t) {
-  if (G.enemyHp <= 0 && t - G.arcDead < 0.55) return; // fell; new one marching in
-  const enter = t - G.arcEnter;
+// enemies face left (toward the caster); all poses are timestamp-driven
+function drawEnemy(t) {
+  if (t >= G.foeDead && t < G.foeEnter) return; // fell; the next one is on its way
+  const enter = t - G.foeEnter;
   const dx = (enter >= 0 && enter < 0.5) ? (1 - enter / 0.5) * 170 : 0;
-  const fl = t - G.archFlash;
-  // draw the bow as the counter loads: windup begins with the strike's t0
+  const fl = t - G.foeFlash;
+  // the counter winds up with the strike's t0: bow pull / lance couch / staff raise
   const wind = G.strikes.length ? G.strikes[0].t0 - t : 9;
   const pull = (wind < 0.24 && wind > -0.05) ? 1 - Math.max(0, wind) / 0.24 : 0;
   cx.save();
   cx.translate(ARC_X + dx - (fl < 0.25 ? 10 * (1 - fl/0.25) : 0), ARC_Y - (fl < 0.25 ? 3 : 0));
+  const kind = G.enemy.kind;
+  if (kind === 'cavalry') drawRider(t, pull); else if (kind === 'boss') { cx.save(); cx.scale(0.88, 0.88); drawBoss(t, pull); cx.restore(); } else drawArcher(pull);
+  if (fl < 0.25) { // bolt impact flash, sized to the body
+    const [rx, ry, cy] = { archer: [26, 46, -42], cavalry: [52, 42, -44], boss: [48, 78, -80] }[kind];
+    cx.globalAlpha = .85 * (1 - fl/0.25); cx.fillStyle = '#ffffff';
+    cx.beginPath(); cx.ellipse(0, cy, rx, ry, 0, 0, 7); cx.fill();
+    cx.globalAlpha = 1;
+  }
+  cx.restore();
+}
+function drawRider(t, pull) { // cavalry: a galloping horse and a couched lance
+  const g = t * 10, bob = Math.sin(g * 2) * 2.5;
+  cx.fillStyle = 'rgba(0,0,0,.4)'; cx.beginPath(); cx.ellipse(0, 3, 52, 7, 0, 0, 7); cx.fill();
+  cx.strokeStyle = '#2b201b'; cx.lineWidth = 5; cx.lineCap = 'round';
+  for (const [hx, ph] of [[-26, 0], [-18, Math.PI], [22, Math.PI * 0.5], [30, Math.PI * 1.5]]) { // legs
+    const a = Math.sin(g + ph) * 0.55;
+    cx.beginPath(); cx.moveTo(hx, -30 + bob); cx.lineTo(hx + Math.sin(a) * 24, -30 + bob + Math.cos(a) * 30); cx.stroke();
+  }
+  cx.lineCap = 'butt';
+  cx.fillStyle = '#3a2a22';
+  cx.beginPath(); cx.ellipse(2, -38 + bob, 40, 15, 0, 0, 7); cx.fill();                                   // body
+  cx.beginPath(); cx.moveTo(-30, -44 + bob); cx.lineTo(-50, -70 + bob); cx.lineTo(-40, -74 + bob); cx.lineTo(-18, -48 + bob); cx.fill(); // neck
+  cx.beginPath(); cx.ellipse(-52, -70 + bob, 12, 7, -0.4, 0, 7); cx.fill();                              // head
+  cx.strokeStyle = '#1a1310'; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(38, -44 + bob); cx.quadraticCurveTo(54, -40 + bob, 50, -22 + bob); cx.stroke(); // tail
+  // rider
+  cx.fillStyle = '#4b2430';
+  cx.beginPath(); cx.moveTo(-4, -50 + bob); cx.lineTo(14, -50 + bob); cx.lineTo(10, -84 + bob); cx.lineTo(0, -84 + bob); cx.fill();
+  cx.beginPath(); cx.arc(4, -92 + bob, 9, 0, 7); cx.fill();
+  cx.fillStyle = '#05070c'; cx.beginPath(); cx.ellipse(1, -92 + bob, 4, 5, 0, 0, 7); cx.fill();
+  // lance: lowers onto the caster as the counter loads
+  const tipY = -76 + bob + pull * 18;
+  cx.strokeStyle = '#cbd5e1'; cx.lineWidth = 3;
+  cx.beginPath(); cx.moveTo(16, -72 + bob); cx.lineTo(-92, tipY); cx.stroke();
+  cx.fillStyle = pull > 0.15 ? '#fb923c' : '#94a3b8';
+  if (pull > 0.15) { cx.shadowColor = '#fb923c'; cx.shadowBlur = 10; }
+  cx.beginPath(); cx.moveTo(-104, tipY - 1); cx.lineTo(-90, tipY - 5); cx.lineTo(-90, tipY + 4); cx.fill();
+  cx.shadowBlur = 0; cx.lineWidth = 1;
+}
+function drawBoss(t, pull) { // boss: a towering robed caster, its school's roots orbiting it
+  const hover = Math.sin(t * 1.6) * 3, eye = G.enemy.color;
+  cx.fillStyle = 'rgba(0,0,0,.45)'; cx.beginPath(); cx.ellipse(0, 3, 50, 8, 0, 0, 7); cx.fill();
+  cx.save(); cx.translate(0, hover);
+  cx.fillStyle = '#241634'; // robe
+  cx.beginPath(); cx.moveTo(-6, -120); cx.bezierCurveTo(-26, -90, -46, -30, -50, 0); cx.lineTo(46, 0); cx.bezierCurveTo(42, -30, 22, -90, 6, -120); cx.closePath(); cx.fill();
+  cx.strokeStyle = eye; cx.globalAlpha = .6; cx.lineWidth = 2.5;
+  cx.beginPath(); cx.moveTo(-50, 0); cx.lineTo(46, 0); cx.moveTo(-2, -112); cx.lineTo(-14, -8); cx.stroke();
+  cx.globalAlpha = 1;
+  cx.fillStyle = '#241634'; // hood + horns
+  cx.beginPath(); cx.moveTo(0, -112); cx.bezierCurveTo(-26, -112, -28, -150, 0, -158); cx.bezierCurveTo(28, -150, 26, -112, 0, -112); cx.fill();
+  cx.strokeStyle = '#3b2a4f'; cx.lineWidth = 5; cx.lineCap = 'round';
+  cx.beginPath(); cx.moveTo(-14, -148); cx.quadraticCurveTo(-34, -168, -26, -182); cx.moveTo(14, -148); cx.quadraticCurveTo(34, -168, 26, -182); cx.stroke();
+  cx.lineCap = 'butt';
+  cx.fillStyle = '#05070c'; cx.beginPath(); cx.ellipse(-3, -134, 11, 13, 0, 0, 7); cx.fill();
+  cx.fillStyle = eye; cx.shadowColor = eye; cx.shadowBlur = 10; // eyes
+  cx.beginPath(); cx.arc(-8, -136, 2.5, 0, 7); cx.arc(2, -136, 2.5, 0, 7); cx.fill(); cx.shadowBlur = 0;
+  // staff rises with the counter
+  cx.save(); cx.translate(-30, -70); cx.rotate(-0.25 - pull * 0.5);
+  cx.strokeStyle = '#3b2a4f'; cx.lineWidth = 5; cx.beginPath(); cx.moveTo(0, 60); cx.lineTo(0, -80); cx.stroke();
+  cx.fillStyle = eye; cx.shadowColor = eye; cx.shadowBlur = 14 + 20 * pull;
+  cx.beginPath(); cx.arc(0, -86, 7 + 5 * pull, 0, 7); cx.fill(); cx.shadowBlur = 0;
+  cx.restore();
+  // the school's roots circle it: the words this boss answers to
+  const roots = Object.keys(SCHOOLS[G.enemy.school]);
+  cx.font = 'bold 13px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
+  roots.concat(roots).forEach((r, i, a) => {
+    const ang = t * 0.9 + i * (Math.PI * 2 / a.length);
+    cx.globalAlpha = .45 + .35 * Math.sin(ang);
+    cx.fillStyle = eye; cx.fillText(r, Math.cos(ang) * 62, -80 + Math.sin(ang) * 20);
+  });
+  cx.globalAlpha = 1; cx.lineWidth = 1;
+  cx.restore();
+}
+function drawArcher(pull) {
   cx.fillStyle = 'rgba(0,0,0,.4)'; cx.beginPath(); cx.ellipse(0, 3, 32, 6, 0, 0, 7); cx.fill();
   // bow arm + recurve bow (drawn toward the caster)
   cx.save();
@@ -685,17 +842,11 @@ function drawArcher(t) {
   cx.beginPath(); cx.moveTo(16, -52); cx.lineTo(30, -22); cx.stroke(); cx.lineWidth = 1;
   cx.strokeStyle = '#cbd5e1';
   cx.beginPath(); cx.moveTo(15, -55); cx.lineTo(19, -60); cx.moveTo(20, -52); cx.lineTo(25, -58); cx.stroke();
-  if (fl < 0.25) { // bolt impact flash
-    cx.globalAlpha = .85 * (1 - fl/0.25); cx.fillStyle = '#ffffff';
-    cx.beginPath(); cx.ellipse(0, -42, 26, 46, 0, 0, 7); cx.fill();
-    cx.globalAlpha = 1;
-  }
   if (pull > 0.15) { // charge glow on the archer while winding up
     cx.globalAlpha = .35 * pull; cx.fillStyle = '#f87171';
     cx.beginPath(); cx.ellipse(-40, -48, 26, 18, 0, 0, 7); cx.fill();
     cx.globalAlpha = 1;
   }
-  cx.restore();
 }
 function drawStage(t, beat, phase) {
   cx.save(); cx.translate(0, STAGE_TOP);
@@ -722,7 +873,7 @@ function drawStage(t, beat, phase) {
     cx.setLineDash([]); cx.globalAlpha = 1; cx.lineWidth = 1;
   }
   drawWizard(t, phase);
-  drawArcher(t);
+  drawEnemy(t);
   cx.strokeStyle = '#1e293b'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(0, 0); cx.lineTo(W, 0); cx.stroke(); cx.lineWidth = 1;
   cx.restore();
 }
@@ -766,7 +917,7 @@ function draw(t) {
     cx.fillStyle = l.color; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
     cx.fillText(l.name, LNX[l.id], HIT_Y + 42);
     cx.fillStyle = '#8fa0bd'; cx.font = '9.5px ui-monospace, Menlo, monospace';
-    cx.fillText(OPT.keys === 'num' ? l.sym : l.keys, LNX[l.id], HIT_Y + 56);
+    cx.fillText(chapterAt(G.ci).tier >= 4 ? l.sym : l.keys, LNX[l.id], HIT_Y + 56);
   }
 
   // health bars in the band under the hit line, each on its fighter's side
@@ -777,10 +928,10 @@ function draw(t) {
   cx.fillStyle = '#0b0e14'; cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
   cx.fillText('CASTER ' + G.hp, X0 + 8, BAR_Y + 12);
   cx.fillStyle = '#1c2536'; rr(W/2 + 24, BAR_Y, HALF, BAR_H, 6); cx.fill();
-  cx.fillStyle = '#f87171'; rr(W/2 + 24, BAR_Y, HALF * Math.max(0, G.enemyHp)/ENEMY_HP, BAR_H, 6); cx.fill();
+  cx.fillStyle = G.enemy.color; rr(W/2 + 24, BAR_Y, HALF * Math.max(0, G.enemy.hp)/G.enemy.max, BAR_H, 6); cx.fill();
   cx.strokeStyle = '#2a3346'; rr(W/2 + 24, BAR_Y, HALF, BAR_H, 6); cx.stroke();
   cx.fillStyle = '#0b0e14'; cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
-  cx.fillText('ARCHER wave ' + G.wave + '  ' + Math.max(0, G.enemyHp), W/2 + 32, BAR_Y + 12);
+  cx.fillText(G.enemy.name.toUpperCase() + '  ' + Math.max(0, G.enemy.hp), W/2 + 32, BAR_Y + 12);
 
   // spells: connectors + runes
   for (const s of G.spells) {
@@ -858,7 +1009,9 @@ function draw(t) {
   if (G.combo > 1) { cx.fillStyle = '#fbbf24'; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.fillText('combo x' + G.combo, 16, 84); }
   cx.fillStyle = '#66738d'; cx.font = '11px ui-monospace, Menlo, monospace';
   const playing = Math.round(60 / segAt(t).beat), queued = Math.round(G.bpm);
-  cx.fillText(playing + ' bpm' + (queued !== playing ? ' → ' + queued : '') + (OPT.cavalry ? ' (cavalry)' : ''), 16, 102);
+  cx.fillText(playing + ' bpm' + (queued !== playing ? ' → ' + queued : ''), 16, 102);
+  const chh = chapterAt(G.ci);
+  cx.fillStyle = '#8fa0bd'; cx.fillText(`ch.${G.ci + 1} ${chh.name} · ${G.ei + 1}/${chh.encs.length}`, 16, 120);
 
   // current word, graded
   const sp = activeSpell();
@@ -867,12 +1020,13 @@ function draw(t) {
     const col = { pending:'#8fa0bd', perfect:'#fbbf24', good:'#4ade80', miss:'#f87171' };
     let ri = 0; const segs = [];
     for (const c of [...sp.word]) {
-      if (c === ' ' && OPT.space === 'auto') { segs.push({ c:'␣', s:'pending' }); continue; }
       segs.push({ c: c === ' ' ? '␣' : c, s: sp.runes[ri] ? sp.runes[ri].status : 'pending' }); ri++;
     }
     const total = segs.reduce((a, s) => a + cx.measureText(s.c).width + 2, 0);
     let x = W/2 - total/2;
     for (const s of segs) { const w = cx.measureText(s.c).width; cx.fillStyle = col[s.s]; cx.fillText(s.c, x + w/2, 30); x += w + 2; }
+    cx.font = 'italic 12px ui-monospace, Menlo, monospace'; cx.fillStyle = '#7d8aa5'; // what you're casting
+    cx.fillText(sp.gloss, W/2, 50);
   }
 
   // fx rings
@@ -902,19 +1056,22 @@ function draw(t) {
     cx.fillText(b.word, bx, by - 16);
     cx.shadowBlur = 0;
   }
-  // enemy arrows in flight: released from the drawn bow, accelerating at the caster
+  // enemy strikes in flight, accelerating at the caster: arrows/lances in the enemy's color, a boss hurls an orb
   for (const s of G.strikes) {
-    const p = Math.min(1, (t - s.t0) / (s.at - s.t0)), e = p * p;
+    const p = Math.min(1, (t - s.t0) / (s.at - s.t0)), e = p * p, c = G.enemy.color;
     const x0 = ARC_X - 56, y0 = ARC_AY - 48, x1 = WIZ_X + 26, y1 = WIZ_AY - 56;
     const ax = x0 + (x1 - x0) * e, ay = y0 + (y1 - y0) * e, ang = Math.atan2(y1 - y0, x1 - x0);
     cx.save(); cx.translate(ax, ay); cx.rotate(ang);
-    cx.shadowColor = '#f87171'; cx.shadowBlur = 10;
-    cx.strokeStyle = '#f87171'; cx.lineWidth = 3;
-    cx.beginPath(); cx.moveTo(-28, 0); cx.lineTo(4, 0); cx.stroke();
-    cx.fillStyle = '#f87171';
-    cx.beginPath(); cx.moveTo(12, 0); cx.lineTo(2, -5); cx.lineTo(2, 5); cx.fill();
-    cx.beginPath(); cx.moveTo(-28, 0); cx.lineTo(-20, -4); cx.moveTo(-28, 0); cx.lineTo(-20, 4); cx.stroke();
-    cx.shadowBlur = 0;
+    cx.shadowColor = c; cx.shadowBlur = 10; cx.strokeStyle = c; cx.fillStyle = c; cx.lineWidth = 3;
+    if (G.enemy.kind === 'boss') {
+      cx.shadowBlur = 18; cx.beginPath(); cx.arc(0, 0, 9, 0, 7); cx.fill();
+      cx.globalAlpha = .4; cx.beginPath(); cx.moveTo(-8, -6); cx.lineTo(-40, 0); cx.lineTo(-8, 6); cx.fill(); cx.globalAlpha = 1;
+    } else {
+      cx.beginPath(); cx.moveTo(-28, 0); cx.lineTo(4, 0); cx.stroke();
+      cx.beginPath(); cx.moveTo(12, 0); cx.lineTo(2, -5); cx.lineTo(2, 5); cx.fill();
+      cx.beginPath(); cx.moveTo(-28, 0); cx.lineTo(-20, -4); cx.moveTo(-28, 0); cx.lineTo(-20, 4); cx.stroke();
+    }
+    cx.shadowBlur = 0; cx.lineWidth = 1;
     cx.restore();
   }
   // particles: shape by elemental kind
@@ -957,13 +1114,22 @@ function draw(t) {
     cx.fillText('correct key: ' + G.flash.text, W/2, 66);
   }
   if (shaking) cx.restore(); // full-screen overlays draw unshaken
+  // encounter / chapter banner: fades in and out over the lanes
+  if (G.banner && t < G.banner.until) {
+    const left = G.banner.until - t, a = Math.min(1, left / 0.5, (2.2 - left) / 0.25);
+    cx.globalAlpha = Math.max(0, a) * .9; cx.fillStyle = '#080a10'; rr(W/2 - 330, 250, 660, 84, 12); cx.fill();
+    cx.globalAlpha = Math.max(0, a); cx.textAlign = 'center';
+    cx.fillStyle = G.enemy.color; cx.font = 'bold 28px ui-monospace, Menlo, monospace'; cx.fillText(G.banner.title, W/2, 290);
+    cx.fillStyle = '#cbd5e1'; cx.font = '14px ui-monospace, Menlo, monospace'; cx.fillText(G.banner.sub, W/2, 316);
+    cx.globalAlpha = 1;
+  }
   // red damage flash
   if (t - G.redFlash < 0.25) { cx.globalAlpha = .28 * (1 - (t - G.redFlash)/0.25); cx.fillStyle = '#ef4444'; cx.fillRect(0, 0, W, H); cx.globalAlpha = 1; }
 
   if (G.over) {
     const s = timingStats(200, false);
     overlay('STRUCK DOWN', '#f87171', [
-      `score ${G.score.toLocaleString()}   wave ${G.wave}   max combo x${G.maxCombo}   P ${G.hits.perfect} / G ${G.hits.good} / M ${G.hits.miss}`,
+      `score ${G.score.toLocaleString()}   chapter ${G.ci + 1} (${chapterAt(G.ci).name}) · ${G.cleared} enemies felled   max combo x${G.maxCombo}   P ${G.hits.perfect} / G ${G.hits.good} / M ${G.hits.miss}`,
       s ? `timing over ${s.n} hits: avg ${Math.round(Math.abs(s.mean))}ms ${s.mean < 0 ? 'early' : 'late'} · spread ±${Math.round(s.sd)}ms` +
           (Math.abs(s.mean) > 25 && s.sd < 45 ? '  — consistent offset: calibrate input' : '') : 'no judged hits',
     ], 'click to retry');
