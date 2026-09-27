@@ -60,6 +60,7 @@
     <ul>
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
+      <li><b>Sigils (thumb):</b> defeating an enemy earns its school's sigil (bosses give 2); three flawless spells earn one too. Between spells press <b>Space</b>, type the sigil's name from the panel between your hands — <i>wynkai</i> Gale (push the runes back a bar), <i>dunfen</i> Bulwark (block the next strike), <i>moxquo</i> Veil (next 6 runes take any key of the right finger), <i>gamsel</i> Stillwater (next 2 spells 20% slower), <i>vorlum</i> Kindle (next spell at double power). A wrong letter fizzles (charge kept); Space again cancels; the mode closes itself when runes arrive.</li>
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
       <li><b>Calibration:</b> if the click doesn't land when the letter crosses the line, slide <i>audio</i>. If your presses sit consistently early/late on the error bar, press "set input from last 20 hits" (or slide <i>input</i>). Both are saved in this browser.</li>
@@ -290,6 +291,13 @@ function impactSnd(power) { // bolt landing on the archer
   beep(t, 90 + 60*power, 0.16, 'sine', 0.22 + 0.15*power);
   beep(t + 0.015, 180, 0.07, 'triangle', 0.10);
 }
+function sigilSnd() { if (!AC) return; const t = AC.currentTime; [523, 659, 784, 1047].forEach((f, i) => beep(t + i * 0.06, f, 0.18, 'triangle', 0.08)); } // sigil earned
+function openSnd() { if (!AC) return; const t = AC.currentTime; beep(t, 330, 0.25, 'sine', 0.08); beep(t + 0.05, 495, 0.25, 'sine', 0.06); } // cast mode opens
+function tickSnd(n) { if (AC) beep(AC.currentTime, 600 + n * 90, 0.05, 'triangle', 0.08); } // a letter of the name lands
+function castSigilSnd(key) { // the sigil fires: a rising chord in its school's element timbre
+  if (!AC) return; const t = AC.currentTime, wave = CAST_TIMBRE[{ storm: 'air', stone: 'earth', shadow: 'air', tide: 'water', flame: 'fire' }[POWERS[key].school]];
+  [1, 1.26, 1.5, 2].forEach((m, i) => beep(t + i * 0.04, 262 * m, 0.6, wave, 0.07));
+}
 function whooshSnd() { // enemy arrow in flight
   if (!AC) return; const t = AC.currentTime;
   const len = 0.22, buf = AC.createBuffer(1, AC.sampleRate*len, AC.sampleRate), d = buf.getChannelData(0);
@@ -319,6 +327,9 @@ function newGame() {
     shake: 0, foeFlash: 0, lastT: 0,
     // stage sprite state (all timestamp-driven poses, no animation loop needed)
     wizCast: null, wizHurt: -9, foeEnter: -9, foeDead: -9,
+    // sigils (§8): charges per power, the flawless meter, cast mode, and live effects
+    sigils: {}, learned: new Set(), meter: 0, cast: null, castFx: null, toast: null, sigilFlash: null,
+    ward: null, wardBreak: -9, veilLeft: 0, stillLeft: 0, stillFx: -9, kindle: null, galeFx: -9,
   };
   startEncounter();
 }
@@ -430,7 +441,9 @@ window.G = () => G; // debug hook
 function makeSpell(t0) {
   const ch = chapterAt(G.ci), foe = G.enemy;
   if (foe.kind === 'cavalry') G.bpm = Math.min(200, G.bpm * ENEMIES.cavalry.ramp);
-  const inc = makeIncantation(ch.tier, foe.school), beat = 60/G.bpm, chars = [...inc.text];
+  let bpm = G.bpm; const still = G.stillLeft > 0; // Stillwater: this spell plays slower (through the tempo map)
+  if (still) { bpm *= STILL_RATE; G.stillLeft--; }
+  const inc = makeIncantation(ch.tier, foe.school), beat = 60/bpm, chars = [...inc.text];
   // t0 is a click (previous spell spans whole beats); this spell's tempo starts here
   if (Math.abs(segAt(t0).beat - beat) > 1e-9) {
     G.segs.push({ t0, beat });
@@ -452,8 +465,9 @@ function makeSpell(t0) {
   });
   const last = runes[runes.length-1];
   const spell = { word: inc.text, gloss: inc.gloss, runes, rests, t0, end: last.time, done: false, fizzled: false, power: 1,
-    arrow: { from: t0 - beat, to: last.time + GW + 0.12 } };
+    arrow: { from: t0 - beat, to: last.time + GW + 0.12 }, still };
   G.spells.push(spell);
+  markVeil();
   if (G.spells.length > 6) G.spells = G.spells.filter(s => !s.done || now() < s.end + 1);
   G.nextT0 = t0 + Math.ceil(bars * 4 + REST - 1e-9) * beat; // whole beats: the next spell starts on a click
 }
@@ -538,6 +552,11 @@ function resolveCast(sp) {
   const el = Object.entries(elCount).sort((a,b)=>b[1]-a[1])[0][0];
   sp.element = el;
   sp.power = OPT.pen === 'strict' ? 1 : (sp.runes.length ? (p + 0.6*g) / sp.runes.length : 1);
+  if (G.kindle && sp.power > 0) { sp.power *= 2; sp.kindled = true; G.kindle = null; } // Kindle: this spell at double power
+  if (p === sp.runes.length) { // flawless: fills the sigil meter; a full meter grants the current school's sigil
+    G.meter += 1 / 3;
+    if (G.meter > 0.999) { G.meter = 0; grantSigil(powerOfSchool(G.enemy.school), 1, 'three flawless spells'); }
+  }
   // Damage model (playtest call): only lapsed runes draw the enemy's arrow —
   // goods cost spell power, never health; perfects heal. Partial lapses
   // counter for the missed share of DMG, proportional to how many lapsed.
@@ -553,7 +572,7 @@ function resolveCast(sp) {
     G.bolts.push({ word: sp.word, el, power: sp.power, t0: now(), at: now() + BOLT_F,
       x0: CAST_X, y0: CAST_AY, x1: ARC_X, y1: ARC_AY - 44, arc: 70 + 60 * sp.power });
     G.fx.push({ kind:'ring', color: ELC[el], t0: now(), dur: .45 + .35*sp.power, x: W/2, y: HIT_Y, big: sp.power });
-    popup((el.toUpperCase()) + (sp.power > .99 ? ' — FULL POWER' : ` — ${Math.round(sp.power*100)}%`), ELC[el], W/2, HIT_Y - 85);
+    popup((el.toUpperCase()) + (sp.kindled ? ' — KINDLED ×2' : sp.power > .99 ? ' — FULL POWER' : ` — ${Math.round(sp.power*100)}%`), ELC[el], W/2, HIT_Y - 85);
     castSnd(el, sp.power);
     if (counter > 0) G.strikes.push({ t0: now() + BOLT_F, at: now() + BOLT_F + ARROW_F,
       dmg: counter, why: missed + (missed > 1 ? ' RUNES MISSED' : ' RUNE MISSED') });
@@ -571,10 +590,17 @@ function applyImpact(b) { // spell bolt reached the enemy
     G.shake = 12;
     G.foeDead = now(); G.foeEnter = now() + 0.9;
     G.strikes = []; // a fallen enemy's counters never land
+    grantSigil(powerOfSchool(G.enemy.school), G.enemy.kind === 'boss' ? 2 : 1, G.enemy.name + ' defeated');
     nextEncounter();
   }
 }
 function applyStrike(s) { // enemy arrow reached the caster — the counter's shortfall lands
+  if (G.ward) { // Bulwark takes the hit
+    G.ward = null; G.wardBreak = now();
+    burst(WIZ_X + 52, WIZ_AY - 56, POWERS.bulwark.color, 26, 220, 'earth');
+    popup('-0 · WARDED', POWERS.bulwark.color, WIZ_X + 30, WIZ_AY - 120);
+    thudSnd(); return;
+  }
   G.hp -= s.dmg; G.redFlash = now();
   G.wizHurt = now();
   G.shake = Math.max(G.shake, 3 + 6 * (s.dmg/DMG));
@@ -584,10 +610,96 @@ function applyStrike(s) { // enemy arrow reached the caster — the counter's sh
   if (G.hp <= 0) { G.hp = 0; G.over = true; }
 }
 
+// ================= sigils (§8 powers): earned from enemies, cast by typing their names =================
+// Space opens cast mode; typing an owned sigil's name casts it the moment the name is complete
+// (names are prefix-free); a letter that fits no owned name fizzles and closes the mode (the charge
+// is kept); Space again cancels. Cast mode closes itself, free, when a rune reaches its window.
+// Each name = the school's noun + a verb of the tongue.
+const POWERS = {
+  gale:    { name: 'wynkai', label: 'GALE',       school: 'storm',  color: '#b36bff', glyph: '≋', desc: 'push the runes back a bar' },
+  bulwark: { name: 'dunfen', label: 'BULWARK',    school: 'stone',  color: '#3cf0a0', glyph: '⬢', desc: 'block the next strike' },
+  veil:    { name: 'moxquo', label: 'VEIL',       school: 'shadow', color: '#e85cff', glyph: '◐', desc: 'next 6 runes: any key of that finger' },
+  still:   { name: 'gamsel', label: 'STILLWATER', school: 'tide',   color: '#38c8ff', glyph: '≈', desc: 'next 2 spells 20% slower' },
+  kindle:  { name: 'vorlum', label: 'KINDLE',     school: 'flame',  color: '#ff6a3d', glyph: '✦', desc: 'next spell at double power' },
+};
+const SIGIL_MAX = 3, VEIL_RUNES = 6, STILL_SPELLS = 2, STILL_RATE = 0.8;
+const powerOfSchool = school => Object.keys(POWERS).find(k => POWERS[k].school === school);
+function grantSigil(key, n, why) {
+  const had = G.sigils[key] || 0, got = Math.min(SIGIL_MAX, had + n) - had;
+  if (got <= 0) return;
+  G.sigils[key] = had + got;
+  const P = POWERS[key], first = !G.learned.has(key);
+  G.learned.add(key);
+  G.toast = { key, text: `+${got} ${P.label}`, sub: first ? `new sigil — Space, then type ${P.name}` : why, at: now(), until: now() + (first ? 3.4 : 2) };
+  G.sigilFlash = { key, at: now() };
+  sigilSnd();
+}
+function openCast() {
+  if (!Object.keys(POWERS).some(k => G.sigils[k] > 0)) { G.castFx = { kind: 'close', at: now(), text: 'no sigils yet — defeat enemies to earn them' }; return; }
+  const tg = now() - OPT.inOff / 1000;
+  if (G.spells.some(s => !s.done && s.runes.some(r => r.status === 'pending' && tg >= r.time - GW))) { G.castFx = { kind: 'close', at: now(), text: 'runes in flight — cast between spells' }; return; }
+  G.cast = { buf: '', at: now() };
+  openSnd();
+}
+function closeCast(text) { G.cast = null; G.castFx = { kind: 'close', at: now(), text }; }
+function castLetter(k) {
+  const buf = G.cast.buf + k;
+  const owned = Object.keys(POWERS).filter(p => G.sigils[p] > 0);
+  const fits = owned.filter(p => POWERS[p].name.startsWith(buf));
+  if (!fits.length) { // fizzle: the mode closes, the charge is kept
+    const known = Object.keys(POWERS).find(p => POWERS[p].name.startsWith(buf));
+    G.cast = null;
+    G.castFx = { kind: 'fizzle', at: now(), buf, text: known ? `no ${POWERS[known].label} charges` : `"${buf}" is no sigil` };
+    fizzleSnd(); return;
+  }
+  G.cast.buf = buf;
+  const done = fits.find(p => POWERS[p].name === buf);
+  if (!done) { tickSnd(buf.length); return; }
+  G.sigils[done]--; G.cast = null;
+  G.castFx = { kind: 'cast', key: done, at: now() };
+  SIGIL_EFFECT[done]();
+  castSigilSnd(done);
+}
+function markVeil() { // Veil covers the next runes in time order, including spells scheduled after the cast
+  if (G.veilLeft <= 0) return;
+  const pend = G.spells.flatMap(s => s.done ? [] : s.runes.filter(r => r.status === 'pending' && !r.veil)).sort((a, b) => a.time - b.time);
+  for (const r of pend) { if (G.veilLeft <= 0) break; r.veil = true; G.veilLeft--; }
+}
+function rescheduleMusicRates() { // the tempo map changed under already-scheduled rate changes
+  if (!musicSrc || !musicSrc.meta) return;
+  const pr = musicSrc.playbackRate, a = AC.currentTime, d = OPT.delay / 1000;
+  pr.cancelScheduledValues(a); pr.setValueAtTime(musicRate(segAt(a).beat), a);
+  for (const s of G.segs) if (s.t0 + d > a) pr.setValueAtTime(musicRate(s.beat), s.t0 + d);
+}
+const SIGIL_EFFECT = {
+  gale() { // every rune not yet in its window moves one bar later (whole bar of the current tempo: stays on the grid)
+    const tg = now() - OPT.inOff / 1000, cut = tg + GW, dt = 4 * segAt(now()).beat;
+    for (const s of G.spells) {
+      if (s.done) continue;
+      for (const r of s.runes) if (r.status === 'pending' && r.time > cut) { r.fromTime = r.time; r.time += dt; r.shiftAt = now(); }
+      s.rests = s.rests.map(x => x > cut ? x + dt : x);
+      if (s.t0 > cut) { s.t0 += dt; s.arrow.from += dt; }
+      s.end = Math.max(...s.runes.map(r => r.time)); s.arrow.to = s.end + GW + 0.12;
+    }
+    for (const sg of G.segs) if (sg.t0 > cut) sg.t0 += dt;
+    G.nextT0 += dt;
+    rescheduleMusicRates();
+    G.galeFx = now();
+  },
+  bulwark() { G.ward = { at: now() }; },
+  veil() { G.veilLeft = VEIL_RUNES; markVeil(); },
+  still() { G.stillLeft = STILL_SPELLS; G.stillFx = now(); },
+  kindle() { G.kindle = { at: now() }; },
+};
+
 // ================= input =================
 addEventListener('keydown', e => {
   if (e.repeat || !started || !G || G.over) return;
-  if (e.key === ' ') { e.preventDefault(); return; } // the thumb has no rune: word breaks are rests (Space is reserved for cast mode)
+  if (e.key === ' ') { e.preventDefault(); if (G.cast) closeCast('cast cancelled'); else openCast(); return; } // the thumb: cast mode
+  if (G.cast) { // cast mode: letters spell a sigil's name, they never reach the runes
+    if (e.key.length === 1 && /[a-z]/i.test(e.key)) castLetter(e.key.toLowerCase());
+    return;
+  }
   const k = e.key.length === 1 ? e.key.toLowerCase() : null;
   if (k === null) return;
   // when the key went down (event timestamp, not handler time), on the heard clock
@@ -600,7 +712,8 @@ addEventListener('keydown', e => {
     for (const r of s.runes) {
       if (r.status !== 'pending') continue;
       const ad = Math.abs(t - r.time);
-      if (r.ch === k && (!same || ad < Math.abs(t - same.r.time))) same = { s, r };
+      const fits = r.ch === k || (r.veil && KEY2LANE[k] === r.lane); // Veil: any key of the right finger
+      if (fits && (!same || ad < Math.abs(t - same.r.time))) same = { s, r };
       if (ad <= GW && (!near || ad < Math.abs(t - near.r.time))) near = { s, r };
     }
   }
@@ -650,6 +763,9 @@ function frame(ts) {
       if (r.status === 'pending' && tg > r.time + GW + LAPSE_GRACE) resolveMiss(s, r);
     }
     for (const s of G.spells) if (!s.done && s.runes.every(r => r.status !== 'pending')) resolveCast(s);
+    // cast mode lives in the gaps: it closes itself, free, the moment a rune reaches its window
+    if (G.cast && G.spells.some(s => !s.done && s.runes.some(r => r.status === 'pending' && tg >= r.time - GW))) closeCast('the runes arrive');
+    if (G.kindle && Math.random() < 0.35) burst(CAST_X, CAST_AY, POWERS.kindle.color, 1, 50, 'fire'); // Kindle smoulders in the hand
   }
   // effects: dt-driven motion for bolts, arrows, particles, shake
   if (musicSrc && G.over) musicStop();
@@ -672,7 +788,11 @@ requestAnimationFrame(frame);
 
 // ================= drawing =================
 function rr(x, y, w, h, r) { cx.beginPath(); cx.roundRect(x, y, w, h, r); }
-function noteY(r, t) { return HIT_Y - (r.time - t) * PXS; }
+function noteY(r, t) { // Gale's shift eases in over 0.35 s (grading already uses the new time)
+  let time = r.time;
+  if (r.shiftAt && t - r.shiftAt < 0.35) { const k = (t - r.shiftAt) / 0.35, e = 1 - (1 - k) ** 3; time = r.fromTime + (r.time - r.fromTime) * e; }
+  return HIT_Y - (time - t) * PXS;
+}
 
 // ================= battle stage (top quarter) =================
 function nextCharge(t) { // staff crystal tracks the next rune: element + charge level
@@ -964,6 +1084,7 @@ function drawStage(t, beat, phase) {
     cx.setLineDash([]); cx.globalAlpha = 1; cx.lineWidth = 1;
   }
   drawWizard(t, phase);
+  drawWard(t);
   drawEnemy(t);
   cx.strokeStyle = '#3a1a5e'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(0, 0); cx.lineTo(W, 0); cx.stroke(); cx.lineWidth = 1;
   cx.restore();
@@ -1079,6 +1200,18 @@ function draw(t) {
           cx.fillStyle = PAL.blush; cx.font = 'bold 13px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
           cx.fillText('\u21E7', cxr + 17, y - 13);
         }
+        if (s.still) { // Stillwater: a slow cyan shimmer on the slowed spell's runes
+          cx.strokeStyle = POWERS.still.color; cx.globalAlpha = .45 + .25 * Math.sin(t * 5 + r.time); cx.setLineDash([4, 5]);
+          cx.beginPath(); cx.arc(cxr, y, 30, t * 0.8, t * 0.8 + 6.2); cx.stroke(); cx.setLineDash([]); cx.globalAlpha = 1;
+        }
+        if (r.veil) { // Veil: smoke wraps the rune, the letter stays faintly readable, the ring says "any key of this finger"
+          for (let i = 0; i < 3; i++) {
+            const a = t * 1.8 + i * 2.1 + r.time;
+            cx.fillStyle = 'rgba(40,10,60,.55)'; cx.beginPath(); cx.arc(cxr + Math.cos(a) * 9, y + Math.sin(a) * 9, 15, 0, 7); cx.fill();
+          }
+          cx.strokeStyle = POWERS.veil.color; cx.lineWidth = 2; cx.shadowColor = POWERS.veil.color; cx.shadowBlur = 10; cx.setLineDash([3, 4]);
+          cx.beginPath(); cx.arc(cxr, y, 29, -t * 2, -t * 2 + 6.28); cx.stroke(); cx.setLineDash([]); cx.shadowBlur = 0; cx.lineWidth = 1;
+        }
       } else if (r.hitAt && t - r.hitAt < 0.25) {
         const a = 1 - (t - r.hitAt) / 0.25;
         cx.globalAlpha = a * .85;
@@ -1113,6 +1246,7 @@ function draw(t) {
   cx.beginPath(); cx.moveTo(LX0, HIT_Y); cx.lineTo(LX1, HIT_Y); cx.stroke();
   cx.globalAlpha = 1; cx.lineWidth = 1;
   drawErrorBar();
+  drawSigils(t);
 
   // HUD: score / combo / bpm
   cx.textAlign = 'left'; cx.fillStyle = PAL.text; cx.font = 'bold 16px ui-monospace, Menlo, monospace';
@@ -1251,6 +1385,129 @@ function draw(t) {
       s ? `timing over ${s.n} hits: avg ${Math.round(Math.abs(s.mean))}ms ${s.mean < 0 ? 'early' : 'late'} · spread ±${Math.round(s.sd)}ms` +
           (Math.abs(s.mean) > 25 && s.sd < 45 ? '  — consistent offset: calibrate input' : '') : 'no judged hits',
     ], 'click to retry');
+  }
+}
+// Bulwark: a stone hex shield before the caster (stage-local coordinates); shatters when it takes a strike
+function drawWard(t) {
+  const x = WIZ_X + 52, y = WIZ_Y - 56, c = POWERS.bulwark.color;
+  const hex = (r, rot) => { cx.beginPath(); for (let i = 0; i < 6; i++) { const a = rot + i * Math.PI / 3; cx[i ? 'lineTo' : 'moveTo'](x + Math.cos(a) * r * 0.6, y + Math.sin(a) * r); } cx.closePath(); };
+  if (G.ward) {
+    const up = Math.min(1, (t - G.ward.at) / 0.3), pulse = 0.5 + 0.5 * Math.sin(t * 4);
+    cx.save(); cx.globalAlpha = up;
+    hex(40 * up, Math.PI / 6); cx.fillStyle = c + '22'; cx.fill();
+    cx.strokeStyle = c; cx.lineWidth = 2.5; cx.shadowColor = c; cx.shadowBlur = 10 + 8 * pulse; cx.stroke();
+    hex(26 * up, Math.PI / 6); cx.lineWidth = 1; cx.globalAlpha = up * .5; cx.stroke();
+    cx.restore();
+  } else if (t - G.wardBreak < 0.45) { // shattering: the hex bursts outward
+    const k = (t - G.wardBreak) / 0.45;
+    cx.save(); cx.globalAlpha = 1 - k; cx.strokeStyle = c; cx.lineWidth = 2; cx.shadowColor = c; cx.shadowBlur = 12;
+    for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * Math.PI / 3, d = 40 + 50 * k;
+      cx.beginPath(); cx.moveTo(x + Math.cos(a) * d * 0.6, y + Math.sin(a) * d); cx.lineTo(x + Math.cos(a + 0.6) * d * 0.6, y + Math.sin(a + 0.6) * d); cx.stroke(); }
+    cx.restore();
+  }
+}
+// sigil layer: the panel between the hands, power animations, cast mode, toasts
+const CAST_RING = { x: W/2, y: 432, r: 40 };
+function drawSigils(t) {
+  // Gale: wind streaks tear up the lanes
+  if (t - G.galeFx < 0.7) {
+    const k = (t - G.galeFx) / 0.7, c = POWERS.gale.color;
+    cx.strokeStyle = c; cx.lineWidth = 2; cx.shadowColor = c; cx.shadowBlur = 8;
+    for (const l of LANES) for (let j = 0; j < 3; j++) {
+      const x = LNX[l.id] - 24 + j * 24, y = HIT_Y - ((k * 1.6 + j * 0.23) % 1) * (HIT_Y - TOP_Y);
+      cx.globalAlpha = (1 - k) * .8; cx.beginPath(); cx.moveTo(x, y); cx.lineTo(x, y - 46); cx.stroke();
+    }
+    cx.globalAlpha = 1; cx.shadowBlur = 0; cx.lineWidth = 1;
+  }
+  // Stillwater: ripples spread across the lanes
+  if (t - G.stillFx < 1.1) {
+    const k = (t - G.stillFx) / 1.1, c = POWERS.still.color;
+    cx.strokeStyle = c; cx.lineWidth = 2;
+    for (let j = 0; j < 3; j++) { const kk = Math.max(0, k - j * 0.15); if (kk <= 0) continue;
+      cx.globalAlpha = (1 - kk) * .7; cx.beginPath(); cx.ellipse(W/2, 340, 60 + kk * 460, 20 + kk * 150, 0, 0, 7); cx.stroke(); }
+    cx.globalAlpha = 1; cx.lineWidth = 1;
+  }
+  // cast mode dims the lanes first, so the sigil panel and the ring read above them
+  if (G.cast) { cx.fillStyle = `rgba(7,3,15,${.55 * Math.min(1, (t - G.cast.at) / 0.2)})`; cx.fillRect(X0 - 12, TOP_Y - 30, LANES_W + 24, HIT_Y + 72 - (TOP_Y - 30)); }
+  // the panel: every sigil's name is always visible (dim until owned), with its charges
+  const px = W/2 - 50, py = TOP_Y - 30;
+  cx.fillStyle = 'rgba(10,4,24,.72)'; rr(px, py, 100, 262, 10); cx.fill();
+  cx.strokeStyle = '#3a1a5e'; rr(px, py, 100, 262, 10); cx.stroke();
+  cx.textAlign = 'center'; cx.fillStyle = PAL.dim; cx.font = 'bold 9px ui-monospace, Menlo, monospace'; cx.fillText('SIGILS · Space', W/2, py + 13);
+  const buf = G.cast ? G.cast.buf : '';
+  Object.keys(POWERS).forEach((key, i) => {
+    const P = POWERS[key], n = G.sigils[key] || 0, y = py + 22 + i * 44, owned = n > 0;
+    const lit = G.cast && owned && P.name.startsWith(buf);
+    const flash = G.sigilFlash && G.sigilFlash.key === key && t - G.sigilFlash.at < 0.9 ? 1 - (t - G.sigilFlash.at) / 0.9 : 0;
+    if (flash) { cx.fillStyle = P.color; cx.globalAlpha = .25 * flash; rr(px + 3, y, 94, 40, 7); cx.fill(); cx.globalAlpha = 1; }
+    cx.globalAlpha = owned ? (G.cast && !lit ? .35 : 1) : .35;
+    cx.fillStyle = PAL.ink; cx.beginPath(); cx.arc(px + 16, y + 17, 11, 0, 7); cx.fill();
+    cx.strokeStyle = P.color; cx.lineWidth = 1.5; if (owned) { cx.shadowColor = P.color; cx.shadowBlur = 8; }
+    cx.beginPath(); cx.arc(px + 16, y + 17, 11, 0, 7); cx.stroke(); cx.shadowBlur = 0; cx.lineWidth = 1;
+    cx.fillStyle = P.color; cx.font = 'bold 12px Georgia, serif'; cx.fillText(P.glyph, px + 16, y + 21);
+    cx.textAlign = 'left'; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
+    cx.fillStyle = owned ? P.color : PAL.dim; cx.fillText(P.name, px + 32, y + 15);
+    if (lit && buf) { cx.fillStyle = '#fff'; cx.shadowColor = P.color; cx.shadowBlur = 10; cx.fillText(buf, px + 32, y + 15); cx.shadowBlur = 0; } // typed prefix glows
+    for (let j = 0; j < SIGIL_MAX; j++) { cx.fillStyle = j < n ? P.color : '#2a1a44'; cx.beginPath(); cx.arc(px + 36 + j * 9, y + 27, 3, 0, 7); cx.fill(); }
+    cx.textAlign = 'center'; cx.globalAlpha = 1;
+  });
+  // flawless meter: three flawless spells grant the current school's sigil
+  cx.fillStyle = '#2a1a44'; rr(px + 10, py + 246, 80, 6, 3); cx.fill();
+  cx.fillStyle = PAL.gold; cx.shadowColor = PAL.gold; cx.shadowBlur = 6; rr(px + 10, py + 246, 80 * G.meter, 6, 3); cx.fill(); cx.shadowBlur = 0;
+  // cast mode: lanes dim, a rune ring turns, the typed name glows at its heart
+  const R = CAST_RING;
+  if (G.cast) {
+    const open = Math.min(1, (t - G.cast.at) / 0.2);
+    cx.save(); cx.translate(R.x, R.y); cx.globalAlpha = open;
+    cx.fillStyle = 'rgba(10,4,24,.9)'; cx.beginPath(); cx.arc(0, 0, R.r + 14, 0, 7); cx.fill();
+    cx.strokeStyle = PAL.pink; cx.lineWidth = 2; cx.shadowColor = PAL.magenta; cx.shadowBlur = 14;
+    cx.beginPath(); cx.arc(0, 0, R.r * open, 0, 7); cx.stroke();
+    cx.rotate(t * 0.8); cx.lineWidth = 1.5; cx.setLineDash([5, 7]); cx.beginPath(); cx.arc(0, 0, R.r + 8, 0, 7); cx.stroke(); cx.setLineDash([]);
+    for (let i = 0; i < 12; i++) { const lit = i < G.cast.buf.length * 2; cx.fillStyle = lit ? '#fff' : PAL.pink; cx.globalAlpha = open * (lit ? 1 : .5); cx.fillRect(-1.5, -(R.r + 8) - 3, 3, 6); cx.rotate(Math.PI / 6); }
+    cx.restore(); cx.globalAlpha = 1;
+    cx.textAlign = 'center'; cx.fillStyle = '#fff'; cx.shadowColor = PAL.magenta; cx.shadowBlur = 12;
+    cx.font = 'bold 22px Georgia, serif'; cx.fillText(G.cast.buf + ((t * 2) % 1 < 0.5 ? '▏' : ' '), R.x, R.y + 7); cx.shadowBlur = 0;
+    cx.fillStyle = PAL.blush; cx.font = '11px ui-monospace, Menlo, monospace'; cx.fillText('type a sigil · Space cancels', R.x, R.y + R.r + 30);
+  }
+  // after a cast / fizzle / close
+  const F = G.castFx;
+  if (F) {
+    const age = t - F.at;
+    if (F.kind === 'cast' && age < 0.9) {
+      const P = POWERS[F.key], k = age / 0.9;
+      cx.strokeStyle = P.color; cx.shadowColor = P.color; cx.shadowBlur = 18;
+      for (let j = 0; j < 2; j++) { const kk = Math.max(0, k - j * 0.18); cx.globalAlpha = (1 - kk); cx.lineWidth = 4 - j * 2;
+        cx.beginPath(); cx.arc(R.x, R.y, R.r + kk * 260, 0, 7); cx.stroke(); }
+      cx.globalAlpha = 1 - k; cx.fillStyle = P.color; cx.textAlign = 'center';
+      cx.font = `bold ${Math.round(40 + 40 * k)}px Georgia, serif`; cx.fillText(P.glyph, R.x, R.y + 14 + 10 * k);
+      cx.font = 'italic 900 22px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(P.label + '!', R.x, R.y - R.r - 18 - 30 * k);
+      cx.globalAlpha = 1; cx.shadowBlur = 0; cx.lineWidth = 1;
+    } else if (F.kind === 'fizzle' && age < 1.2) {
+      const k = Math.min(1, age / 0.6);
+      cx.strokeStyle = PAL.pink; cx.lineWidth = 2; cx.globalAlpha = 1 - k;
+      for (let i = 0; i < 14; i++) { const a = i * Math.PI / 7 + 0.2, d = R.r + 70 * k;
+        cx.beginPath(); cx.moveTo(R.x + Math.cos(a) * d, R.y + Math.sin(a) * d); cx.lineTo(R.x + Math.cos(a + 0.18) * (d + 10), R.y + Math.sin(a + 0.18) * (d + 10)); cx.stroke(); }
+      cx.fillStyle = 'rgba(60,40,80,.5)'; cx.beginPath(); cx.arc(R.x, R.y - 20 * k, 20 + 40 * k, 0, 7); cx.fill();
+      cx.globalAlpha = Math.min(1, (1.2 - age) / 0.3); cx.textAlign = 'center';
+      cx.fillStyle = PAL.bad; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText('FIZZLE', R.x, R.y - 6);
+      cx.fillStyle = PAL.text; cx.font = '11px ui-monospace, Menlo, monospace'; cx.fillText(F.text + ' · charge kept', R.x, R.y + 14);
+      cx.globalAlpha = 1; cx.lineWidth = 1;
+    } else if (F.kind === 'close' && age < 1.3) {
+      cx.globalAlpha = Math.min(1, (1.3 - age) / 0.4); cx.textAlign = 'center';
+      cx.fillStyle = 'rgba(10,4,24,.85)'; rr(R.x - 170, R.y - 14, 340, 26, 8); cx.fill();
+      cx.fillStyle = PAL.blush; cx.font = '12px ui-monospace, Menlo, monospace'; cx.fillText(F.text, R.x, R.y + 4);
+      cx.globalAlpha = 1;
+    }
+  }
+  // earned-sigil toast
+  if (G.toast && t < G.toast.until) {
+    const P = POWERS[G.toast.key], a = Math.min(1, (G.toast.until - t) / 0.4, (t - G.toast.at) / 0.2);
+    cx.globalAlpha = Math.max(0, Math.min(1, a)); cx.textAlign = 'center';
+    cx.fillStyle = 'rgba(10,4,24,.94)'; rr(W/2 - 190, 176, 380, 52, 10); cx.fill();
+    cx.strokeStyle = P.color; cx.shadowColor = P.color; cx.shadowBlur = 12; rr(W/2 - 190, 176, 380, 52, 10); cx.stroke();
+    cx.fillStyle = P.color; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(`${P.glyph} ${G.toast.text}`, W/2, 199);
+    cx.shadowBlur = 0; cx.fillStyle = PAL.text; cx.font = '12px ui-monospace, Menlo, monospace'; cx.fillText(`${G.toast.sub} · ${P.desc}`, W/2, 218);
+    cx.globalAlpha = 1;
   }
 }
 // hit-error meter: last 20 judged presses on the ±GW scale (gold = PERFECT zone), ▲ = average

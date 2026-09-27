@@ -316,6 +316,29 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > Each track is started on a click at its measured first beat and time-scaled
   > so its beat is the game's beat (resampling, so pitch follows tempo). The
   > metronome stays as the enemy's heartbeat under the track.
+- **Powers (sigils) — prototype, playtest pending.** The thumb's job once the
+  space lane was cut. Earned: defeating an enemy grants its school's sigil
+  (bosses 2); three flawless (all-perfect) spells grant the current school's
+  sigil; max 3 charges each. Cast: **Space opens cast mode, you type the
+  sigil's name** — a noun of its school + a verb of the tongue, prefix-free so
+  it fires on the last letter. A letter that fits no owned name **fizzles**
+  (mode closes, charge kept); Space again cancels. Cast mode lives in the gaps
+  between spells: it won't open while a rune is in its window and closes
+  itself (free) when one arrives, so casting never costs runes.
+
+  | sigil | name | school | effect | animation |
+  |---|---|---|---|---|
+  | Gale | `wynkai` | storm | runes not yet in their window move one bar later (whole bar: stays on the grid; tempo map + music rates shift with them) | wind streaks up the lanes, runes ease back |
+  | Bulwark | `dunfen` | stone | the next strike deals 0 | hex shield before the caster, shatters on the hit |
+  | Veil | `moxquo` | shadow | next 6 runes accept any key of the right finger (letter stays faintly visible) | smoke orbits the rune, dashed finger ring |
+  | Stillwater | `gamsel` | tide | next 2 spells play at 80% tempo (tempo map) | ripples across the lanes, cyan shimmer on the slowed runes |
+  | Kindle | `vorlum` | flame | next spell casts at double power | embers smoulder in the spell hand |
+
+  Every name is always listed in the panel between the hands (dim until
+  owned, with charge pips and the flawless meter); cast mode dims the lanes,
+  turns a rune ring and glows the typed prefix on the matching name. Open:
+  timed casting (bonus for casting on the click), more sigils, whether
+  perfect-heal should give way to charges.
 - **Meta-progression** — spellbook, unlockable elements/areas, score/rank,
   replay.
 - **Controls & input** — key event handling, input buffering, key-rollover for
