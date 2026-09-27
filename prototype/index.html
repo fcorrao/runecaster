@@ -68,6 +68,7 @@
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Cast feel:</b> watch the word-bolt hit the archer — does the element color + impact sell "you cast a spell"? Waves tighten +4 bpm each; is the fight loop compelling?</li>
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
+      <li><b>Perfect band:</b> the bright band above the line is the perfect window exactly — tile center in band = PERFECT. Rune arrivals are now on the metronome clicks; if it still feels off, slide the audio delay.</li>
       <li><b>Audio delay:</b> if the click and your keystroke feel offset, slide until they fuse.</li>
     </ul>
     Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. Soundtrack runs at the speed of the letters (try the cavalry ramp); music needs an http server — file:// plays silent.
@@ -237,7 +238,8 @@ function newGame() {
 }
 function startRun() {
   G.nextBeat = AC.currentTime + 0.1;
-  G.nextT0 = AC.currentTime + Math.max(LOOK + 0.3, 3 * (60/G.bpm));
+  const b = 60/G.bpm;
+  G.nextT0 = G.nextBeat + Math.ceil(Math.max(LOOK + 0.3, 3 * b) / b) * b; // spell grid ON the click grid
 }
 
 // ================= soundtrack (§8): runs at the speed of the letters =================
@@ -277,6 +279,7 @@ window.G = () => G; // debug hook
 function makeSpell(t0) {
   if (OPT.cavalry) G.bpm = Math.min(200, G.bpm * 1.05);
   const word = pickWord(), beat = 60/G.bpm, chars = [...word];
+  t0 = G.nextBeat + Math.ceil((t0 - G.nextBeat) / beat - 1e-9) * beat; // snap arrivals to the click grid (§5)
   const gap = OPT.grid === 'A' ? beat : (FIT * beat) / chars.length;
   const runes = []; let k = 0;
   for (const ch of chars) {
@@ -319,10 +322,10 @@ function fizzle(sp) {
   G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: DMG, why: sp.fizzledWrong ? 'WRONG KEY' : 'MISSED RUNE' });
   whooshSnd();
 }
-function resolveMiss(sp, r) {
+function resolveMiss(sp, r, late) {
   r.status = 'miss'; r.hitAt = now();
   G.combo = 0; G.hits.miss++;
-  popup('MISS', '#f87171', LNX[r.lane], HIT_Y - 30);
+  popup('MISS' + (late ? ' · late' : ''), '#f87171', LNX[r.lane], HIT_Y - 30);
   teachFlash(r);
   if (OPT.pen === 'strict') fizzle(sp);
 }
@@ -410,8 +413,13 @@ addEventListener('keydown', e => {
       if (!r.warned) { r.warned = true; popup('EARLY', '#8fa0bd', LNX[r.lane], HIT_Y - 30); }
       return;
     }
+    else if (delta > GW) resolveMiss(sp, r, 'late'); // lapse on input: same press quality, same verdict
     else if (Math.abs(delta) <= PW) grade(r, 'perfect', delta);
     else grade(r, 'good', delta);
+  } else if (t < r.time - GW) {
+    // a typo before the gate: nothing was strikable yet — no reward, no punishment
+  } else if (t > r.time + GW) {
+    resolveMiss(sp, r, 'late'); // the live rune was already past due; lapse it, never misjudge this typo
   } else {
     G.combo = 0;
     popup('WRONG', '#f87171', LNX[r.lane], HIT_Y - 30);
@@ -636,6 +644,11 @@ function draw(t) {
     cx.fillStyle = l.color; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
     cx.fillText(l.id === 'SP' ? '—' : l.el.toUpperCase(), LNX[l.id], TOP_Y - 42);
   }
+
+  // perfect band: exactly +/- PW seconds of travel above the line — if the tile
+  // center is in this band, the press grades PERFECT (visual matches grading)
+  cx.fillStyle = 'rgba(226,232,240,.08)';
+  cx.fillRect(X0 - 12, HIT_Y - PW * PXS, 8*LW + SW + 2*GAP + 24, 2 * PW * PXS);
 
   // hit line (glows on beat)
   cx.strokeStyle = '#e2e8f0';
