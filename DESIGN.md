@@ -81,10 +81,13 @@ truth that symbols are a two-hand chord, not a key.)
 They arrive **staggered** (one at a time) with a subtle connector showing the
 word boundary.
 
-**Space key:** thumbs have no lane; a **central space channel** sits between
-the two hand groups — fits the keyboard-split metaphor, and for learning,
-typing space matters. **Decided (playtest):** spaces are always typed; every
-incantation is at least two words, so the thumb plays from the first spell.
+**Space key — decided (playtest): no space lane.** A typed space took a whole
+lane of screen and gave the thumb almost nothing to do. Word breaks are now
+**rests**: the space keeps its time slot in the rhythm but has no rune (a small
+diamond falls through the gap between the hands, and the connector breaks
+between words). The eight finger lanes widened into the freed space, and the
+gap between the hands is reserved for the thumb's new job: **cast mode** for
+powers (Space opens it, you type the power's name — planned, see §8).
 
 **Finger enforcement:** the game can't detect *which* finger you actually use
 (unless you have a per-key-pressure keyboard), so it **guides** rather than

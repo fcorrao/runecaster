@@ -75,14 +75,13 @@ const LANES = [
   {id:'LR', name:'L ring',   el:'earth', color:'#3cf0a0', keys:'2 W S X', sym:'2 @'},
   {id:'LM', name:'L mid',    el:'water', color:'#38c8ff', keys:'3 E D C', sym:'3 #'},
   {id:'LI', name:'L index',  el:'fire',  color:'#ff6a3d', keys:'4 5 R T F G V B', sym:'4$ 5%'},
-  {id:'SP', name:'thumb',    el:'space', color:'#f3a5e6', keys:'SPACE', sym:'SPACE'},
   {id:'RI', name:'R index',  el:'fire',  color:'#ff8a3d', keys:'6 7 Y U H J M N', sym:'6^ 7&'},
   {id:'RM', name:'R mid',    el:'water', color:'#2fa8ff', keys:'8 I K ,', sym:'8* <'},
   {id:'RR', name:'R ring',   el:'earth', color:'#22d88a', keys:'9 O L .', sym:'9) >'},
   {id:'RP', name:'R pinky',  el:'air',   color:'#9b5cff', keys:'0 P ; \'' , sym:'0) -_ =+ :\' /?'},
 ];
 const LANE = Object.fromEntries(LANES.map(l => [l.id, l]));
-const ELC = {fire:'#ff6a3d', water:'#38c8ff', earth:'#3cf0a0', air:'#b36bff', space:'#f3a5e6'};
+const ELC = {fire:'#ff6a3d', water:'#38c8ff', earth:'#3cf0a0', air:'#b36bff'};
 // retro-wizard synthwave palette, sampled from art/splash.jpg
 const PAL = { void:'#07030f', night:'#0c0a3a', indigo:'#1b1280', violet:'#5c15bd', magenta:'#d225d1', pink:'#f96999',
   blush:'#f3a5e6', wine:'#650a44', crimson:'#d5263f', cyan:'#32b3cd', gold:'#ffcf6b', good:'#3cf0a0', bad:'#ff4d7d', ink:'#0b0618', text:'#e9dcff', dim:'#a993c9' };
@@ -91,7 +90,6 @@ for (const [id, ks] of Object.entries({
   LP:'`~1!qazQAZ', LR:'2@wsxWSX', LM:'3#edcEDC', LI:'45$%rtfgvbRTFGBV',
   RI:'67^&yuhjmnYUHMN', RM:'8*(ik,<I,K', RR:'9)ol.>O.L', RP:'0-=_+p;\':"/?P',
 })) for (const c of ks) KEY2LANE[c] = id;
-KEY2LANE[' '] = 'SP';
 
 // which way the finger travels from its home key — turns a lane into motor instruction
 // grid: col units = key widths (rows staggered), row: -1 top, 0 home, +1 bottom
@@ -104,7 +102,7 @@ const KEYPOS = {
   '^':[4.5,-1],'&':[5.5,-1],'*':[6.5,-1],'(':[7.5,-1],')':[8.5,-1],
   '-':[9.5,1],'_':[9.5,1],'=':[10.5,1],'+':[10.5,1],':':[9.5,1],'?':[9.8,2],'"':[10.5,1],
 };
-const HOME_KEY = {LP:'a',LR:'s',LM:'d',LI:'f',SP:' ',RI:'j',RM:'k',RR:'l',RP:';'};
+const HOME_KEY = {LP:'a',LR:'s',LM:'d',LI:'f',RI:'j',RM:'k',RR:'l',RP:';'};
 const KEYDIR = {}; // lane -> key -> [sx, sy] in {-1,0,1}; [0,0] = home (no travel)
 for (const [lane, home] of Object.entries(HOME_KEY)) {
   const hp = KEYPOS[home]; if (!hp) continue;
@@ -125,9 +123,10 @@ for (const [sh, base] of Object.entries(BASE_OF)) if (KEYDIR[base]) KEYDIR[sh] =
 // ================= geometry =================
 const cv = document.getElementById('game'), cx = cv.getContext('2d');
 const W = cv.width, H = cv.height;
-const LW = 92, SW = 112, GAP = 14;
-const X0 = (W - (8*LW + SW + 2*GAP)) / 2;
-const LNX = {}; { let x = X0; for (const l of LANES) { const w = l.id==='SP' ? SW : LW; if (l.id==='SP') x += GAP; if (l.id==='RI') x += GAP; LNX[l.id] = x + w/2; x += w; } }
+// 8 finger lanes split like the keyboard; the gap between the hands (above the thumbs) is kept free for the thumb's own UI
+const LW = 96, SPLIT = 108, LANES_W = 8 * LW + SPLIT;
+const X0 = (W - LANES_W) / 2;
+const LNX = {}; { let x = X0; for (const l of LANES) { if (l.id === 'RI') x += SPLIT; LNX[l.id] = x + LW/2; x += LW; } }
 const HIT_Y = 554, TOP_Y = 138, LOOK = 2.2, PXS = (HIT_Y - TOP_Y) / LOOK;
 // battle stage: bottom quarter of the canvas (under the hit line), sprites live here
 const STAGE_TOP = H - 210, STAGE_H = 210, GROUND_Y = 178, WIZ_X = 190, WIZ_Y = 178, ARC_X = 930, ARC_Y = 178, CAST_X = WIZ_X + 64, CAST_Y = WIZ_Y - 88;
@@ -278,10 +277,10 @@ function beep(t, f, dur, type, vol) {
 function hitSnd(g) { if (AC) { const t = AC.currentTime; beep(t, g==='perfect'?880:620, .07, 'triangle', .18); } }
 function wrongSnd() { if (AC) { const t = AC.currentTime; beep(t, 160, .12, 'square', .12); } }
 function fizzleSnd() { if (AC) { const t = AC.currentTime; const o = AC.createOscillator(), g = AC.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(400,t); o.frequency.exponentialRampToValueAtTime(60,t+.4); g.gain.setValueAtTime(.15,t); g.gain.exponentialRampToValueAtTime(.001,t+.4); o.connect(g).connect(AC.destination); o.start(t); o.stop(t+.45); } }
-const CAST_TIMBRE = { fire:'sawtooth', water:'sine', earth:'triangle', air:'square', space:'triangle' };
+const CAST_TIMBRE = { fire:'sawtooth', water:'sine', earth:'triangle', air:'square' };
 function castSnd(el, power) {
   if (!AC) return; const t = AC.currentTime + 0.02;
-  const base = {fire:196, water:220, earth:165, air:247, space:220}[el] || 220;
+  const base = {fire:196, water:220, earth:165, air:247}[el] || 220;
   const vol = 0.06 + 0.12 * power;
   const wave = CAST_TIMBRE[el] || 'triangle';
   for (const [i, m] of [1, 1.25, 1.5].entries()) beep(t + i*0.03, base*m, 0.5, wave, vol);
@@ -444,9 +443,15 @@ function makeSpell(t0) {
   let bars, offs;
   if (foe.kind === 'boss') { offs = bossPositions(n, ch.dens); bars = Math.floor(offs[n - 1] / 4) + 1; }
   else { bars = Math.ceil(n / dens); offs = chars.map((_, i) => i * bars * 4 / n); }
-  const runes = chars.map((c, i) => ({ ch: c, lane: KEY2LANE[c], time: t0 + offs[i] * beat, status: 'pending', hitAt: 0 }));
+  // a space keeps its time slot but has no rune: it is a rest between words (the thumb plays nothing)
+  const runes = [], rests = [];
+  chars.forEach((c, i) => {
+    const time = t0 + offs[i] * beat;
+    if (c === ' ') rests.push(time);
+    else runes.push({ ch: c, lane: KEY2LANE[c], time, status: 'pending', hitAt: 0, wordStart: i > 0 && chars[i - 1] === ' ' });
+  });
   const last = runes[runes.length-1];
-  const spell = { word: inc.text, gloss: inc.gloss, runes, t0, end: last.time, done: false, fizzled: false, power: 1,
+  const spell = { word: inc.text, gloss: inc.gloss, runes, rests, t0, end: last.time, done: false, fizzled: false, power: 1,
     arrow: { from: t0 - beat, to: last.time + GW + 0.12 } };
   G.spells.push(spell);
   if (G.spells.length > 6) G.spells = G.spells.filter(s => !s.done || now() < s.end + 1);
@@ -475,7 +480,7 @@ function showCalib() {
   document.getElementById('calibv').textContent = s
     ? `last ${s.n}: avg ${Math.round(s.mean)}ms (${s.mean < 0 ? 'early' : 'late'}) · spread ±${Math.round(s.sd)}ms` : 'no hits yet';
 }
-function teachFlash(r) { const l = LANE[r.lane]; G.flash = { text: `'${r.ch === ' ' ? 'SPACE' : r.ch}' → ${l.name}`, color: l.color, until: now() + 1.0 }; }
+function teachFlash(r) { const l = LANE[r.lane]; G.flash = { text: `'${r.ch}' → ${l.name}`, color: l.color, until: now() + 1.0 }; }
 function burst(x, y, color, n, spd, kind) {
   for (let i = 0; i < n; i++) {
     let a = Math.random() * Math.PI * 2, v = spd * (0.3 + Math.random() * 0.7);
@@ -529,8 +534,8 @@ function resolveCast(sp) {
   let p = 0, g = 0;
   for (const r of sp.runes) { if (r.status === 'perfect') p++; else if (r.status === 'good') g++; }
   const elCount = {};
-  for (const r of sp.runes) if (r.lane !== 'SP') { const e = LANE[r.lane].el; elCount[e] = (elCount[e]||0)+1; }
-  const el = Object.entries(elCount).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'space';
+  for (const r of sp.runes) { const e = LANE[r.lane].el; elCount[e] = (elCount[e]||0)+1; }
+  const el = Object.entries(elCount).sort((a,b)=>b[1]-a[1])[0][0];
   sp.element = el;
   sp.power = OPT.pen === 'strict' ? 1 : (sp.runes.length ? (p + 0.6*g) / sp.runes.length : 1);
   // Damage model (playtest call): only lapsed runes draw the enemy's arrow —
@@ -582,9 +587,9 @@ function applyStrike(s) { // enemy arrow reached the caster — the counter's sh
 // ================= input =================
 addEventListener('keydown', e => {
   if (e.repeat || !started || !G || G.over) return;
-  const k = e.key === ' ' ? ' ' : (e.key.length === 1 ? e.key.toLowerCase() : null);
+  if (e.key === ' ') { e.preventDefault(); return; } // the thumb has no rune: word breaks are rests (Space is reserved for cast mode)
+  const k = e.key.length === 1 ? e.key.toLowerCase() : null;
   if (k === null) return;
-  if (k === ' ') e.preventDefault();
   // when the key went down (event timestamp, not handler time), on the heard clock
   const raw = heardAt(e.timeStamp), t = raw - OPT.inOff / 1000;
   // route the press to the nearest pending rune with that character; separately
@@ -604,7 +609,7 @@ addEventListener('keydown', e => {
   else if (same && d > GW) resolveMiss(same.s, same.r, fmtMs(d)); // past due but not yet lapsed: same press, same verdict
   else if (near) { // a different rune was live: wrong key
     G.combo = 0;
-    judge(near.r.lane, 'WRONG', `'${k === ' ' ? '␣' : k}' ≠ '${near.r.ch === ' ' ? '␣' : near.r.ch}'`, PAL.bad);
+    judge(near.r.lane, 'WRONG', `'${k}' ≠ '${near.r.ch}'`, PAL.bad);
     teachFlash(near.r); wrongSnd();
     if (OPT.pen === 'strict') { near.s.fizzledWrong = true; fizzle(near.s); }
   }
@@ -673,7 +678,7 @@ function noteY(r, t) { return HIT_Y - (r.time - t) * PXS; }
 function nextCharge(t) { // staff crystal tracks the next rune: element + charge level
   const sp = activeSpell();
   if (sp) for (const r of sp.runes) if (r.status === 'pending') {
-    const el = LANE[r.lane].el === 'space' ? null : LANE[r.lane].el;
+    const el = LANE[r.lane].el;
     return { el, c: Math.max(0, Math.min(1, 1 - (r.time - t) / 1.2)) };
   }
   return null;
@@ -974,7 +979,7 @@ function draw(t) {
 
   // lane columns
   for (const l of LANES) {
-    const w = l.id === 'SP' ? SW : LW, x = LNX[l.id] - w/2;
+    const w = LW, x = LNX[l.id] - w/2;
     const sp = activeSpell();
     const guide = OPT.guide && sp && sp.runes.find(r => r.status === 'pending');
     const lit = guide && guide.lane === l.id;
@@ -987,7 +992,7 @@ function draw(t) {
     // header: element + finger
     cx.textAlign = 'center';
     cx.fillStyle = l.color; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.shadowColor = l.color; cx.shadowBlur = 8;
-    cx.fillText(l.id === 'SP' ? '—' : l.el.toUpperCase(), LNX[l.id], TOP_Y - 42);
+    cx.fillText(l.el.toUpperCase(), LNX[l.id], TOP_Y - 42);
     cx.shadowBlur = 0;
   }
 
@@ -1001,7 +1006,7 @@ function draw(t) {
 
   // keycap strip (finger teaching legend)
   for (const l of LANES) {
-    const w = l.id === 'SP' ? SW : LW, x = LNX[l.id] - w/2;
+    const w = LW, x = LNX[l.id] - w/2;
     cx.fillStyle = 'rgba(12,6,30,.75)'; rr(x + 4, HIT_Y + 28, w - 8, 42, 8); cx.fill();
     cx.strokeStyle = l.color; cx.globalAlpha = .5;
     rr(x + 4, HIT_Y + 28, w - 8, 42, 8); cx.stroke();
@@ -1031,9 +1036,15 @@ function draw(t) {
     for (let i = 0; i < s.runes.length - 1; i++) {
       const a = s.runes[i], b = s.runes[i+1];
       const ya = noteY(a, t), yb = noteY(b, t);
+      if (b.wordStart) continue; // the connector breaks between words
       if (ya > -60 && yb < STAGE_TOP) { cx.moveTo(LNX[a.lane], ya); cx.lineTo(LNX[b.lane], yb); }
     }
     cx.stroke();
+    for (const rt of s.rests) { // the rest between words: a small diamond falls through the gap between the hands
+      const y = noteY({ time: rt }, t); if (y < -20 || y > HIT_Y + 20) continue;
+      cx.fillStyle = PAL.blush; cx.globalAlpha = .55; cx.beginPath();
+      cx.moveTo(W/2, y - 6); cx.lineTo(W/2 + 6, y); cx.lineTo(W/2, y + 6); cx.lineTo(W/2 - 6, y); cx.fill(); cx.globalAlpha = 1;
+    }
     for (const r of s.runes) {
       const y = noteY(r, t); if (y < -60 || y > STAGE_TOP - 4) continue;
       const l = LANE[r.lane];
@@ -1049,10 +1060,10 @@ function draw(t) {
         cx.strokeStyle = l.color; cx.lineWidth = 3; cx.beginPath(); cx.arc(cxr, y, 24, 0, 7); cx.stroke();
         cx.lineWidth = 1; cx.globalAlpha = .55; cx.beginPath(); cx.arc(cxr, y, 19, 0, 7); cx.stroke(); cx.globalAlpha = 1;
         cx.fillStyle = '#ffffff'; cx.font = 'bold 25px Georgia, "Times New Roman", serif'; cx.textAlign = 'center';
-        cx.fillText(r.ch === ' ' ? '␣' : r.ch, cxr, y + 8);
+        cx.fillText(r.ch, cxr, y + 8);
         cx.shadowBlur = 0;
         // travel cue: dot = finger stays home, triangle = direction the finger moves (on the ring)
-        const d = r.ch === ' ' ? [0, 0] : KEYDIR[r.ch];
+        const d = KEYDIR[r.ch];
         if (d) {
           cx.fillStyle = l.color;
           if (!d[0] && !d[1]) { cx.beginPath(); cx.arc(cxr, y + 17, 2.5, 0, 7); cx.fill(); }
@@ -1089,7 +1100,7 @@ function draw(t) {
 
   // timing overlay drawn OVER the tiles, so it is visible at the moment of judgment:
   // dashed gold lines = PERFECT window (±PW), white line = the beat (pulses on the clicks)
-  const LX0 = X0 - 12, LX1 = X0 + 8*LW + SW + 2*GAP + 12, band = PW * PXS;
+  const LX0 = X0 - 12, LX1 = X0 + LANES_W + 12, band = PW * PXS;
   cx.fillStyle = 'rgba(255,207,107,.07)'; cx.fillRect(LX0, HIT_Y - band, LX1 - LX0, 2 * band);
   cx.strokeStyle = PAL.gold; cx.globalAlpha = .6; cx.setLineDash([6, 5]);
   cx.beginPath(); cx.moveTo(LX0, HIT_Y - band); cx.lineTo(LX1, HIT_Y - band); cx.moveTo(LX0, HIT_Y + band); cx.lineTo(LX1, HIT_Y + band); cx.stroke();
@@ -1122,7 +1133,8 @@ function draw(t) {
     const col = { pending: PAL.text, perfect: PAL.gold, good: '#3cf0a0', miss: PAL.crimson };
     let ri = 0; const segs = [];
     for (const c of [...sp.word]) {
-      segs.push({ c: c === ' ' ? '␣' : c, s: sp.runes[ri] ? sp.runes[ri].status : 'pending' }); ri++;
+      if (c === ' ') { segs.push({ c: ' ', s: 'pending' }); continue; } // word break: no rune
+      segs.push({ c, s: sp.runes[ri] ? sp.runes[ri].status : 'pending' }); ri++;
     }
     const total = segs.reduce((a, s) => a + cx.measureText(s.c).width + 2, 0);
     let x = W/2 - total/2;
