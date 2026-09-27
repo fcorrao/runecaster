@@ -151,13 +151,16 @@ function fitCanvas() {
 addEventListener('resize', () => { fitCanvas(); BG = null; }); // backdrops repaint at the new resolution
 fitCanvas();
 // 8 finger lanes split like the keyboard; the gap between the hands (above the thumbs) is kept free for the thumb's own UI
-const LW = 96, SPLIT = 108, LANES_W = 8 * LW + SPLIT;
+const LW = 84, SPLIT = 100, LANES_W = 8 * LW + SPLIT; // narrower lanes leave side margins for the fighters
 const X0 = (W - LANES_W) / 2;
 const LNX = {}; { let x = X0; for (const l of LANES) { if (l.id === 'RI') x += SPLIT; LNX[l.id] = x + LW/2; x += LW; } }
-const HIT_Y = 554, TOP_Y = 138, LOOK = 2.2, PXS = (HIT_Y - TOP_Y) / LOOK;
-// battle stage: bottom quarter of the canvas (under the hit line), sprites live here
-const STAGE_TOP = H - 210, STAGE_H = 210, GROUND_Y = 178, WIZ_X = 190, WIZ_Y = 178, ARC_X = 930, ARC_Y = 178, CAST_X = WIZ_X + 64, CAST_Y = WIZ_Y - 88;
+const HIT_Y = 640, TOP_Y = 138, LOOK = 2.6, PXS = (HIT_Y - TOP_Y) / LOOK; // taller field: 2.6 s of read-ahead at the old scroll speed
+// the battle ground IS the hit line: the vista's horizon sits on the rune circles, the fighters stand in the
+// side margins with their feet on it, and bolts/strikes run along the floor below — the fight happens where you look
+const GROUND_Y = 178, STAGE_TOP = HIT_Y - GROUND_Y, STAGE_H = H - STAGE_TOP;
+const WIZ_X = 96, WIZ_Y = GROUND_Y, ARC_X = 1030, ARC_Y = GROUND_Y, CAST_X = WIZ_X + 64, CAST_Y = WIZ_Y - 88;
 const WIZ_AY = STAGE_TOP + WIZ_Y, ARC_AY = STAGE_TOP + ARC_Y, CAST_AY = STAGE_TOP + CAST_Y; // absolute anchors (CAST = the caster's spell hand)
+const FLOOR_Y = HIT_Y + 96; // the duel line on the floor: under the keycap row, above the error meter
 const PW = 0.055, GW = 0.14, DMG = 18, REST = 1.2, HEAL = 2;
 const LAPSE_GRACE = 0.05; // frame lapse waits this long past the window so a queued in-window keypress is graded by its own timestamp first
 const EARLY_SHOW = 0.6;   // correct key up to this far before the window says EARLY (with ms); earlier presses are strays
@@ -509,7 +512,7 @@ function makeSpell(t0) {
 function popup(text, color, x, y) { G.pops.push({ text, color, x, y, until: now() + 0.8 }); }
 // judgment readout: sits in the lane's keycap box (where the tile lands), never over incoming tiles;
 // one per lane — a newer judgment replaces the old one instead of stacking
-const JUDGE_Y = HIT_Y + 49, JUDGE_DUR = 0.6;
+const JUDGE_Y = HIT_Y + 54, JUDGE_DUR = 0.6;
 function judge(lane, text, sub, color) {
   G.pops = G.pops.filter(p => !(p.judge && p.lane === lane));
   G.pops.push({ judge: true, lane, text, sub, color, x: LNX[lane], y: JUDGE_Y, until: now() + JUDGE_DUR });
@@ -603,7 +606,7 @@ function resolveCast(sp) {
     whooshSnd();
   } else {
     G.bolts.push({ word: sp.word, el, power: sp.power, t0: now(), at: now() + BOLT_F,
-      x0: CAST_X, y0: CAST_AY, x1: ARC_X, y1: ARC_AY - 44, arc: 70 + 60 * sp.power });
+      x0: CAST_X, y0: CAST_AY, x1: ARC_X, y1: ARC_AY - 44 });
     G.fx.push({ kind:'ring', color: ELC[el], t0: now(), dur: .45 + .35*sp.power, x: W/2, y: HIT_Y, big: sp.power });
     popup((el.toUpperCase()) + (sp.kindled ? ' — KINDLED ×2' : sp.power > .99 ? ' — FULL POWER' : ` — ${Math.round(sp.power*100)}%`), ELC[el], W/2, HIT_Y - 85);
     castSnd(el, sp.power);
@@ -822,6 +825,14 @@ requestAnimationFrame(frame);
 
 // ================= drawing =================
 function rr(x, y, w, h, r) { cx.beginPath(); cx.roundRect(x, y, w, h, r); }
+// fighter-to-fighter paths hug the floor: leave the body, drop onto the duel line under the rune circles, rise into the target
+function floorPath(x0, y0, x1, y1, dy, p) {
+  const sg = x1 > x0 ? 1 : -1, fy = FLOOR_Y + dy, a = x0 + sg * 70, b = x1 - sg * 70;
+  const q = (s, c, e, k) => (1 - k) * (1 - k) * s + 2 * (1 - k) * k * c + k * k * e; // quadratic corner
+  if (p < 0.15) { const k = p / 0.15; return [q(x0, x0, a, k), q(y0, fy, fy, k)]; }            // drop onto the duel line
+  if (p > 0.85) { const k = (p - 0.85) / 0.15; return [q(b, x1, x1, k), q(fy, fy, y1, k)]; }    // rise into the target
+  return [a + (b - a) * (p - 0.15) / 0.7, fy];                                                  // run the floor
+}
 function noteY(r, t) { // Gale's shift eases in over 0.35 s (grading already uses the new time)
   let time = r.time;
   if (r.shiftAt && t - r.shiftAt < 0.35) { const k = (t - r.shiftAt) / 0.35, e = 1 - (1 - k) ** 3; time = r.fromTime + (r.time - r.fromTime) * e; }
@@ -1052,7 +1063,7 @@ function paintBackdrops() {
   let rnd = 7; const rand = () => (rnd = (rnd * 16807) % 2147483647) / 2147483647; // seeded: same sky every run
   // lanes: deep night with nebula haze and stars
   const [bg, b] = mk(W, H);
-  const sky = b.createLinearGradient(0, 0, 0, STAGE_TOP);
+  const sky = b.createLinearGradient(0, 0, 0, HIT_Y);
   sky.addColorStop(0, '#0c0a3a'); sky.addColorStop(.55, '#140a2e'); sky.addColorStop(1, '#07030f');
   b.fillStyle = sky; b.fillRect(0, 0, W, H);
   for (const [x, y, r, c] of [[140, 120, 260, '#d225d1'], [990, 220, 300, '#5c15bd'], [560, 40, 360, '#1b1280']]) {
@@ -1063,8 +1074,8 @@ function paintBackdrops() {
   b.globalAlpha = 1;
   // stage: striped sun behind a gothic castle, violet ranges, ruins, neon grid floor
   const [st, s] = mk(W, STAGE_H), hz = GROUND_Y;
-  const ss = s.createLinearGradient(0, 0, 0, hz);
-  ss.addColorStop(0, '#1b1280'); ss.addColorStop(.6, '#5c15bd'); ss.addColorStop(1, '#d225d1');
+  const ss = s.createLinearGradient(0, 0, 0, hz); // the vista fades in from the night sky above: no hard strip edge
+  ss.addColorStop(0, 'rgba(27,18,128,0)'); ss.addColorStop(.45, 'rgba(92,21,189,.55)'); ss.addColorStop(1, '#d225d1');
   s.fillStyle = ss; s.fillRect(0, 0, W, hz);
   for (let i = 0; i < 40; i++) { s.globalAlpha = .3 + rand() * .6; s.fillStyle = '#fff'; s.fillRect(rand() * W, rand() * hz * .5, 1, 1); }
   s.globalAlpha = 1;
@@ -1090,9 +1101,9 @@ function paintBackdrops() {
     s.fillStyle = PAL.magenta + '66'; s.fillRect(x + w - 2, hz - h, 2, h); s.fillStyle = '#140a2a';
   }
   s.fillStyle = '#0a010a'; s.fillRect(0, hz, W, STAGE_H - hz);
-  s.strokeStyle = PAL.magenta; s.lineWidth = 1; // perspective grid
-  for (let k = 1; k < 8; k++) { s.globalAlpha = .12 + k * .04; const y = hz + (k * k) * 0.55; s.beginPath(); s.moveTo(0, y); s.lineTo(W, y); s.stroke(); }
-  for (let k = -14; k <= 14; k++) { s.globalAlpha = .25; s.beginPath(); s.moveTo(560 + k * 8, hz); s.lineTo(560 + k * 80, STAGE_H); s.stroke(); }
+  s.strokeStyle = PAL.magenta; s.lineWidth = 1; // perspective grid floor
+  for (let k = 1; k < 13; k++) { s.globalAlpha = .1 + k * .025; const y = hz + (k * k) * 1.3; if (y > STAGE_H) break; s.beginPath(); s.moveTo(0, y); s.lineTo(W, y); s.stroke(); }
+  for (let k = -16; k <= 16; k++) { s.globalAlpha = .22; s.beginPath(); s.moveTo(560 + k * 8, hz); s.lineTo(560 + k * 130, STAGE_H); s.stroke(); }
   s.globalAlpha = 1;
   BG = bg; STAGE_BG = st;
 }
@@ -1108,19 +1119,14 @@ function drawStage(t, beat, phase) {
     const x = (i * 131 + 40) % W, y = GROUND_Y - ((t * (6 + i % 4 * 3) + i * 37) % 170), r = 3 + (i % 3) * 2, a = t * (0.5 + i * 0.1);
     cx.save(); cx.translate(x, y); cx.rotate(a); cx.fillRect(-r, -r * 0.7, r * 2, r * 1.4); cx.restore();
   }
-  // aim arc: the enemy's intent, drawn while a spell is live
-  const asp = activeSpell();
-  if (asp && !G.over) {
-    const mx = (WIZ_X + ARC_X) / 2, my = 40;
-    cx.strokeStyle = G.enemy.color; cx.globalAlpha = .2; cx.lineWidth = 2; cx.setLineDash([3, 9]);
-    cx.beginPath(); cx.moveTo(WIZ_X + 40, WIZ_Y - 70);
-    cx.quadraticCurveTo(mx, my - 26, ARC_X - 34, ARC_Y - 46); cx.stroke();
-    cx.setLineDash([]); cx.globalAlpha = 1; cx.lineWidth = 1;
-  }
+  // the duel line: the floor lane bolts and strikes travel, lit in the enemy's color while a spell is live
+  const fy = FLOOR_Y - STAGE_TOP, live = activeSpell() && !G.over;
+  cx.strokeStyle = live ? G.enemy.color : '#3a1a5e'; cx.globalAlpha = live ? .3 : .5; cx.lineWidth = 2; cx.setLineDash([4, 10]);
+  cx.beginPath(); cx.moveTo(WIZ_X + 60, fy); cx.lineTo(ARC_X - 60, fy); cx.stroke();
+  cx.setLineDash([]); cx.globalAlpha = 1; cx.lineWidth = 1;
   drawWizard(t, phase);
   drawWard(t);
   drawEnemy(t);
-  cx.strokeStyle = '#3a1a5e'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(0, 0); cx.lineTo(W, 0); cx.stroke(); cx.lineWidth = 1;
   cx.restore();
 }
 
@@ -1138,11 +1144,11 @@ function draw(t) {
     const sp = activeSpell();
     const guide = OPT.guide && sp && sp.runes.find(r => r.status === 'pending');
     const lit = guide && guide.lane === l.id;
-    cx.fillStyle = l.color;
-    cx.globalAlpha = lit ? 0.12 : 0.035;
-    rr(x, TOP_Y - 30, w, STAGE_TOP - 6 - (TOP_Y - 30), 8); cx.fill();
+    cx.fillStyle = 'rgba(7,3,15,.6)'; cx.fillRect(x, TOP_Y - 30, w, HIT_Y - (TOP_Y - 30)); // scrim: runes stay readable over the vista
+    cx.fillStyle = l.color; cx.globalAlpha = lit ? 0.12 : 0.035;
+    rr(x, TOP_Y - 30, w, HIT_Y + 30 - (TOP_Y - 30), 8); cx.fill();
     cx.globalAlpha = lit ? 0.45 : 0.14; cx.strokeStyle = l.color; // neon lane edges
-    cx.beginPath(); cx.moveTo(x + .5, TOP_Y - 24); cx.lineTo(x + .5, STAGE_TOP - 12); cx.moveTo(x + w - .5, TOP_Y - 24); cx.lineTo(x + w - .5, STAGE_TOP - 12); cx.stroke();
+    cx.beginPath(); cx.moveTo(x + .5, TOP_Y - 24); cx.lineTo(x + .5, HIT_Y + 24); cx.moveTo(x + w - .5, TOP_Y - 24); cx.lineTo(x + w - .5, HIT_Y + 24); cx.stroke();
     cx.globalAlpha = 1;
     // header: element + finger
     cx.textAlign = 'center';
@@ -1162,18 +1168,18 @@ function draw(t) {
   // keycap strip (finger teaching legend)
   for (const l of LANES) {
     const w = LW, x = LNX[l.id] - w/2;
-    cx.fillStyle = 'rgba(12,6,30,.75)'; rr(x + 4, HIT_Y + 28, w - 8, 42, 8); cx.fill();
+    cx.fillStyle = 'rgba(12,6,30,.8)'; rr(x + 4, HIT_Y + 34, w - 8, 40, 8); cx.fill();
     cx.strokeStyle = l.color; cx.globalAlpha = .5;
-    rr(x + 4, HIT_Y + 28, w - 8, 42, 8); cx.stroke();
+    rr(x + 4, HIT_Y + 34, w - 8, 40, 8); cx.stroke();
     cx.globalAlpha = 1;
     cx.fillStyle = l.color; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
-    cx.fillText(l.name, LNX[l.id], HIT_Y + 42);
+    cx.fillText(l.name, LNX[l.id], HIT_Y + 49);
     cx.fillStyle = PAL.dim; cx.font = '9.5px ui-monospace, Menlo, monospace';
-    cx.fillText(chapterAt(G.ci).tier >= 4 ? l.sym : l.keys, LNX[l.id], HIT_Y + 56);
+    cx.fillText((chapterAt(G.ci).tier >= 4 ? l.sym : l.keys).replace(/ /g, ''), LNX[l.id], HIT_Y + 64);
   }
 
-  // health bars in the band under the hit line, each on its fighter's side
-  const BAR_Y = HIT_Y + 74, BAR_H = 16, HALF = (W/2 - X0) - 24;
+  // health bars at the top corners, each on its fighter's side
+  const BAR_Y = 8, BAR_H = 14, HALF = 300;
   const bar = (x, frac, c1, c2, label) => { // neon gauge
     cx.fillStyle = '#14082c'; rr(x, BAR_Y, HALF, BAR_H, 6); cx.fill();
     const g = cx.createLinearGradient(x, 0, x + HALF, 0); g.addColorStop(0, c1); g.addColorStop(1, c2);
@@ -1182,8 +1188,8 @@ function draw(t) {
     cx.fillStyle = '#fff'; cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
     cx.shadowColor = '#000'; cx.shadowBlur = 4; cx.fillText(label, x + 8, BAR_Y + 12); cx.shadowBlur = 0;
   };
-  bar(X0, G.hp / 100, G.hp > 40 ? PAL.cyan : PAL.crimson, G.hp > 40 ? '#3cf0a0' : PAL.pink, 'CASTER ' + G.hp);
-  bar(W/2 + 24, G.enemy.hp / G.enemy.max, PAL.wine, G.enemy.color, G.enemy.name.toUpperCase() + '  ' + Math.max(0, G.enemy.hp));
+  bar(16, G.hp / 100, G.hp > 40 ? PAL.cyan : PAL.crimson, G.hp > 40 ? '#3cf0a0' : PAL.pink, 'CASTER ' + G.hp);
+  bar(W - 16 - HALF, G.enemy.hp / G.enemy.max, PAL.wine, G.enemy.color, G.enemy.name.toUpperCase() + '  ' + Math.max(0, G.enemy.hp));
 
   // spells: connectors + runes
   for (const s of G.spells) {
@@ -1192,7 +1198,7 @@ function draw(t) {
       const a = s.runes[i], b = s.runes[i+1];
       const ya = noteY(a, t), yb = noteY(b, t);
       if (b.wordStart) continue; // the connector breaks between words
-      if (ya > -60 && yb < STAGE_TOP) { cx.moveTo(LNX[a.lane], ya); cx.lineTo(LNX[b.lane], yb); }
+      if (ya > -60 && ya < HIT_Y + 80 && yb > -60 && yb < HIT_Y + 80) { cx.moveTo(LNX[a.lane], ya); cx.lineTo(LNX[b.lane], yb); }
     }
     cx.stroke();
     for (const rt of s.rests) { // the rest between words: a small diamond falls through the gap between the hands
@@ -1201,7 +1207,7 @@ function draw(t) {
       cx.moveTo(W/2, y - 6); cx.lineTo(W/2 + 6, y); cx.lineTo(W/2, y + 6); cx.lineTo(W/2 - 6, y); cx.fill(); cx.globalAlpha = 1;
     }
     for (const r of s.runes) {
-      const y = noteY(r, t); if (y < -60 || y > STAGE_TOP - 4) continue;
+      const y = noteY(r, t); if (y < -60 || y > HIT_Y + 80) continue;
       const l = LANE[r.lane];
       if (r.status === 'pending') {
         const cxr = LNX[r.lane];
@@ -1257,10 +1263,11 @@ function draw(t) {
     }
     // arrow: the volley closing in — a target reticle descending from the stage
     if (!s.fizzled) {
+      // the volley advances along the floor from the enemy toward the caster
       const p = Math.max(0, Math.min(1, (t - s.arrow.from) / (s.arrow.to - s.arrow.from)));
-      const ay = (STAGE_TOP - 10) - p * (STAGE_TOP - HIT_Y - 20);
-      cx.fillStyle = G.enemy.color;
-      cx.beginPath(); cx.moveTo(W/2, ay - 10); cx.lineTo(W/2 - 6, ay + 2); cx.lineTo(W/2 + 6, ay + 2); cx.fill();
+      const ax = (ARC_X - 60) - p * (ARC_X - 60 - (WIZ_X + 70));
+      cx.fillStyle = G.enemy.color; cx.globalAlpha = .8;
+      cx.beginPath(); cx.moveTo(ax - 10, FLOOR_Y); cx.lineTo(ax + 2, FLOOR_Y - 6); cx.lineTo(ax + 2, FLOOR_Y + 6); cx.fill(); cx.globalAlpha = 1;
       cx.lineWidth = 1;
     }
   }
@@ -1320,18 +1327,13 @@ function draw(t) {
     cx.beginPath(); cx.arc(f.x, f.y, (f.big ? 40 : 20) + p * (f.big ? 120 : 50), 0, 7); cx.stroke();
     cx.globalAlpha = 1; cx.lineWidth = 1;
   }
-  // spell bolts in flight: the incantation arcs from staff to archer
-  const qp = (a, c, b, p) => (1-p)*(1-p)*a + 2*(1-p)*p*c + p*p*b;
+  // spell bolts in flight: the incantation dives from the spell hand onto the duel line and runs the floor to the enemy
   for (const b of G.bolts) {
     const p = (t - b.t0) / (b.at - b.t0), e = ELC[b.el];
-    const qx = (b.x0 + b.x1) / 2, qy = Math.min(b.y0, b.y1) - b.arc;
-    const bx = qp(b.x0, qx, b.x1, p), by = qp(b.y0, qy, b.y1, p);
-    cx.strokeStyle = e; cx.globalAlpha = .4; cx.lineWidth = 3; // comet trail along the arc
+    const [bx, by] = floorPath(b.x0, b.y0, b.x1, b.y1, 0, p);
+    cx.strokeStyle = e; cx.globalAlpha = .45; cx.lineWidth = 3; // comet trail along the path
     cx.beginPath();
-    for (let k = 0; k <= 8; k++) {
-      const q = Math.max(0, p - k*0.055);
-      k ? cx.lineTo(qp(b.x0, qx, b.x1, q), qp(b.y0, qy, b.y1, q)) : cx.moveTo(qp(b.x0, qx, b.x1, q), qp(b.y0, qy, b.y1, q));
-    }
+    for (let k = 0; k <= 8; k++) { const [qx, qy] = floorPath(b.x0, b.y0, b.x1, b.y1, 0, Math.max(0, p - k * 0.05)); k ? cx.lineTo(qx, qy) : cx.moveTo(qx, qy); }
     cx.stroke(); cx.globalAlpha = 1; cx.lineWidth = 1;
     cx.shadowColor = e; cx.shadowBlur = 18;
     cx.fillStyle = e;
@@ -1343,8 +1345,8 @@ function draw(t) {
   // enemy strikes in flight, accelerating at the caster: arrows/lances in the enemy's color, a boss hurls an orb
   for (const s of G.strikes) {
     const p = Math.min(1, (t - s.t0) / (s.at - s.t0)), e = p * p, c = G.enemy.color;
-    const x0 = ARC_X - 56, y0 = ARC_AY - 48, x1 = WIZ_X + 26, y1 = WIZ_AY - 56;
-    const ax = x0 + (x1 - x0) * e, ay = y0 + (y1 - y0) * e, ang = Math.atan2(y1 - y0, x1 - x0);
+    const pt = floorPath(ARC_X - 56, ARC_AY - 48, WIZ_X + 26, WIZ_AY - 56, 10, e), pn = floorPath(ARC_X - 56, ARC_AY - 48, WIZ_X + 26, WIZ_AY - 56, 10, Math.min(1, e + 0.01));
+    const ax = pt[0], ay = pt[1], ang = Math.atan2(pn[1] - ay, pn[0] - ax);
     cx.save(); cx.translate(ax, ay); cx.rotate(ang);
     cx.shadowColor = c; cx.shadowBlur = 10; cx.strokeStyle = c; cx.fillStyle = c; cx.lineWidth = 3;
     if (G.enemy.kind === 'boss') {
@@ -1375,8 +1377,8 @@ function draw(t) {
   for (const p of G.pops) {
     if (p.judge) { // lane judgment: a pill over the keycap box, holds then fades
       const a = Math.min(1, (p.until - t) / 0.2);
-      cx.globalAlpha = a; cx.fillStyle = 'rgba(10,4,24,.94)'; rr(p.x - 43, p.y - 20, 86, 40, 8); cx.fill();
-      cx.strokeStyle = p.color; cx.lineWidth = 1.5; cx.shadowColor = p.color; cx.shadowBlur = 10; rr(p.x - 43, p.y - 20, 86, 40, 8); cx.stroke(); cx.lineWidth = 1;
+      cx.globalAlpha = a; cx.fillStyle = 'rgba(10,4,24,.94)'; rr(p.x - 39, p.y - 19, 78, 38, 8); cx.fill();
+      cx.strokeStyle = p.color; cx.lineWidth = 1.5; cx.shadowColor = p.color; cx.shadowBlur = 10; rr(p.x - 39, p.y - 19, 78, 38, 8); cx.stroke(); cx.lineWidth = 1;
       cx.textAlign = 'center'; cx.fillStyle = p.color; cx.font = 'bold 14px ui-monospace, Menlo, monospace';
       cx.fillText(p.text, p.x, p.y - 2); cx.shadowBlur = 0;
       cx.fillStyle = PAL.text; cx.font = '10.5px ui-monospace, Menlo, monospace';
@@ -1441,7 +1443,7 @@ function drawWard(t) {
   }
 }
 // sigil layer: the panel between the hands, power animations, cast mode, toasts
-const CAST_RING = { x: W/2, y: 432, r: 40 };
+const CAST_RING = { x: W/2, y: 430, r: 40 };
 function drawSigils(t) {
   // Gale: wind streaks tear up the lanes
   if (t - G.galeFx < 0.7) {
@@ -1546,7 +1548,7 @@ function drawSigils(t) {
 }
 // hit-error meter: last 20 judged presses on the ±GW scale (gold = PERFECT zone), ▲ = average
 function drawErrorBar() {
-  const cxm = W/2, y = STAGE_TOP + 36, half = 180, sx = half / GW; // below the health bars, above the fighters
+  const cxm = W/2, y = HIT_Y + 150, half = 180, sx = half / GW; // on the floor, under the duel line
   cx.fillStyle = 'rgba(10,4,24,.82)'; rr(cxm - half - 58, y - 13, 2*half + 116, 46, 7); cx.fill(); // tall enough for the stats line
   cx.strokeStyle = '#3a1a5e'; rr(cxm - half - 58, y - 13, 2*half + 116, 46, 7); cx.stroke();
   cx.fillStyle = 'rgba(60,240,160,.2)'; cx.fillRect(cxm - half, y - 5, 2*half, 10);
