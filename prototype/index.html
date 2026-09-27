@@ -316,7 +316,7 @@ function fizzle(sp) {
   G.fx.push({ kind:'ring', color:'#f87171', t0: now(), dur: .5, x: W/2, y: HIT_Y });
   fizzleSnd();
   // the archer counters: an arrow flies down; the hit lands when it arrives
-  G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: DMG });
+  G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: DMG, why: sp.fizzledWrong ? 'WRONG KEY' : 'MISSED RUNE' });
   whooshSnd();
 }
 function resolveMiss(sp, r) {
@@ -355,7 +355,7 @@ function resolveCast(sp) {
   if (sp.power <= 0) {
     popup('FIZZLE', '#f87171', W/2, HIT_Y - 60);
     fizzleSnd();
-    G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: DMG });
+    G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: DMG, why: 'ALL RUNES LAPSED' });
     whooshSnd();
   } else {
     G.bolts.push({ word: sp.word, el, power: sp.power, t0: now(), at: now() + BOLT_F,
@@ -364,7 +364,7 @@ function resolveCast(sp) {
     popup((el.toUpperCase()) + (sp.power > .99 ? ' — FULL POWER' : ` — ${Math.round(sp.power*100)}%`), ELC[el], W/2, HIT_Y - 85);
     castSnd(el, sp.power);
     const leak = Math.round(DMG * (1 - sp.power));
-    if (leak > 0) G.strikes.push({ t0: now() + BOLT_F, at: now() + BOLT_F + ARROW_F, dmg: leak });
+    if (leak > 0) G.strikes.push({ t0: now() + BOLT_F, at: now() + BOLT_F + ARROW_F, dmg: leak, why: 'SLOPPY TIMING' });
   }
 }
 function applyImpact(b) { // spell bolt reached the archer
@@ -387,7 +387,7 @@ function applyStrike(s) { // enemy arrow reached the caster — the counter's sh
   G.shake = Math.max(G.shake, 3 + 6 * (s.dmg/DMG));
   thudSnd();
   burst(WIZ_X + 26, WIZ_AY - 56, '#f87171', 8 + Math.round(10 * s.dmg/DMG), 140 + 120*s.dmg/DMG);
-  popup('-' + s.dmg, '#f87171', WIZ_X + 30, WIZ_AY - 120);
+  popup('-' + s.dmg + (s.why ? ' · ' + s.why : ''), '#f87171', WIZ_X + 30, WIZ_AY - 120);
   if (G.hp <= 0) { G.hp = 0; G.over = true; }
 }
 
@@ -413,7 +413,7 @@ addEventListener('keydown', e => {
     G.combo = 0;
     popup('WRONG', '#f87171', LNX[r.lane], HIT_Y - 30);
     teachFlash(r); wrongSnd();
-    if (OPT.pen === 'strict') fizzle(sp);
+    if (OPT.pen === 'strict') { sp.fizzledWrong = true; fizzle(sp); }
   }
 });
 cv.addEventListener('click', () => {
