@@ -50,6 +50,14 @@
     <fieldset><legend>Coach</legend>
       <label><input type="checkbox" id="guide" checked> highlight next lane</label>
     </fieldset>
+    <fieldset><legend>Soundtrack (§8 OPEN)</legend>
+      <select id="music">
+        <option value="a" selected>tribal drums</option>
+        <option value="b">dark orchestral</option>
+        <option value="c">synthwave</option>
+        <option value="off">off</option>
+      </select>
+    </fieldset>
   </div>
   <canvas id="game" width="1120" height="840"></canvas>
   <div id="help">
@@ -62,7 +70,7 @@
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
       <li><b>Audio delay:</b> if the click and your keystroke feel offset, slide until they fuse.</li>
     </ul>
-    Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor.
+    Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. Soundtrack runs at the speed of the letters (try the cavalry ramp); music needs an http server — file:// plays silent.
   </div>
 </div>
 <script>
@@ -161,6 +169,7 @@ function syncOpts() {
   OPT.keys = document.querySelector('input[name=keys]:checked').value;
   OPT.cavalry = document.getElementById('cavalry').checked;
   OPT.guide = document.getElementById('guide').checked;
+  OPT.music = document.getElementById('music').value;
   OPT.delay = +document.getElementById('delay').value;
   document.getElementById('delayv').textContent = OPT.delay;
   // NOTE: never touch G.bpm here — the bpm slider's own input/change
@@ -170,6 +179,7 @@ document.querySelectorAll('#opts input').forEach(i => i.addEventListener('change
   if (i.id === 'bpm') { document.getElementById('bpmv').textContent = i.value; if (G) G.bpm = +i.value; }
   syncOpts();
 }));
+document.getElementById('music').addEventListener('change', () => { syncOpts(); if (started && G && !G.over) musicPlay(OPT.music); });
 document.getElementById('bpm').addEventListener('input', () => { document.getElementById('bpmv').textContent = document.getElementById('bpm').value; if (G) G.bpm = +document.getElementById('bpm').value; });
 
 // ================= audio (beat = enemy heartbeat) =================
@@ -228,6 +238,36 @@ function newGame() {
 function startRun() {
   G.nextBeat = AC.currentTime + 0.1;
   G.nextT0 = AC.currentTime + Math.max(LOOK + 0.3, 3 * (60/G.bpm));
+}
+
+// ================= soundtrack (§8): runs at the speed of the letters =================
+// The generated tracks sit at 90 BPM; playbackRate tracks G.bpm, so the music
+// literally rides the letter speed — wave ramps and cavalry push the track with
+// the game, pitch intact (AudioBufferSource rate is a time-scale, not a stretch).
+const MUSIC_REF = 90;
+const musicBufs = {};
+let musicSrc = null, musicGain = null;
+function musicBuf(name) {
+  if (!musicBufs[name]) {
+    musicBufs[name] = fetch('audio/track_' + name + '.m4a')
+      .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.arrayBuffer(); })
+      .then(b => AC.decodeAudioData(b))
+      .catch(() => null); // file:// or missing asset: stay silent, game unaffected
+  }
+  return musicBufs[name];
+}
+function musicStop() { if (musicSrc) { const s = musicSrc; musicSrc = null; try { s.stop(); } catch (e) {} } }
+function musicPlay(name) {
+  musicStop();
+  if (!AC || name === 'off') return;
+  musicBuf(name).then(buf => {
+    if (!buf || !started || !G || G.over || OPT.music !== name) return; // stale or dead run
+    musicSrc = AC.createBufferSource(); musicSrc.buffer = buf; musicSrc.loop = true;
+    musicSrc.playbackRate.value = G.bpm / MUSIC_REF;
+    if (!musicGain) { musicGain = AC.createGain(); musicGain.gain.value = 0.42; musicGain.connect(AC.destination); }
+    musicSrc.connect(musicGain);
+    musicSrc.start(AC.currentTime + 0.05);
+  });
 }
 function now() { return AC ? AC.currentTime : performance.now()/1000; }
 function activeSpell() { if (!G) return null; for (const s of G.spells) if (!s.done) return s; return null; }
@@ -379,8 +419,8 @@ addEventListener('keydown', e => {
 cv.addEventListener('click', () => {
   if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); }
   AC.resume();
-  if (!started) { started = true; newGame(); syncOpts(); startRun(); }
-  else if (G.over) { newGame(); syncOpts(); startRun(); }
+  if (!started) { started = true; newGame(); syncOpts(); startRun(); musicPlay(OPT.music); }
+  else if (G.over) { newGame(); syncOpts(); startRun(); musicPlay(OPT.music); }
 });
 
 // ================= frame =================
@@ -396,11 +436,13 @@ function frame() {
       G.beatIdx++; G.nextBeat += 60/G.bpm;
     }
     while (G.nextT0 < t + LOOK + 0.05) makeSpell(G.nextT0);
+    if (musicSrc) musicSrc.playbackRate.value = G.bpm / MUSIC_REF;
     const sp = activeSpell();
     if (sp) for (const r of sp.runes) if (r.status === 'pending' && t > r.time + GW) resolveMiss(sp, r);
     for (const s of G.spells) if (!s.done && s.runes.every(r => r.status !== 'pending')) resolveCast(s);
   }
   // effects: dt-driven motion for bolts, arrows, particles, shake
+  if (musicSrc && G.over) musicStop();
   const dt = G.lastT ? Math.min(0.05, t - G.lastT) : 0.016; G.lastT = t;
   if (G.bolts.length) { for (const b of G.bolts) if (t >= b.at) applyImpact(b); G.bolts = G.bolts.filter(b => t < b.at); }
   if (G.strikes.length) { for (const s of G.strikes) if (t >= s.at) applyStrike(s); G.strikes = G.strikes.filter(s => t < s.at); }

@@ -232,6 +232,12 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   element color language.
 - **Audio** — the "beat" of the enemy's attack; how is it conveyed (SFX, music,
   screen pulse)?
+
+  > **Prototype answer (soundtrack):** three ACE-Step-generated loops (tribal /
+  > orchestral / synthwave) at a 90 BPM reference; `playbackRate` tracks the
+  > game's bpm, so the music literally runs at the speed of the letters and
+  > rides wave/cavalry ramps pitch-intact. The metronome stays as the enemy's
+  > heartbeat under the track.
 - **Meta-progression** — spellbook, unlockable elements/areas, score/rank,
   replay.
 - **Controls & input** — key event handling, input buffering, key-rollover for
