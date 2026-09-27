@@ -151,14 +151,30 @@ damage. Different enemies = different rhythms.
    it. The deadline, not the beat, is the gate.
 3. **Speed is the difficulty knob.** Tempo (scroll speed) increases over time.
 
-> **Prototype implementation (verified):** every ruling derives from one
-> quantity, `t − r.time`, against two constants (±55 ms perfect window, ±140 ms
-> gate). Presses before the gate — correct key or typo — are unjudged; presses
-> past the deadline lapse the rune on input (`MISS · late`), so the same press
-> quality always gets the same verdict regardless of frame timing. Rune
-> arrivals are snapped to the metronome click grid, and the perfect window is
-> drawn at its true size as a band above the hit line: what you see is what
-> grades.
+> **Prototype implementation (verified):** every ruling is the press error
+> `t − r.time` against two constants (±55 ms perfect, ±140 ms good), where
+> `t` is the key's event timestamp on the *heard* audio clock
+> (`getOutputTimestamp`) minus a per-device input offset. Visuals are drawn on
+> the same clock (for the frame's display time), so a rune crosses the line
+> exactly when its click is heard.
+> - **When to press:** the letter crossing the white line — the tile filling
+>   its receptor slot. Dashed gold lines over the tiles mark the perfect window;
+>   a tile touching the line at all is inside the good window.
+> - **Routing:** a press goes to the nearest pending rune with that character.
+>   A different rune inside its window → WRONG; the correct key up to 0.6 s
+>   early → EARLY (unjudged, rune stays live); a past-due but not-yet-lapsed
+>   rune → MISS on input. Frame lapses wait 50 ms of grace so a queued
+>   in-window press is always graded by its own timestamp.
+> - **Tempo map:** a tempo change (wave ramp, cavalry, slider) takes effect on
+>   the first rune of the next scheduled spell; clicks, the line pulse and the
+>   music follow it, so no cue ever disagrees with runes already on screen.
+>   Music is started on a click at its measured first beat, scaled so one track
+>   beat = one game beat, and looped over whole bars.
+> - **Feedback:** every judgment shows its error in ms; a hit-error meter plots
+>   the last 20 presses with their average; the run summary reports average
+>   offset and spread. Consistent offset → calibrate input; wide spread → the
+>   player. Audio delay (±300 ms) and input offset (±150 ms, or set from the
+>   last 20 hits) persist per browser.
 
 **Tempo:** **[OPEN]** — fixed per-spell with a difficulty selector, or
 adaptive? Constrained either way: cavalry (above) accelerates *within* an
@@ -243,8 +259,9 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   element is derived from its letters, §4): majority element, first letter, …
 - **Per-character beat grid** — how variable-length words map onto a fixed
   enemy cadence (see §5).
-- **Timing windows & latency calibration** — perfect/good/miss thresholds,
-  plus an input/audio latency calibration step (mandatory for a rhythm game).
+- **Timing windows & latency calibration** — perfect/good/miss thresholds are
+  playable in the prototype (§5); calibration is manual (audio delay + input
+  offset, or "set from last 20 hits"). Open: a guided first-run calibration step.
 - **Visual design** — lane rendering, hit line, enemy animation, spell effects,
   element color language.
 - **Audio** — the "beat" of the enemy's attack; how is it conveyed (SFX, music,

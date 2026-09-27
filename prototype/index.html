@@ -43,9 +43,12 @@
       <input id="bpm" type="range" min="60" max="160" value="90"><span id="bpmv">90</span> bpm<br>
       <label><input type="checkbox" id="cavalry"> cavalry accel (+5%/spell)</label>
     </fieldset>
-    <fieldset><legend>Audio delay (§8 OPEN)</legend>
-      <input id="delay" type="range" min="-120" max="120" value="0"><span id="delayv">0</span> ms<br>
-      <span style="color:#66738d">shift click sound vs notes</span>
+    <fieldset><legend>Timing calibration (§8)</legend>
+      audio <input id="delay" type="range" min="-300" max="300" value="0"><span id="delayv">0</span> ms
+      <span style="color:#66738d">click/music earlier ← → later</span><br>
+      input <input id="inoff" type="range" min="-150" max="150" value="0"><span id="inoffv">0</span> ms
+      <span style="color:#66738d">your press lag (subtracted from every press)</span><br>
+      <button id="calib" type="button">set input from last 20 hits</button> <span id="calibv" style="color:#8fa0bd">no hits yet</span>
     </fieldset>
     <fieldset><legend>Coach</legend>
       <label><input type="checkbox" id="guide" checked> highlight next lane</label>
@@ -53,7 +56,7 @@
     <fieldset><legend>Soundtrack (§8 OPEN)</legend>
       <select id="music">
         <option value="a" selected>tribal drums</option>
-        <option value="b">dark orchestral</option>
+        <option value="b">dark orchestral (no beat — free-running)</option>
         <option value="c">synthwave</option>
         <option value="off">off</option>
       </select>
@@ -68,8 +71,8 @@
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Cast feel:</b> watch the word-bolt hit the archer — does the element color + impact sell "you cast a spell"? Waves tighten +4 bpm each; is the fight loop compelling?</li>
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
-      <li><b>Perfect band:</b> the bright band above the line is the perfect window exactly — tile center in band = PERFECT. Rune arrivals are now on the metronome clicks; if it still feels off, slide the audio delay.</li>
-      <li><b>Audio delay:</b> if the click and your keystroke feel offset, slide until they fuse.</li>
+      <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
+      <li><b>Calibration:</b> if the click doesn't land when the letter crosses the line, slide <i>audio</i>. If your presses sit consistently early/late on the error bar, press "set input from last 20 hits" (or slide <i>input</i>). Both are saved in this browser.</li>
     </ul>
     Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. Soundtrack runs at the speed of the letters (try the cavalry ramp); music needs an http server — file:// plays silent.
   </div>
@@ -137,6 +140,8 @@ const HIT_Y = 554, TOP_Y = 138, LOOK = 2.2, PXS = (HIT_Y - TOP_Y) / LOOK;
 const STAGE_TOP = H - 210, STAGE_H = 210, GROUND_Y = 178, WIZ_X = 190, WIZ_Y = 178, ARC_X = 930, ARC_Y = 178, STAFF_X = 284, STAFF_Y = 28;
 const WIZ_AY = STAGE_TOP + WIZ_Y, ARC_AY = STAGE_TOP + ARC_Y, STAFF_AY = STAGE_TOP + STAFF_Y; // absolute anchors
 const PW = 0.055, GW = 0.14, DMG = 18, REST = 1.2, FIT = 4, HEAL = 2;
+const LAPSE_GRACE = 0.05; // frame lapse waits this long past the window so a queued in-window keypress is graded by its own timestamp first
+const EARLY_SHOW = 0.6;   // correct key up to this far before the window says EARLY (with ms); earlier presses are strays
 const ENEMY_HP = 24, WAVE_BPM = 4, BOLT_F = 0.38, ARROW_F = 0.45; // casting feel: bolt flight, enemy-arrow flight
 
 // ================= content =================
@@ -172,16 +177,33 @@ function syncOpts() {
   OPT.guide = document.getElementById('guide').checked;
   OPT.music = document.getElementById('music').value;
   OPT.delay = +document.getElementById('delay').value;
+  OPT.inOff = +document.getElementById('inoff').value;
   document.getElementById('delayv').textContent = OPT.delay;
+  document.getElementById('inoffv').textContent = OPT.inOff;
+  localStorage.setItem('runecaster.delay', OPT.delay);
+  localStorage.setItem('runecaster.inoff', OPT.inOff);
   // NOTE: never touch G.bpm here — the bpm slider's own input/change
   // handlers apply it, and a cavalry ramp must survive toggling options.
 }
+// calibration is per device: restore it before the first sync
+for (const [id, key] of [['delay', 'runecaster.delay'], ['inoff', 'runecaster.inoff']]) {
+  const v = localStorage.getItem(key); if (v !== null) document.getElementById(id).value = v;
+}
+syncOpts();
 document.querySelectorAll('#opts input').forEach(i => i.addEventListener('change', () => {
   if (i.id === 'bpm') { document.getElementById('bpmv').textContent = i.value; if (G) G.bpm = +i.value; }
   syncOpts();
+  if (i.id === 'delay' && started && G && !G.over) musicPlay(OPT.music); // music is scheduled against the delay: re-lock it
 }));
+for (const id of ['delay', 'inoff']) document.getElementById(id).addEventListener('input', syncOpts);
 document.getElementById('music').addEventListener('change', () => { syncOpts(); if (started && G && !G.over) musicPlay(OPT.music); });
 document.getElementById('bpm').addEventListener('input', () => { document.getElementById('bpmv').textContent = document.getElementById('bpm').value; if (G) G.bpm = +document.getElementById('bpm').value; });
+document.getElementById('calib').addEventListener('click', () => {
+  const s = G && timingStats(20, true); if (!s) return;
+  document.getElementById('inoff').value = Math.max(-150, Math.min(150, Math.round(s.mean)));
+  syncOpts(); showCalib();
+  document.activeElement.blur(); // keep Space/letters going to the game, not the button
+});
 
 // ================= audio (beat = enemy heartbeat) =================
 let AC = null;
@@ -228,6 +250,8 @@ function newGame() {
   G = {
     bpm: +document.getElementById('bpm').value, hp: 100, score: 0, combo: 0, maxCombo: 0,
     hits: {perfect:0, good:0, miss:0}, spells: [], nextT0: 0, beatIdx: 0, nextBeat: 0,
+    segs: [],   // tempo map: [{t0, beat}] — clicks, pulse and music follow the tempo of the spell being played
+    deltas: [], // judged presses: {d, raw, g} seconds (d = graded error, raw = before input offset)
     pops: [], fx: [], flash: null, redFlash: 0, over: false,
     // effects: enemy with hp/waves, in-flight spell bolts, enemy arrow strikes, particles
     enemyHp: ENEMY_HP, wave: 1, bolts: [], strikes: [], parts: [],
@@ -239,14 +263,31 @@ function newGame() {
 function startRun() {
   G.nextBeat = AC.currentTime + 0.1;
   const b = 60/G.bpm;
+  G.segs = [{ t0: G.nextBeat, beat: b }];
   G.nextT0 = G.nextBeat + Math.ceil(Math.max(LOOK + 0.3, 3 * b) / b) * b; // spell grid ON the click grid
 }
+// ---- tempo map: a tempo change takes effect on the first rune of the spell that
+// introduced it, so the clicks never disagree with runes already on screen (§5)
+function segAt(t) { let s = G.segs[0]; for (const x of G.segs) { if (x.t0 <= t + 1e-6) s = x; else break; } return s; }
+function segAfter(s) { return G.segs[G.segs.indexOf(s) + 1]; }
+function gridAtOrAfter(t) { // first click time >= t
+  const s = segAt(t), nx = segAfter(s);
+  const g = s.t0 + Math.max(0, Math.ceil((t - s.t0) / s.beat - 1e-9)) * s.beat;
+  return nx && g > nx.t0 - 1e-6 ? nx.t0 : g;
+}
+function beatPhase(t) { const s = segAt(t), p = ((t - s.t0) / s.beat) % 1; return p < 0 ? p + 1 : p; }
 
-// ================= soundtrack (§8): runs at the speed of the letters =================
-// The generated tracks sit at 90 BPM; playbackRate tracks G.bpm, so the music
-// literally rides the letter speed — wave ramps and cavalry push the track with
-// the game, pitch intact (AudioBufferSource rate is a time-scale, not a stretch).
-const MUSIC_REF = 90;
+// ================= soundtrack (§8): locked to the click grid =================
+// Each beat-driven track is started on a click at its measured first beat and
+// time-scaled so one track beat = one game beat; rate changes land on segment
+// starts (whole beats), and the loop spans whole bars, so the lock survives
+// tempo changes and loop seams. Resampling shifts pitch with tempo.
+// bpm/off measured from the files (onset phase fit, stable to ±25 ms across the file).
+const MUSIC = {
+  a: { bpm: 89.775, off: 0.394, bars: 21 },
+  b: null, // no stable pulse: free-running at native speed, never implies a beat
+  c: { bpm: 102.08, off: 0.286, bars: 25 },
+};
 const musicBufs = {};
 let musicSrc = null, musicGain = null;
 function musicBuf(name) {
@@ -259,19 +300,41 @@ function musicBuf(name) {
   return musicBufs[name];
 }
 function musicStop() { if (musicSrc) { const s = musicSrc; musicSrc = null; try { s.stop(); } catch (e) {} } }
+function musicRate(beat) { return musicSrc && musicSrc.meta ? (60 / musicSrc.meta.bpm) / beat : 1; }
 function musicPlay(name) {
   musicStop();
   if (!AC || name === 'off') return;
   musicBuf(name).then(buf => {
     if (!buf || !started || !G || G.over || OPT.music !== name) return; // stale or dead run
-    musicSrc = AC.createBufferSource(); musicSrc.buffer = buf; musicSrc.loop = true;
-    musicSrc.playbackRate.value = G.bpm / MUSIC_REF;
+    const meta = MUSIC[name], d = OPT.delay / 1000;
+    const src = AC.createBufferSource(); src.buffer = buf; src.loop = true; src.meta = meta;
     if (!musicGain) { musicGain = AC.createGain(); musicGain.gain.value = 0.42; musicGain.connect(AC.destination); }
-    musicSrc.connect(musicGain);
-    musicSrc.start(AC.currentTime + 0.05);
+    src.connect(musicGain);
+    musicSrc = src;
+    if (!meta) { src.start(AC.currentTime + 0.05); return; }
+    const tb = 60 / meta.bpm;
+    src.loopStart = meta.off; src.loopEnd = meta.off + meta.bars * 4 * tb;
+    const T = gridAtOrAfter(AC.currentTime + 0.1 - d); // the track's first beat plays on this click
+    src.playbackRate.setValueAtTime(musicRate(segAt(T).beat), 0);
+    for (const s of G.segs) if (s.t0 > T) src.playbackRate.setValueAtTime(musicRate(s.beat), s.t0 + d);
+    src.start(T + d, meta.off);
   });
 }
-function now() { return AC ? AC.currentTime : performance.now()/1000; }
+// ---- the heard clock: AudioContext time of the sound reaching the speakers now.
+// Visuals, lapses and key presses all use it, so a rune scheduled at time T
+// crosses the line exactly when its click is heard. (AC.currentTime runs ahead
+// by the output latency; it is only used to schedule sounds.)
+let clkOff = null;
+function heardAt(perfMs) {
+  if (!AC) return perfMs / 1000;
+  const ts = AC.getOutputTimestamp ? AC.getOutputTimestamp() : null;
+  const est = ts && ts.contextTime > 0 && ts.performanceTime > 0
+    ? ts.contextTime - ts.performanceTime / 1000
+    : AC.currentTime - (AC.outputLatency || AC.baseLatency || 0) - performance.now() / 1000;
+  if (clkOff === null || Math.abs(est - clkOff) > 0.03) clkOff = est; else clkOff += 0.05 * (est - clkOff); // smooth report jitter, snap on jumps
+  return perfMs / 1000 + clkOff;
+}
+function now() { return heardAt(performance.now()); }
 function activeSpell() { if (!G) return null; for (const s of G.spells) if (!s.done) return s; return null; }
 window.G = () => G; // debug hook
 
@@ -279,7 +342,12 @@ window.G = () => G; // debug hook
 function makeSpell(t0) {
   if (OPT.cavalry) G.bpm = Math.min(200, G.bpm * 1.05);
   const word = pickWord(), beat = 60/G.bpm, chars = [...word];
-  t0 = G.nextBeat + Math.ceil((t0 - G.nextBeat) / beat - 1e-9) * beat; // snap arrivals to the click grid (§5)
+  // t0 is a click (previous spell spans whole beats); this spell's tempo starts here
+  if (Math.abs(segAt(t0).beat - beat) > 1e-9) {
+    G.segs.push({ t0, beat });
+    if (musicSrc && musicSrc.meta) musicSrc.playbackRate.setValueAtTime(musicRate(beat), t0 + OPT.delay / 1000);
+  }
+  while (G.segs.length > 1 && G.segs[1].t0 < Math.min(now(), G.nextBeat) - 1) G.segs.shift();
   const gap = OPT.grid === 'A' ? beat : (FIT * beat) / chars.length;
   const runes = []; let k = 0;
   for (const ch of chars) {
@@ -292,12 +360,32 @@ function makeSpell(t0) {
     arrow: { from: t0 - beat, to: (last ? last.time : t0) + GW + 0.12 } };
   G.spells.push(spell);
   if (G.spells.length > 6) G.spells = G.spells.filter(s => !s.done || now() < s.end + 1);
-  const total = OPT.grid === 'A' ? k * gap : FIT * beat;
-  G.nextT0 = t0 + total + REST * beat;
+  const beats = OPT.grid === 'A' ? k : FIT;
+  G.nextT0 = t0 + Math.ceil(beats + REST - 1e-9) * beat; // whole beats: the next spell starts on a click
 }
 
 // ================= grading / resolution =================
 function popup(text, color, x, y) { G.pops.push({ text, color, x, y, until: now() + 0.8 }); }
+// judgment readout: sits in the lane's keycap box (where the tile lands), never over incoming tiles;
+// one per lane — a newer judgment replaces the old one instead of stacking
+const JUDGE_Y = HIT_Y + 49, JUDGE_DUR = 0.6;
+function judge(lane, text, sub, color) {
+  G.pops = G.pops.filter(p => !(p.judge && p.lane === lane));
+  G.pops.push({ judge: true, lane, text, sub, color, x: LNX[lane], y: JUDGE_Y, until: now() + JUDGE_DUR });
+}
+function fmtMs(d) { const v = Math.round(Math.abs(d) * 1000); return v + 'ms ' + (d < 0 ? 'early' : 'late'); }
+function timingStats(n, raw) { // ms over the last n judged presses; raw = before the input offset
+  const xs = G.deltas.slice(-n).map(x => (raw ? x.raw : x.d) * 1000);
+  if (!xs.length) return null;
+  const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+  const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / xs.length);
+  return { mean, sd, n: xs.length };
+}
+function showCalib() {
+  const s = G && timingStats(20, true);
+  document.getElementById('calibv').textContent = s
+    ? `last ${s.n}: avg ${Math.round(s.mean)}ms (${s.mean < 0 ? 'early' : 'late'}) · spread ±${Math.round(s.sd)}ms` : 'no hits yet';
+}
 function teachFlash(r) { const l = LANE[r.lane]; G.flash = { text: `'${r.ch === ' ' ? 'SPACE' : r.ch}' → ${l.name}`, color: l.color, until: now() + 1.0 }; }
 function burst(x, y, color, n, spd, kind) {
   for (let i = 0; i < n; i++) {
@@ -322,23 +410,27 @@ function fizzle(sp) {
   G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: DMG, why: sp.fizzledWrong ? 'WRONG KEY' : 'MISSED RUNE' });
   whooshSnd();
 }
-function resolveMiss(sp, r, late) {
+function resolveMiss(sp, r, note) {
   r.status = 'miss'; r.hitAt = now();
   G.combo = 0; G.hits.miss++;
-  popup('MISS' + (late ? ' · late' : ''), '#f87171', LNX[r.lane], HIT_Y - 30);
+  judge(r.lane, 'MISS', note || 'lapsed', '#f87171');
   teachFlash(r);
   if (OPT.pen === 'strict') fizzle(sp);
 }
-function grade(r, g, delta) {
+function grade(r, g, delta, raw) {
   r.status = g; r.hitAt = now();
   G.combo++; G.maxCombo = Math.max(G.maxCombo, G.combo);
   const mult = 1 + Math.min(3, G.combo/10);
   G.score += Math.round((g === 'perfect' ? 100 : 50) * mult);
   G.hits[g]++;
-  // tell the learner WHICH way the timing was off (§6: mistakes are lessons)
-  let label = g === 'perfect' ? 'PERFECT' : (delta < 0 ? 'good · early' : 'good · late');
-  if (g === 'perfect' && G.hp < 100) { G.hp = Math.min(100, G.hp + HEAL); label += ' +' + HEAL; } // precision heals
-  popup(label, g === 'perfect' ? '#fbbf24' : '#4ade80', LNX[r.lane], HIT_Y - 30);
+  G.deltas.push({ d: delta, raw, g }); if (G.deltas.length > 200) G.deltas.shift();
+  showCalib();
+  // tell the learner WHICH way and HOW FAR the timing was off (§6: mistakes are lessons)
+  judge(r.lane, g === 'perfect' ? 'PERFECT' : 'GOOD', fmtMs(delta), g === 'perfect' ? '#fbbf24' : '#4ade80');
+  if (g === 'perfect' && G.hp < 100) { // precision heals
+    G.hp = Math.min(100, G.hp + HEAL);
+    popup('+' + HEAL + ' HP · PERFECT', '#4ade80', WIZ_X + 30, WIZ_AY - 120);
+  }
   G.fx.push({ kind:'ring', color: g==='perfect' ? '#fbbf24' : '#4ade80', t0: now(), dur: .25, x: LNX[r.lane], y: HIT_Y });
   burst(LNX[r.lane], HIT_Y, g === 'perfect' ? '#fbbf24' : '#4ade80', g === 'perfect' ? 12 : 5, 150);
   hitSnd(g);
@@ -404,52 +496,65 @@ addEventListener('keydown', e => {
   if (k === null) return;
   if (k === ' ') e.preventDefault();
   if (k === ' ' && OPT.space === 'auto') return;
-  const sp = activeSpell(); if (!sp) return;
-  const r = sp.runes.find(r => r.status === 'pending'); if (!r) return;
-  const t = now();
-  if (k === r.ch) {
-    const delta = t - r.time;
-    if (delta < -GW) { // too early to count: the rune stays pending, but say why (§5: gate = deadline)
-      if (!r.warned) { r.warned = true; popup('EARLY', '#8fa0bd', LNX[r.lane], HIT_Y - 30); }
-      return;
+  // when the key went down (event timestamp, not handler time), on the heard clock
+  const raw = heardAt(e.timeStamp), t = raw - OPT.inOff / 1000;
+  // route the press to the nearest pending rune with that character; separately
+  // track the nearest judgeable rune of any character (for WRONG)
+  let same = null, near = null;
+  for (const s of G.spells) {
+    if (s.done) continue;
+    for (const r of s.runes) {
+      if (r.status !== 'pending') continue;
+      const ad = Math.abs(t - r.time);
+      if (r.ch === k && (!same || ad < Math.abs(t - same.r.time))) same = { s, r };
+      if (ad <= GW && (!near || ad < Math.abs(t - near.r.time))) near = { s, r };
     }
-    else if (delta > GW) resolveMiss(sp, r, 'late'); // lapse on input: same press quality, same verdict
-    else if (Math.abs(delta) <= PW) grade(r, 'perfect', delta);
-    else grade(r, 'good', delta);
-  } else if (t < r.time - GW) {
-    // a typo before the gate: nothing was strikable yet — no reward, no punishment
-  } else if (t > r.time + GW) {
-    resolveMiss(sp, r, 'late'); // the live rune was already past due; lapse it, never misjudge this typo
-  } else {
-    G.combo = 0;
-    popup('WRONG', '#f87171', LNX[r.lane], HIT_Y - 30);
-    teachFlash(r); wrongSnd();
-    if (OPT.pen === 'strict') { sp.fizzledWrong = true; fizzle(sp); }
   }
+  const d = same ? t - same.r.time : 0;
+  if (same && Math.abs(d) <= GW) grade(same.r, Math.abs(d) <= PW ? 'perfect' : 'good', d, raw - same.r.time);
+  else if (same && d > GW) resolveMiss(same.s, same.r, fmtMs(d)); // past due but not yet lapsed: same press, same verdict
+  else if (near) { // a different rune was live: wrong key
+    G.combo = 0;
+    judge(near.r.lane, 'WRONG', `'${k === ' ' ? '␣' : k}' ≠ '${near.r.ch === ' ' ? '␣' : near.r.ch}'`, '#f87171');
+    teachFlash(near.r); wrongSnd();
+    if (OPT.pen === 'strict') { near.s.fizzledWrong = true; fizzle(near.s); }
+  }
+  else if (same && d >= -GW - EARLY_SHOW) judge(same.r.lane, 'EARLY', fmtMs(d), '#8fa0bd'); // not judged: rune stays live
+  // anything else touched no live rune: no reward, no punishment
 });
 cv.addEventListener('click', () => {
-  if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); }
+  if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' }); }
   AC.resume();
   if (!started) { started = true; newGame(); syncOpts(); startRun(); musicPlay(OPT.music); }
   else if (G.over) { newGame(); syncOpts(); startRun(); musicPlay(OPT.music); }
 });
 
 // ================= frame =================
-function frame() {
+let lastTs = 0, frameDt = 1/60;
+function frame(ts) {
   requestAnimationFrame(frame);
+  if (lastTs && ts > lastTs) frameDt += 0.1 * (Math.min(0.05, (ts - lastTs) / 1000) - frameDt); lastTs = ts;
   if (!started || !G) { drawIdle(); return; }
   const t = now();
   if (!G.over) {
-    // metronome = enemy heartbeat
-    while (G.nextBeat < t + 0.15) {
+    // metronome = enemy heartbeat, on the tempo map; each volley opens on an accented click
+    const ahead = AC.currentTime + 0.15 + Math.max(0, -OPT.delay / 1000);
+    while (G.nextBeat < ahead) {
+      const s = segAt(G.nextBeat), nx = segAfter(s);
+      if (G.spells.some(sp => Math.abs(sp.t0 - G.nextBeat) < 1e-6)) G.beatIdx = 0;
       const at = G.nextBeat + OPT.delay/1000;
-      beep(at, G.beatIdx % 4 === 0 ? 1400 : 900, .04, 'square', G.beatIdx % 4 === 0 ? .1 : .05);
-      G.beatIdx++; G.nextBeat += 60/G.bpm;
+      if (at > AC.currentTime - 0.02) beep(at, G.beatIdx % 4 === 0 ? 1400 : 900, .04, 'square', G.beatIdx % 4 === 0 ? .1 : .05); // clicks missed while the tab slept stay silent
+      G.beatIdx++;
+      const nb = G.nextBeat + s.beat;
+      G.nextBeat = nx && nb > nx.t0 - 1e-6 ? nx.t0 : nb;
     }
     while (G.nextT0 < t + LOOK + 0.05) makeSpell(G.nextT0);
-    if (musicSrc) musicSrc.playbackRate.value = G.bpm / MUSIC_REF;
-    const sp = activeSpell();
-    if (sp) for (const r of sp.runes) if (r.status === 'pending' && t > r.time + GW) resolveMiss(sp, r);
+    // lapse on the same clock the keys are graded on (heard time minus input offset), with grace
+    const tg = t - OPT.inOff / 1000;
+    for (const s of G.spells) if (!s.done) for (const r of s.runes) {
+      if (s.done) break; // strict mode fizzles the spell on its first lapse
+      if (r.status === 'pending' && tg > r.time + GW + LAPSE_GRACE) resolveMiss(s, r);
+    }
     for (const s of G.spells) if (!s.done && s.runes.every(r => r.status !== 'pending')) resolveCast(s);
   }
   // effects: dt-driven motion for bolts, arrows, particles, shake
@@ -467,7 +572,7 @@ function frame() {
   G.pops = G.pops.filter(p => p.until > t);
   G.fx = G.fx.filter(f => t < f.t0 + f.dur);
   if (G.flash && G.flash.until < t) G.flash = null;
-  draw(t);
+  draw(heardAt(ts + frameDt * 1000)); // render the moment this frame reaches the screen (next vsync)
 }
 requestAnimationFrame(frame);
 
@@ -624,7 +729,7 @@ function drawStage(t, beat, phase) {
 
 function draw(t) {
   cx.clearRect(0, 0, W, H);
-  const beat = 60/G.bpm, phase = ((t % beat) + beat) % beat / beat;
+  const beat = segAt(t).beat, phase = beatPhase(t); // pulse peaks on the clicks (tempo map), not on t % beat
   const shaking = G.shake > 0.2;
   if (shaking) { cx.save(); cx.translate((Math.random()-.5)*2*G.shake, (Math.random()-.5)*2*G.shake); }
   drawStage(t, beat, phase);
@@ -645,16 +750,11 @@ function draw(t) {
     cx.fillText(l.id === 'SP' ? '—' : l.el.toUpperCase(), LNX[l.id], TOP_Y - 42);
   }
 
-  // perfect band: exactly +/- PW seconds of travel above the line — if the tile
-  // center is in this band, the press grades PERFECT (visual matches grading)
-  cx.fillStyle = 'rgba(226,232,240,.08)';
-  cx.fillRect(X0 - 12, HIT_Y - PW * PXS, 8*LW + SW + 2*GAP + 24, 2 * PW * PXS);
-
-  // hit line (glows on beat)
-  cx.strokeStyle = '#e2e8f0';
-  cx.globalAlpha = 0.9 - 0.35 * phase;
-  cx.lineWidth = 2 + 3 * (1 - phase);
-  cx.beginPath(); cx.moveTo(X0 - 12, HIT_Y); cx.lineTo(X0 + 8*LW + SW + 2*GAP + 12, HIT_Y); cx.stroke();
+  // receptor slots: the tile's target is to FILL its slot — tile center on the hit line
+  for (const l of LANES) {
+    cx.strokeStyle = l.color; cx.lineWidth = 2; cx.globalAlpha = .3 + .25 * (1 - phase);
+    rr(LNX[l.id] - 27, HIT_Y - 27, 54, 54, 11); cx.stroke();
+  }
   cx.globalAlpha = 1; cx.lineWidth = 1;
 
   // keycap strip (finger teaching legend)
@@ -740,12 +840,25 @@ function draw(t) {
     }
   }
 
+  // timing overlay drawn OVER the tiles, so it is visible at the moment of judgment:
+  // dashed gold lines = PERFECT window (±PW), white line = the beat (pulses on the clicks)
+  const LX0 = X0 - 12, LX1 = X0 + 8*LW + SW + 2*GAP + 12, band = PW * PXS;
+  cx.fillStyle = 'rgba(255,255,255,.10)'; cx.fillRect(LX0, HIT_Y - band, LX1 - LX0, 2 * band);
+  cx.strokeStyle = '#fbbf24'; cx.globalAlpha = .6; cx.setLineDash([6, 5]);
+  cx.beginPath(); cx.moveTo(LX0, HIT_Y - band); cx.lineTo(LX1, HIT_Y - band); cx.moveTo(LX0, HIT_Y + band); cx.lineTo(LX1, HIT_Y + band); cx.stroke();
+  cx.setLineDash([]);
+  cx.strokeStyle = '#ffffff'; cx.globalAlpha = 0.95 - 0.4 * phase; cx.lineWidth = 1.5 + 2.5 * (1 - phase);
+  cx.beginPath(); cx.moveTo(LX0, HIT_Y); cx.lineTo(LX1, HIT_Y); cx.stroke();
+  cx.globalAlpha = 1; cx.lineWidth = 1;
+  drawErrorBar();
+
   // HUD: score / combo / bpm
   cx.textAlign = 'left'; cx.fillStyle = '#e2e8f0'; cx.font = 'bold 16px ui-monospace, Menlo, monospace';
   cx.fillText(G.score.toLocaleString(), 16, 62);
   if (G.combo > 1) { cx.fillStyle = '#fbbf24'; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.fillText('combo x' + G.combo, 16, 84); }
   cx.fillStyle = '#66738d'; cx.font = '11px ui-monospace, Menlo, monospace';
-  cx.fillText(Math.round(G.bpm) + ' bpm' + (OPT.cavalry ? ' (cavalry)' : ''), 16, 102);
+  const playing = Math.round(60 / segAt(t).beat), queued = Math.round(G.bpm);
+  cx.fillText(playing + ' bpm' + (queued !== playing ? ' → ' + queued : '') + (OPT.cavalry ? ' (cavalry)' : ''), 16, 102);
 
   // current word, graded
   const sp = activeSpell();
@@ -819,6 +932,17 @@ function draw(t) {
   }
   // popups
   for (const p of G.pops) {
+    if (p.judge) { // lane judgment: a pill over the keycap box, holds then fades
+      const a = Math.min(1, (p.until - t) / 0.2);
+      cx.globalAlpha = a; cx.fillStyle = 'rgba(8,10,16,.92)'; rr(p.x - 43, p.y - 20, 86, 40, 8); cx.fill();
+      cx.strokeStyle = p.color; cx.lineWidth = 1.5; rr(p.x - 43, p.y - 20, 86, 40, 8); cx.stroke(); cx.lineWidth = 1;
+      cx.textAlign = 'center'; cx.fillStyle = p.color; cx.font = 'bold 14px ui-monospace, Menlo, monospace';
+      cx.fillText(p.text, p.x, p.y - 2);
+      cx.fillStyle = '#cbd5e1'; cx.font = '10.5px ui-monospace, Menlo, monospace';
+      cx.fillText(p.sub, p.x, p.y + 13);
+      cx.globalAlpha = 1;
+      continue;
+    }
     const age = (p.until - t) / 0.8;
     cx.globalAlpha = Math.min(1, age * 1.6);
     cx.fillStyle = p.color; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
@@ -836,9 +960,40 @@ function draw(t) {
   // red damage flash
   if (t - G.redFlash < 0.25) { cx.globalAlpha = .28 * (1 - (t - G.redFlash)/0.25); cx.fillStyle = '#ef4444'; cx.fillRect(0, 0, W, H); cx.globalAlpha = 1; }
 
-  if (G.over) overlay('STRUCK DOWN', '#f87171',
-    `score ${G.score.toLocaleString()}   wave ${G.wave}   max combo x${G.maxCombo}   P ${G.hits.perfect} / G ${G.hits.good} / M ${G.hits.miss}`,
-    'click to retry');
+  if (G.over) {
+    const s = timingStats(200, false);
+    overlay('STRUCK DOWN', '#f87171', [
+      `score ${G.score.toLocaleString()}   wave ${G.wave}   max combo x${G.maxCombo}   P ${G.hits.perfect} / G ${G.hits.good} / M ${G.hits.miss}`,
+      s ? `timing over ${s.n} hits: avg ${Math.round(Math.abs(s.mean))}ms ${s.mean < 0 ? 'early' : 'late'} · spread ±${Math.round(s.sd)}ms` +
+          (Math.abs(s.mean) > 25 && s.sd < 45 ? '  — consistent offset: calibrate input' : '') : 'no judged hits',
+    ], 'click to retry');
+  }
+}
+// hit-error meter: last 20 judged presses on the ±GW scale (gold = PERFECT zone), ▲ = average
+function drawErrorBar() {
+  const cxm = W/2, y = STAGE_TOP + 36, half = 180, sx = half / GW; // below the health bars, above the fighters
+  cx.fillStyle = 'rgba(8,10,16,.75)'; rr(cxm - half - 58, y - 13, 2*half + 116, 26, 7); cx.fill();
+  cx.fillStyle = 'rgba(74,222,128,.22)'; cx.fillRect(cxm - half, y - 5, 2*half, 10);
+  cx.fillStyle = 'rgba(251,191,36,.45)'; cx.fillRect(cxm - PW*sx, y - 5, 2*PW*sx, 10);
+  cx.fillStyle = '#ffffff'; cx.fillRect(cxm - 1, y - 9, 2, 18);
+  cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillStyle = '#8fa0bd';
+  cx.textAlign = 'right'; cx.fillText('early', cxm - half - 8, y + 4);
+  cx.textAlign = 'left'; cx.fillText('late', cxm + half + 8, y + 4);
+  const xs = G.deltas.slice(-20);
+  xs.forEach((x, i) => {
+    const px = cxm + Math.max(-GW, Math.min(GW, x.d)) * sx, newest = i === xs.length - 1;
+    cx.globalAlpha = 0.25 + 0.75 * (i + 1) / xs.length;
+    cx.fillStyle = x.g === 'perfect' ? '#fbbf24' : '#4ade80';
+    cx.fillRect(px - (newest ? 1.5 : 1), y - (newest ? 11 : 8), newest ? 3 : 2, newest ? 22 : 16);
+  });
+  cx.globalAlpha = 1;
+  const s = timingStats(20, false);
+  if (s) {
+    const mx = cxm + Math.max(-GW, Math.min(GW, s.mean / 1000)) * sx;
+    cx.fillStyle = '#e2e8f0'; cx.beginPath(); cx.moveTo(mx, y + 7); cx.lineTo(mx - 5, y + 15); cx.lineTo(mx + 5, y + 15); cx.fill();
+    cx.textAlign = 'center'; cx.fillStyle = '#8fa0bd';
+    cx.fillText(`avg ${Math.round(Math.abs(s.mean))}ms ${s.mean < 0 ? 'early' : 'late'} · spread ±${Math.round(s.sd)}ms`, cxm, y + 28);
+  }
 }
 
 function drawIdle() {
@@ -852,9 +1007,9 @@ function overlay(title, color, sub, cta) {
   cx.textAlign = 'center'; cx.fillStyle = color; cx.font = 'bold 44px ui-monospace, Menlo, monospace';
   cx.fillText(title, W/2, H/2 - 40);
   cx.fillStyle = '#8fa0bd'; cx.font = '15px ui-monospace, Menlo, monospace';
-  cx.fillText(sub, W/2, H/2 + 4);
+  for (const [i, line] of (Array.isArray(sub) ? sub : [sub]).entries()) cx.fillText(line, W/2, H/2 + 4 + i * 22);
   cx.fillStyle = '#e2e8f0'; cx.font = 'bold 16px ui-monospace, Menlo, monospace';
-  cx.fillText(cta, W/2, H/2 + 44);
+  cx.fillText(cta, W/2, H/2 + 44 + (Array.isArray(sub) ? (sub.length - 1) * 22 : 0));
 }
 </script>
 </body>
