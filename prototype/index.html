@@ -4,9 +4,18 @@
 <meta charset="utf-8">
 <title>Runecaster — prototype v0</title>
 <style>
-  body { margin:0; background:#07030f radial-gradient(ellipse at 50% -10%, #2a0f55 0%, #07030f 60%) no-repeat; color:#d9c8f0; font:13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; min-height:100vh; }
-  #wrap { max-width:1120px; margin:0 auto; padding:10px 10px 24px; }
-  h1 { font:italic 900 18px/1.2 "Trebuchet MS", "Arial Black", sans-serif; margin:6px 0; color:#f3a5e6; letter-spacing:2px; text-shadow:0 0 8px #d225d1, 0 0 18px #5c15bd; }
+  html, body { height:100%; }
+  body { margin:0; overflow:hidden; background:#07030f radial-gradient(ellipse at 50% -10%, #2a0f55 0%, #07030f 60%) no-repeat; color:#d9c8f0; font:13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  /* the game always fits the window: a slim header, the canvas scaled into the rest, settings in a drawer */
+  #wrap { height:100vh; display:flex; flex-direction:column; }
+  header { flex:none; display:flex; align-items:center; gap:14px; padding:6px 14px; }
+  header .hint { color:#a993c9; font-size:11.5px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #stage { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:0 10px 10px; }
+  #drawer { position:fixed; top:0; right:0; bottom:0; width:min(460px, 92vw); overflow-y:auto; padding:14px 16px 24px; box-sizing:border-box;
+    background:rgba(12,5,28,.97); border-left:1px solid #3a1a5e; box-shadow:-20px 0 40px rgba(0,0,0,.5); transform:translateX(105%); transition:transform .18s ease; z-index:10; }
+  #drawer.open { transform:none; }
+  #drawer .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  h1 { font:italic 900 18px/1.2 "Trebuchet MS", "Arial Black", sans-serif; margin:0; color:#f3a5e6; letter-spacing:2px; text-shadow:0 0 8px #d225d1, 0 0 18px #5c15bd; }
   #opts { display:flex; flex-wrap:wrap; gap:10px; padding:8px 0; align-items:flex-start; }
   fieldset { border:1px solid #3a1a5e; border-radius:8px; padding:4px 10px 6px; margin:0; background:rgba(20,8,44,.55); box-shadow:inset 0 0 12px rgba(210,37,209,.08); }
   legend { color:#c77dff; font-size:10.5px; padding:0 4px; text-shadow:0 0 6px #5c15bd; }
@@ -23,7 +32,15 @@
 </head>
 <body>
 <div id="wrap">
-  <h1>RUNECASTER — prototype v0</h1>
+  <header>
+    <h1>RUNECASTER</h1>
+    <span class="hint">click the game to start · type the runes as they cross the line · Space = cast a sigil</span>
+    <button id="settingsBtn" type="button">⚙ settings &amp; help</button>
+  </header>
+  <div id="stage"><canvas id="game"></canvas></div>
+</div>
+<aside id="drawer">
+  <div class="top"><h1>SETTINGS</h1><button id="closeBtn" type="button">✕ close (Esc)</button></div>
   <div id="opts">
     <fieldset><legend>Penalty (§6)</legend>
       <label><input type="radio" name="pen" value="lenient" checked> lenient (learn)</label><br>
@@ -54,7 +71,6 @@
       </select>
     </fieldset>
   </div>
-  <canvas id="game" width="1120" height="840"></canvas>
   <div id="help">
     <b>How a run goes:</b> chapters of short encounters — archers (steady volleys), cavalry (the charge speeds up each spell), and a boss (its incantations follow a rhythm pattern, off-beat runes included). Clear a chapter and the incantations grow: short two-word spells → longer derived words → three-word invocations → numbers → symbols. Spells are phrases in one invented tongue (the gloss under the word says what you're casting), and each encounter keeps to one school of words, so they repeat and become learnable.
     <ul>
@@ -67,7 +83,7 @@
     </ul>
     Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. Soundtrack is locked to the beat and runs at the speed of the letters; music needs an http server — file:// plays silent.
   </div>
-</div>
+</aside>
 <script>
 'use strict';
 // ================= finger lanes (the core mechanic, §3) =================
@@ -123,7 +139,17 @@ for (const [sh, base] of Object.entries(BASE_OF)) if (KEYDIR[base]) KEYDIR[sh] =
 
 // ================= geometry =================
 const cv = document.getElementById('game'), cx = cv.getContext('2d');
-const W = cv.width, H = cv.height;
+const W = 1120, H = 840; // logical resolution: all drawing uses these; the canvas is scaled to fit the window
+let VIEW = 1; // backing-store pixels per logical pixel (window fit × device pixel ratio)
+function fitCanvas() {
+  const box = document.getElementById('stage').getBoundingClientRect();
+  const fit = Math.max(0.3, Math.min(box.width / W, box.height / H));
+  cv.style.width = Math.floor(W * fit) + 'px'; cv.style.height = Math.floor(H * fit) + 'px';
+  VIEW = fit * (window.devicePixelRatio || 1);
+  cv.width = Math.round(W * VIEW); cv.height = Math.round(H * VIEW); // crisp at any size
+}
+addEventListener('resize', () => { fitCanvas(); BG = null; }); // backdrops repaint at the new resolution
+fitCanvas();
 // 8 finger lanes split like the keyboard; the gap between the hands (above the thumbs) is kept free for the thumb's own UI
 const LW = 96, SPLIT = 108, LANES_W = 8 * LW + SPLIT;
 const X0 = (W - LANES_W) / 2;
@@ -264,6 +290,13 @@ document.getElementById('calib').addEventListener('click', () => {
   syncOpts(); showCalib();
   document.activeElement.blur(); // keep Space/letters going to the game, not the button
 });
+// settings & help live in a drawer so the game keeps the whole window; Esc toggles it
+const drawer = document.getElementById('drawer');
+function toggleDrawer(open = !drawer.classList.contains('open')) { drawer.classList.toggle('open', open); document.activeElement.blur(); }
+document.getElementById('settingsBtn').addEventListener('click', () => toggleDrawer());
+document.getElementById('closeBtn').addEventListener('click', () => toggleDrawer(false));
+addEventListener('keydown', e => { if (e.key === 'Escape') toggleDrawer(); });
+cv.addEventListener('mousedown', () => toggleDrawer(false));
 
 // ================= audio (beat = enemy heartbeat) =================
 let AC = null;
@@ -740,6 +773,7 @@ cv.addEventListener('click', () => {
 let lastTs = 0, frameDt = 1/60;
 function frame(ts) {
   requestAnimationFrame(frame);
+  cx.setTransform(VIEW, 0, 0, VIEW, 0, 0); // logical 1120×840 → fitted backing store
   if (lastTs && ts > lastTs) frameDt += 0.1 * (Math.min(0.05, (ts - lastTs) / 1000) - frameDt); lastTs = ts;
   if (!started || !G) { drawIdle(); return; }
   const t = now();
@@ -1014,7 +1048,7 @@ function drawArcher(pull) { // skeleton archer in tattered cloth
 // ---- static backdrops, painted once: the lanes' night sky and the stage's synthwave vista
 let BG = null, STAGE_BG = null;
 function paintBackdrops() {
-  const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; };
+  const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.round(w * VIEW); c.height = Math.round(h * VIEW); const x = c.getContext('2d'); x.scale(VIEW, VIEW); return [c, x]; }; // painted at screen resolution
   let rnd = 7; const rand = () => (rnd = (rnd * 16807) % 2147483647) / 2147483647; // seeded: same sky every run
   // lanes: deep night with nebula haze and stars
   const [bg, b] = mk(W, H);
@@ -1041,7 +1075,7 @@ function paintBackdrops() {
   u.fillStyle = sg; u.beginPath(); u.arc(100, 100, 96, 0, 7); u.fill();
   u.globalCompositeOperation = 'destination-out';
   for (let y = 104, k = 1; y < 200; y += 12 + k, k++) u.fillRect(0, y, 200, 2 + k * 0.9);
-  s.drawImage(sunC, 460, hz - 182);
+  s.drawImage(sunC, 460, hz - 182, 200, 200);
   const range = (base, amp, col, seed) => { s.fillStyle = col; s.beginPath(); s.moveTo(0, hz);
     for (let x = 0; x <= W; x += 30) s.lineTo(x, base - amp * Math.abs(Math.sin(x * 0.011 + seed) + 0.5 * Math.sin(x * 0.031 + seed * 2)));
     s.lineTo(W, hz); s.closePath(); s.fill(); };
@@ -1064,7 +1098,7 @@ function paintBackdrops() {
 }
 function drawStage(t, beat, phase) {
   cx.save(); cx.translate(0, STAGE_TOP);
-  cx.drawImage(STAGE_BG, 0, 0);
+  cx.drawImage(STAGE_BG, 0, 0, W, STAGE_H);
   cx.strokeStyle = PAL.pink; cx.globalAlpha = .25 + .5 * (1 - phase); cx.lineWidth = 2; // horizon pulses on the beat
   cx.shadowColor = PAL.magenta; cx.shadowBlur = 10;
   cx.beginPath(); cx.moveTo(0, GROUND_Y); cx.lineTo(W, GROUND_Y); cx.stroke();
@@ -1092,7 +1126,7 @@ function drawStage(t, beat, phase) {
 
 function draw(t) {
   if (!BG) paintBackdrops();
-  cx.drawImage(BG, 0, 0);
+  cx.drawImage(BG, 0, 0, W, H);
   const beat = segAt(t).beat, phase = beatPhase(t); // pulse peaks on the clicks (tempo map), not on t % beat
   const shaking = G.shake > 0.2;
   if (shaking) { cx.save(); cx.translate((Math.random()-.5)*2*G.shake, (Math.random()-.5)*2*G.shake); }
