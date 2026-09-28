@@ -879,23 +879,32 @@ function nextCharge(t) { // staff crystal tracks the next rune: element + charge
   }
   return null;
 }
+// the caster: cool teal cloth and a gold rune band against the magenta night (complementary hues), a cyan rim
+// light around the silhouette, a lit face, and a rune circle on the floor — he must read at a glance
+const WIZ_PAL = { rim: '#7cf7ff', cloak: '#16506e', cloakDark: '#0b2638', coat: '#1f6485', leg: '#0d3246', skin: '#f2c29c', hair: '#402334', hairLit: '#ffb86b' };
 function drawWizard(t, phase) { // long-haired caster, rune-trimmed cloak streaming back, spell hand toward the enemy
   const hurt = t - G.wizHurt, casting = G.wizCast && t < G.wizCast.until;
   const cp = casting ? 1 - (G.wizCast.until - t) / 0.5 : -1; // 0..1 cast thrust progress
+  const P = WIZ_PAL;
   cx.save();
   cx.translate(WIZ_X + (hurt < 0.3 ? -7 * (1 - hurt/0.3) : 0), WIZ_Y + Math.sin(t * 2.2) * 2);
   if (G.over) { cx.translate(-10, 26); cx.rotate(-0.5); } // struck down
   const ch = nextCharge(t), castEl = casting ? G.wizCast.el : null;
   const orbC = ELC[castEl] || ELC[ch && ch.el] || PAL.pink;
   const wave = Math.sin(t * 3), wave2 = Math.sin(t * 3 + 1.3);
-  cx.fillStyle = 'rgba(0,0,0,.5)'; cx.beginPath(); cx.ellipse(0, 3, 44, 7, 0, 0, 7); cx.fill();
-  // cloak streaming behind, with the neon rune band of the splash art
-  cx.fillStyle = '#140a2a';
-  cx.beginPath(); cx.moveTo(-4, -80);
-  cx.bezierCurveTo(-40, -76 + wave * 3, -74, -50 + wave * 5, -80, -14 + wave2 * 4);
-  cx.lineTo(-58, 2); cx.lineTo(14, 2); cx.lineTo(10, -60); cx.closePath(); cx.fill();
-  cx.save(); cx.clip();
-  cx.strokeStyle = PAL.magenta; cx.shadowColor = PAL.magenta; cx.shadowBlur = 6; cx.lineWidth = 1.6; cx.globalAlpha = .9;
+  // rune circle on the floor: anchors him to the ground line
+  cx.fillStyle = 'rgba(0,0,0,.5)'; cx.beginPath(); cx.ellipse(0, 3, 46, 8, 0, 0, 7); cx.fill();
+  cx.strokeStyle = P.rim; cx.lineWidth = 1.5; cx.globalAlpha = .6; cx.setLineDash([6, 6]); cx.lineDashOffset = -t * 18;
+  cx.beginPath(); cx.ellipse(0, 2, 50, 11, 0, 0, 7); cx.stroke(); cx.setLineDash([]); cx.lineDashOffset = 0; cx.globalAlpha = 1;
+  // cloak streaming behind: teal gradient, cyan halo + rim, gold rune band
+  const cloak = new Path2D();
+  cloak.moveTo(-4, -80); cloak.bezierCurveTo(-40, -76 + wave * 3, -74, -50 + wave * 5, -80, -14 + wave2 * 4);
+  cloak.lineTo(-58, 2); cloak.lineTo(14, 2); cloak.lineTo(10, -60); cloak.closePath();
+  const cg = cx.createLinearGradient(-80, -80, 12, 0); cg.addColorStop(0, P.cloakDark); cg.addColorStop(1, P.cloak);
+  cx.fillStyle = cg; cx.shadowColor = P.rim; cx.shadowBlur = 14; cx.fill(cloak); cx.shadowBlur = 0;
+  cx.strokeStyle = P.rim; cx.lineWidth = 1.5; cx.globalAlpha = .75; cx.stroke(cloak); cx.globalAlpha = 1;
+  cx.save(); cx.clip(cloak);
+  cx.strokeStyle = PAL.gold; cx.shadowColor = PAL.gold; cx.shadowBlur = 6; cx.lineWidth = 1.8;
   for (let i = 0; i < 5; i++) { // alternating triangles and diamonds along the hem
     const x = -66 + i * 15, y = -18 + i * 3 + wave2 * 2;
     cx.beginPath();
@@ -905,31 +914,38 @@ function drawWizard(t, phase) { // long-haired caster, rune-trimmed cloak stream
   }
   cx.beginPath(); cx.moveTo(-84, -30 + wave2 * 3); cx.lineTo(10, -4); cx.stroke();
   cx.restore();
-  // legs in a casting stance
-  cx.strokeStyle = '#0e0720'; cx.lineCap = 'round'; cx.lineWidth = 9;
+  // legs in a casting stance, rim-lit on the front edge
+  cx.lineCap = 'round';
+  cx.strokeStyle = P.leg; cx.lineWidth = 9;
   cx.beginPath(); cx.moveTo(-6, -40); cx.lineTo(-20, 0); cx.moveTo(8, -40); cx.lineTo(24, 0); cx.stroke();
-  // coat
-  cx.fillStyle = '#1d1036';
-  cx.beginPath(); cx.moveTo(-12, -82); cx.lineTo(14, -82); cx.lineTo(18, -36); cx.lineTo(-14, -36); cx.closePath(); cx.fill();
-  cx.strokeStyle = '#3a1a5e'; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(-14, -46); cx.lineTo(18, -46); cx.stroke();
-  // back arm, then hair streaming left
-  cx.strokeStyle = '#1d1036'; cx.lineWidth = 7; cx.beginPath(); cx.moveTo(-4, -76); cx.lineTo(-18, -54); cx.stroke();
+  cx.strokeStyle = P.rim; cx.lineWidth = 1.2; cx.globalAlpha = .6;
+  cx.beginPath(); cx.moveTo(12, -40); cx.lineTo(28, -1); cx.stroke(); cx.globalAlpha = 1;
+  // coat with a gold belt
+  cx.fillStyle = P.coat; cx.shadowColor = P.rim; cx.shadowBlur = 8;
+  cx.beginPath(); cx.moveTo(-12, -82); cx.lineTo(14, -82); cx.lineTo(18, -36); cx.lineTo(-14, -36); cx.closePath(); cx.fill(); cx.shadowBlur = 0;
+  cx.strokeStyle = PAL.gold; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(-14, -46); cx.lineTo(18, -46); cx.stroke();
+  // back arm, then long hair streaming left with warm highlights
+  cx.strokeStyle = P.coat; cx.lineWidth = 7; cx.beginPath(); cx.moveTo(-4, -76); cx.lineTo(-18, -54); cx.stroke();
   for (let i = 0; i < 5; i++) {
     const y0 = -100 + i * 3, sway = Math.sin(t * 3.4 + i) * 4;
-    cx.strokeStyle = i % 2 ? '#1a0f2e' : '#24143d'; cx.lineWidth = 5 - i * 0.5;
+    cx.strokeStyle = i === 1 || i === 3 ? P.hairLit : P.hair; cx.globalAlpha = i === 1 || i === 3 ? .55 : 1; cx.lineWidth = 5 - i * 0.5;
     cx.beginPath(); cx.moveTo(2, y0); cx.bezierCurveTo(-16, y0 - 6 + sway, -30, y0 + 6 - sway, -46 - i * 3, y0 + 10 + sway); cx.stroke();
   }
-  // head in profile
-  cx.fillStyle = '#24143d'; cx.beginPath(); cx.arc(4, -92, 9, 0, 7); cx.fill();
-  // spell arm: thrusts forward on a cast
+  cx.globalAlpha = 1;
+  // head in profile: hair behind, a lit face toward the enemy
+  cx.fillStyle = P.hair; cx.beginPath(); cx.arc(3, -92, 9.5, 0, 7); cx.fill();
+  cx.fillStyle = P.skin; cx.beginPath(); cx.ellipse(8, -91, 4.5, 7, 0.15, 0, 7); cx.fill();
+  cx.fillStyle = '#1a0f2e'; cx.fillRect(9, -94, 2, 1.6); // eye
+  // spell arm: thrusts forward on a cast; bare hand at the orb
   const reach = cp >= 0 ? Math.sin(Math.min(1, cp * 1.6) * Math.PI) * 8 : 0;
   const hx = 64 + reach, hy = -88;
-  cx.strokeStyle = '#1d1036'; cx.lineWidth = 7; cx.beginPath(); cx.moveTo(8, -78); cx.lineTo(hx - 4, hy + 2); cx.stroke();
+  cx.strokeStyle = P.coat; cx.lineWidth = 7; cx.beginPath(); cx.moveTo(8, -78); cx.lineTo(hx - 6, hy + 2); cx.stroke();
+  cx.fillStyle = P.skin; cx.beginPath(); cx.arc(hx - 5, hy + 1, 3.5, 0, 7); cx.fill();
   cx.lineCap = 'butt';
-  // neon rim light along the front edge (backlit by the synthwave sun)
-  cx.strokeStyle = orbC; cx.globalAlpha = .55; cx.lineWidth = 1.5;
-  cx.beginPath(); cx.arc(4, -92, 9, -1.2, 1.0); cx.moveTo(14, -82); cx.lineTo(18, -36); cx.moveTo(8, -78); cx.lineTo(hx - 4, hy + 2); cx.stroke();
-  cx.globalAlpha = 1;
+  // cyan rim light along the front edge
+  cx.strokeStyle = P.rim; cx.globalAlpha = .8; cx.lineWidth = 1.5; cx.shadowColor = P.rim; cx.shadowBlur = 6;
+  cx.beginPath(); cx.arc(3, -92, 10, -1.9, -0.2); cx.moveTo(14, -82); cx.lineTo(18, -36); cx.moveTo(10, -81); cx.lineTo(hx - 6, hy - 2); cx.stroke();
+  cx.globalAlpha = 1; cx.shadowBlur = 0;
   // the spell orb in the hand: element of the next rune, swelling as it nears; a rune ring turns around it
   const orbR = 6 + (cp >= 0 ? 9 * Math.sin(Math.min(1, cp * 1.35) * Math.PI) : 2 + 3 * (1 - phase) + (ch ? 3 * ch.c : 0));
   cx.shadowColor = orbC; cx.shadowBlur = 16 + 12 * (ch ? ch.c : 0) + (cp >= 0 ? 16 : 0);

@@ -307,6 +307,9 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > element rings with serif glyphs, the hit line a magenta laser, the stage a
   > vista with a perspective-grid floor, and the enemies an undead host
   > (skeleton archer, skeletal knight on a spectral horse, crowned lich).
+  > The caster is deliberately off-palette for contrast (playtest: purple
+  > blended into the magenta night): teal cloth, gold rune band and belt, a
+  > cyan rim light and floor rune circle, a lit face.
 - **Audio** — the "beat" of the enemy's attack; how is it conveyed (SFX, music,
   screen pulse)?
 
