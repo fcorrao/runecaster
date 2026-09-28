@@ -60,15 +60,8 @@
     <fieldset><legend>Coach</legend>
       <label><input type="checkbox" id="guide" checked> highlight next lane</label>
     </fieldset>
-    <fieldset><legend>Soundtrack (§8 OPEN)</legend>
-      <select id="music">
-        <option value="e" selected>mystic synthwave</option>
-        <option value="d">arcane synthwave</option>
-        <option value="f">arcane battle</option>
-        <option value="c">synthwave</option>
-        <option value="b">dark orchestral (no beat — free-running)</option>
-        <option value="off">off</option>
-      </select>
+    <fieldset><legend>Soundtrack</legend>
+      <label><input type="checkbox" id="music" checked> synthwave (locked to the beat)</label>
     </fieldset>
   </div>
   <div id="help">
@@ -81,7 +74,7 @@
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
       <li><b>Calibration:</b> if the click doesn't land when the letter crosses the line, slide <i>audio</i>. If your presses sit consistently early/late on the error bar, press "set input from last 20 hits" (or slide <i>input</i>). Both are saved in this browser.</li>
     </ul>
-    Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. Soundtrack is locked to the beat and runs at the speed of the letters; music needs an http server — file:// plays silent.
+    Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. The synthwave soundtrack is locked to the beat and runs at the speed of the letters; music needs an http server — file:// plays silent.
   </div>
 </aside>
 <script>
@@ -266,7 +259,7 @@ function syncOpts() {
   OPT.pen = document.querySelector('input[name=pen]:checked').value;
   OPT.startCh = +document.getElementById('chapter').value;
   OPT.guide = document.getElementById('guide').checked;
-  OPT.music = document.getElementById('music').value;
+  OPT.music = document.getElementById('music').checked;
   OPT.delay = +document.getElementById('delay').value;
   OPT.inOff = +document.getElementById('inoff').value;
   document.getElementById('delayv').textContent = OPT.delay;
@@ -282,8 +275,7 @@ for (const [id, key] of [['delay', 'runecaster.delay'], ['inoff', 'runecaster.in
 syncOpts();
 document.querySelectorAll('#opts input, #opts select').forEach(i => i.addEventListener('change', () => {
   syncOpts();
-  if (i.id === 'delay' && started && G && !G.over) musicPlay(OPT.music); // music is scheduled against the delay: re-lock it
-  if (i.id === 'music' && started && G && !G.over) musicPlay(OPT.music);
+  if ((i.id === 'delay' || i.id === 'music') && started && G && !G.over) musicPlay(); // music is scheduled against the delay: re-lock it
 }));
 for (const id of ['delay', 'inoff']) document.getElementById(id).addEventListener('input', syncOpts);
 document.getElementById('bpm').addEventListener('input', () => { document.getElementById('bpmv').textContent = document.getElementById('bpm').value; }); // start tempo: applies to the next run
@@ -409,50 +401,36 @@ function gridAtOrAfter(t) { // first click time >= t
 }
 function beatPhase(t) { const s = segAt(t), p = ((t - s.t0) / s.beat) % 1; return p < 0 ? p + 1 : p; }
 
-// ================= soundtrack (§8): locked to the click grid =================
-// Each beat-driven track is started on a click at its measured first beat and
-// time-scaled so one track beat = one game beat; rate changes land on segment
-// starts (whole beats), and the loop spans whole bars, so the lock survives
-// tempo changes and loop seams. Resampling shifts pitch with tempo.
-// bpm/off measured from the files (onset phase fit, stable to ±25 ms across the file).
-const MUSIC = {
-  b: null, // no stable pulse: free-running at native speed, never implies a beat
-  c: { bpm: 102.08, off: 0.286, bars: 25 },
-  // ACE-Step generations, picked from 16 for beat stability; bpm/off = folded-kick fit on the encoded file
-  d: { bpm: 97.065, off: 0.361, bars: 22 },
-  e: { bpm: 97.06,  off: 0.381, bars: 22 },
-  f: { bpm: 97.105, off: 0.366, bars: 22 },
-};
-const musicBufs = {};
-let musicSrc = null, musicGain = null;
-function musicBuf(name) {
-  if (!musicBufs[name]) {
-    musicBufs[name] = fetch('audio/track_' + name + '.m4a')
-      .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.arrayBuffer(); })
-      .then(b => AC.decodeAudioData(b))
-      .catch(() => null); // file:// or missing asset: stay silent, game unaffected
-  }
-  return musicBufs[name];
+// ================= soundtrack (§8): one synthwave loop, locked to the click grid =================
+// Started on a click at its measured first beat and time-scaled so one track beat = one game beat; rate changes
+// land on segment starts (whole beats), and the loop spans whole bars, so the lock survives tempo changes and
+// loop seams. Resampling shifts pitch with tempo. bpm/off measured from the file (onset phase fit, ±25 ms).
+const MUSIC = { src: 'audio/synthwave.m4a', bpm: 102.08, off: 0.286, bars: 25 };
+let musicBuffer = null, musicSrc = null, musicGain = null;
+function musicBuf() {
+  if (!musicBuffer) musicBuffer = fetch(MUSIC.src)
+    .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.arrayBuffer(); })
+    .then(b => AC.decodeAudioData(b))
+    .catch(() => null); // file:// or missing asset: stay silent, game unaffected
+  return musicBuffer;
 }
 function musicStop() { if (musicSrc) { const s = musicSrc; musicSrc = null; try { s.stop(); } catch (e) {} } }
-function musicRate(beat) { return musicSrc && musicSrc.meta ? (60 / musicSrc.meta.bpm) / beat : 1; }
-function musicPlay(name) {
+function musicRate(beat) { return (60 / MUSIC.bpm) / beat; }
+function musicPlay() {
   musicStop();
-  if (!AC || name === 'off') return;
-  musicBuf(name).then(buf => {
-    if (!buf || !started || !G || G.over || OPT.music !== name) return; // stale or dead run
-    const meta = MUSIC[name], d = OPT.delay / 1000;
-    const src = AC.createBufferSource(); src.buffer = buf; src.loop = true; src.meta = meta;
+  if (!AC || !OPT.music) return;
+  musicBuf().then(buf => {
+    if (!buf || !started || !G || G.over || !OPT.music || musicSrc) return; // stale or dead run
+    const d = OPT.delay / 1000, tb = 60 / MUSIC.bpm;
+    const src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
     if (!musicGain) { musicGain = AC.createGain(); musicGain.gain.value = 0.42; musicGain.connect(AC.destination); }
     src.connect(musicGain);
     musicSrc = src;
-    if (!meta) { src.start(AC.currentTime + 0.05); return; }
-    const tb = 60 / meta.bpm;
-    src.loopStart = meta.off; src.loopEnd = meta.off + meta.bars * 4 * tb;
+    src.loopStart = MUSIC.off; src.loopEnd = MUSIC.off + MUSIC.bars * 4 * tb;
     const T = gridAtOrAfter(AC.currentTime + 0.1 - d); // the track's first beat plays on this click
     src.playbackRate.setValueAtTime(musicRate(segAt(T).beat), 0);
     for (const s of G.segs) if (s.t0 > T) src.playbackRate.setValueAtTime(musicRate(s.beat), s.t0 + d);
-    src.start(T + d, meta.off);
+    src.start(T + d, MUSIC.off);
   });
 }
 // ---- the heard clock: AudioContext time of the sound reaching the speakers now.
@@ -483,7 +461,7 @@ function makeSpell(t0) {
   // t0 is a click (previous spell spans whole beats); this spell's tempo starts here
   if (Math.abs(segAt(t0).beat - beat) > 1e-9) {
     G.segs.push({ t0, beat });
-    if (musicSrc && musicSrc.meta) musicSrc.playbackRate.setValueAtTime(musicRate(beat), t0 + OPT.delay / 1000);
+    if (musicSrc) musicSrc.playbackRate.setValueAtTime(musicRate(beat), t0 + OPT.delay / 1000);
   }
   while (G.segs.length > 1 && G.segs[1].t0 < Math.min(now(), G.nextBeat) - 1) G.segs.shift();
   // runes fill whole 4-beat bars: evenly spread (archers, cavalry — who crams one more per bar),
@@ -702,7 +680,6 @@ function castTick() { const t = now(); dilate((t - G.cast.t) * (1 - CAST_K)); G.
 function castMusicRate(slow) { // the soundtrack slows with the rhythm (tape-style pitch drop), then re-locks
   if (!musicSrc) return;
   const pr = musicSrc.playbackRate, a = AC.currentTime;
-  if (!musicSrc.meta) { pr.cancelScheduledValues(a); pr.setValueAtTime(slow ? CAST_K : 1, a); return; }
   if (slow) { pr.cancelScheduledValues(a); pr.setValueAtTime(musicRate(segAt(a).beat) * CAST_K, a); }
   else rescheduleMusicRates();
 }
@@ -732,7 +709,7 @@ function markVeil() { // Veil covers the next runes in time order, including spe
   for (const r of pend) { if (G.veilLeft <= 0) break; r.veil = true; G.veilLeft--; }
 }
 function rescheduleMusicRates() { // the tempo map changed under already-scheduled rate changes
-  if (!musicSrc || !musicSrc.meta) return;
+  if (!musicSrc) return;
   const pr = musicSrc.playbackRate, a = AC.currentTime, d = OPT.delay / 1000;
   pr.cancelScheduledValues(a); pr.setValueAtTime(musicRate(segAt(a).beat), a);
   for (const s of G.segs) if (s.t0 + d > a) pr.setValueAtTime(musicRate(s.beat), s.t0 + d);
@@ -798,8 +775,8 @@ addEventListener('keydown', e => {
 cv.addEventListener('click', () => {
   if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' }); }
   AC.resume();
-  if (!started) { started = true; newGame(); syncOpts(); startRun(); musicPlay(OPT.music); }
-  else if (G.over) { newGame(); syncOpts(); startRun(); musicPlay(OPT.music); }
+  if (!started) { started = true; newGame(); syncOpts(); startRun(); musicPlay(); }
+  else if (G.over) { newGame(); syncOpts(); startRun(); musicPlay(); }
 });
 
 // ================= frame =================

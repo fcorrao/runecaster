@@ -313,9 +313,10 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
 - **Audio** — the "beat" of the enemy's attack; how is it conveyed (SFX, music,
   screen pulse)?
 
-  > **Prototype answer (soundtrack):** ACE-Step-generated loops. Tribal drums
-  > were cut (didn't fit); synthwave fit, so three darker arcane synthwave
-  > tracks were generated and picked from 16 candidates for beat stability.
+  > **Prototype answer (soundtrack):** one ACE-Step-generated synthwave loop.
+  > Tribal drums were cut (didn't fit); darker arcane synthwave variants were
+  > generated and tried, but after playtesting the original synthwave stayed the
+  > best, so it is the only track (on/off in settings).
   > Each track is started on a click at its measured first beat and time-scaled
   > so its beat is the game's beat (resampling, so pitch follows tempo). The
   > metronome stays as the enemy's heartbeat under the track.
