@@ -76,7 +76,7 @@
     <ul>
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
-      <li><b>Sigils (thumb):</b> defeating an enemy earns its school's sigil (bosses give 2); three flawless spells earn one too. Press <b>Space</b> and time slows to a crawl (the same slow speed at any tempo; letters are hidden so it can't be used to read ahead), then type the sigil's name from the panel between your hands — <i>wynkai</i> Gale (push the runes back a bar), <i>dunfen</i> Bulwark (block the next strike), <i>moxquo</i> Veil (next 6 runes take any key of the right finger), <i>gamsel</i> Stillwater (next 2 spells 20% slower), <i>vorlum</i> Kindle (next spell at double power). A wrong letter fizzles (charge kept); Space again cancels; the ring can open any time, and closes itself only when a rune reaches the line (you still have the late half of its window to hit it). The runes keep creeping while you cast — that distance is the price.</li>
+      <li><b>Sigils (thumb):</b> defeating an enemy earns its school's sigil (bosses give 2); three flawless spells earn one too. Press <b>Space</b> and time slows to a crawl (the same slow speed at any tempo; letters are hidden so it can't be used to read ahead), the panel between your hands opens into a <b>spellbook</b> showing what every sigil does (new ones are tagged NEW until you've read them) — then type the sigil's name — <i>wynkai</i> Gale (push the runes back a bar), <i>dunfen</i> Bulwark (block the next strike), <i>moxquo</i> Veil (next 6 runes take any key of the right finger), <i>gamsel</i> Stillwater (next 2 spells 20% slower), <i>vorlum</i> Kindle (next spell at double power). A wrong letter fizzles (charge kept); Space again cancels; the ring can open any time, and closes itself only when a rune reaches the line (you still have the late half of its window to hit it). The runes keep creeping while you cast — that distance is the price.</li>
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
       <li><b>Calibration:</b> if the click doesn't land when the letter crosses the line, slide <i>audio</i>. If your presses sit consistently early/late on the error bar, press "set input from last 20 hits" (or slide <i>input</i>). Both are saved in this browser.</li>
@@ -364,7 +364,7 @@ function newGame() {
     // stage sprite state (all timestamp-driven poses, no animation loop needed)
     wizCast: null, wizHurt: -9, foeEnter: -9, foeDead: -9,
     // sigils (§8): charges per power, the flawless meter, cast mode, and live effects
-    sigils: {}, learned: new Set(), meter: 0, cast: null, castFx: null, toast: null, sigilFlash: null,
+    sigils: {}, learned: new Set(), unseen: new Set(), meter: 0, cast: null, castFx: null, toast: null, sigilFlash: null,
     ward: null, wardBreak: -9, veilLeft: 0, stillLeft: 0, stillFx: -9, kindle: null, galeFx: -9,
   };
   startEncounter();
@@ -652,11 +652,11 @@ function applyStrike(s) { // enemy arrow reached the caster — the counter's sh
 // is kept); Space again cancels. Cast mode closes itself, free, when a rune reaches its window.
 // Each name = the school's noun + a verb of the tongue.
 const POWERS = {
-  gale:    { name: 'wynkai', label: 'GALE',       school: 'storm',  color: '#b36bff', glyph: '≋', desc: 'push the runes back a bar' },
-  bulwark: { name: 'dunfen', label: 'BULWARK',    school: 'stone',  color: '#3cf0a0', glyph: '⬢', desc: 'block the next strike' },
-  veil:    { name: 'moxquo', label: 'VEIL',       school: 'shadow', color: '#e85cff', glyph: '◐', desc: 'next 6 runes: any key of that finger' },
-  still:   { name: 'gamsel', label: 'STILLWATER', school: 'tide',   color: '#38c8ff', glyph: '≈', desc: 'next 2 spells 20% slower' },
-  kindle:  { name: 'vorlum', label: 'KINDLE',     school: 'flame',  color: '#ff6a3d', glyph: '✦', desc: 'next spell at double power' },
+  gale:    { name: 'wynkai', label: 'GALE',       school: 'storm',  color: '#b36bff', glyph: '≋', desc: 'blows every incoming rune a bar further away' },
+  bulwark: { name: 'dunfen', label: 'BULWARK',    school: 'stone',  color: '#3cf0a0', glyph: '⬢', desc: 'a shield blocks the next enemy strike' },
+  veil:    { name: 'moxquo', label: 'VEIL',       school: 'shadow', color: '#e85cff', glyph: '◐', desc: 'next 6 runes: any key of the right finger' },
+  still:   { name: 'gamsel', label: 'STILLWATER', school: 'tide',   color: '#38c8ff', glyph: '≈', desc: 'next 2 spells play 20% slower' },
+  kindle:  { name: 'vorlum', label: 'KINDLE',     school: 'flame',  color: '#ff6a3d', glyph: '✦', desc: 'next spell hits at double power' },
 };
 const SIGIL_MAX = 3, VEIL_RUNES = 6, STILL_SPELLS = 2, STILL_RATE = 0.8;
 // cast mode slows the whole rhythm to a fixed crawl — runes, clicks and music together, so everything is
@@ -669,7 +669,8 @@ function grantSigil(key, n, why) {
   G.sigils[key] = had + got;
   const P = POWERS[key], first = !G.learned.has(key);
   G.learned.add(key);
-  G.toast = { key, text: `+${got} ${P.label}`, sub: first ? `new sigil — Space, then type ${P.name}` : why, at: now(), until: now() + (first ? 3.4 : 2) };
+  if (first) G.unseen.add(key); // flagged NEW until you read it in the spellbook (cast mode)
+  G.toast = { key, text: `+${got} ${P.label}`, sub: first ? 'new sigil — press Space to read it and cast' : why, at: now(), until: now() + (first ? 3.4 : 2) };
   G.sigilFlash = { key, at: now() };
   sigilSnd();
 }
@@ -705,7 +706,7 @@ function castMusicRate(slow) { // the soundtrack slows with the rhythm (tape-sty
   if (slow) { pr.cancelScheduledValues(a); pr.setValueAtTime(musicRate(segAt(a).beat) * CAST_K, a); }
   else rescheduleMusicRates();
 }
-function leaveCast() { castTick(); G.cast = null; castMusicRate(false); }
+function leaveCast() { castTick(); G.cast = null; castMusicRate(false); G.unseen.clear(); } // the spellbook was on screen: nothing is NEW any more
 function closeCast(text) { leaveCast(); G.castFx = { kind: 'close', at: now(), text }; }
 function castLetter(k) {
   const buf = G.cast.buf + k;
@@ -1489,6 +1490,58 @@ function drawWard(t) {
     cx.restore();
   }
 }
+// the spellbook: cast mode's view of the sigil panel, readable because time is slowed. Every sigil: glyph, the
+// name to type (typed prefix glowing), what it does, charges — or where to earn it.
+function drawSpellbook(t) {
+  const buf = G.cast.buf, x0 = W/2 - 230, y0 = TOP_Y - 30, rowH = 46, w = 460, h = 30 + 5 * rowH + 6;
+  const open = Math.min(1, (t - G.cast.at) / 0.2);
+  cx.save(); cx.globalAlpha = open;
+  cx.fillStyle = 'rgba(10,4,24,.94)'; rr(x0, y0, w, h, 12); cx.fill();
+  cx.strokeStyle = PAL.pink; cx.shadowColor = PAL.magenta; cx.shadowBlur = 12; rr(x0, y0, w, h, 12); cx.stroke(); cx.shadowBlur = 0;
+  cx.textAlign = 'left'; cx.fillStyle = PAL.blush; cx.font = 'italic 900 13px "Trebuchet MS", "Arial Black", sans-serif';
+  cx.fillText('SPELLBOOK', x0 + 16, y0 + 20);
+  cx.textAlign = 'right'; cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace';
+  cx.fillText('time is slowed · type a name · Space closes', x0 + w - 14, y0 + 20);
+  Object.keys(POWERS).forEach((key, i) => {
+    const P = POWERS[key], n = G.sigils[key] || 0, owned = n > 0, y = y0 + 30 + i * rowH;
+    const match = owned && buf && P.name.startsWith(buf);
+    cx.globalAlpha = open * (owned ? (buf && !match ? .4 : 1) : .45);
+    if (match) { cx.strokeStyle = P.color; cx.shadowColor = P.color; cx.shadowBlur = 10; rr(x0 + 8, y + 2, w - 16, rowH - 4, 8); cx.stroke(); cx.shadowBlur = 0; }
+    cx.fillStyle = PAL.ink; cx.beginPath(); cx.arc(x0 + 30, y + rowH / 2, 15, 0, 7); cx.fill();
+    cx.strokeStyle = P.color; cx.lineWidth = 2; cx.beginPath(); cx.arc(x0 + 30, y + rowH / 2, 15, 0, 7); cx.stroke(); cx.lineWidth = 1;
+    cx.textAlign = 'center'; cx.fillStyle = P.color; cx.font = 'bold 16px Georgia, serif'; cx.fillText(P.glyph, x0 + 30, y + rowH / 2 + 6);
+    cx.textAlign = 'left'; cx.font = 'bold 14px ui-monospace, Menlo, monospace';
+    cx.fillStyle = P.color; cx.fillText(P.name, x0 + 56, y + 20);
+    if (match) { cx.fillStyle = '#fff'; cx.shadowColor = P.color; cx.shadowBlur = 10; cx.fillText(buf, x0 + 56, y + 20); cx.shadowBlur = 0; }
+    const nw = cx.measureText(P.name).width;
+    cx.font = 'italic 900 11px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(P.label, x0 + 64 + nw, y + 20);
+    if (G.unseen.has(key)) { cx.fillStyle = PAL.gold; cx.font = 'bold 9px ui-monospace, Menlo, monospace'; cx.fillText('NEW', x0 + 72 + nw + cx.measureText(P.label).width + 14, y + 19); }
+    cx.fillStyle = PAL.text; cx.font = '11.5px ui-monospace, Menlo, monospace'; cx.fillText(P.desc, x0 + 56, y + 37);
+    cx.textAlign = 'right';
+    if (owned) for (let j = 0; j < SIGIL_MAX; j++) { cx.fillStyle = j < n ? P.color : '#2a1a44'; cx.beginPath(); cx.arc(x0 + w - 20 - j * 11, y + 17, 3.5, 0, 7); cx.fill(); }
+    else { cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillText(`defeat ${P.school} foes`, x0 + w - 14, y + 20); }
+  });
+  cx.restore(); cx.textAlign = 'center';
+}
+// active sigils, stated in words while they run (left HUD column): you learn what a sigil did by seeing it work
+function drawSigilStatus(t) {
+  const lines = [];
+  if (G.ward) lines.push(['bulwark', 'next strike blocked']);
+  const veiled = G.spells.reduce((a, s) => a + (s.done ? 0 : s.runes.filter(r => r.veil && r.status === 'pending').length), 0) + G.veilLeft;
+  if (veiled) lines.push(['veil', `${veiled} rune${veiled > 1 ? 's' : ''} · any finger key`]);
+  const slowed = G.stillLeft + G.spells.filter(s => s.still && !s.done).length;
+  if (slowed) lines.push(['still', `${slowed} spell${slowed > 1 ? 's' : ''} slowed`]);
+  if (G.kindle) lines.push(['kindle', 'next spell ×2 power']);
+  if (t - G.galeFx < 1.5) lines.push(['gale', 'runes blown back a bar']);
+  lines.forEach(([key, text], i) => {
+    const P = POWERS[key], y = 146 + i * 36;
+    cx.fillStyle = 'rgba(10,4,24,.85)'; rr(12, y, 156, 30, 7); cx.fill();
+    cx.strokeStyle = P.color; cx.shadowColor = P.color; cx.shadowBlur = 8; rr(12, y, 156, 30, 7); cx.stroke(); cx.shadowBlur = 0;
+    cx.textAlign = 'left'; cx.fillStyle = P.color; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(`${P.glyph} ${P.label}`, 20, y + 12);
+    cx.fillStyle = PAL.text; cx.font = '9.5px ui-monospace, Menlo, monospace'; cx.fillText(text, 20, y + 24);
+  });
+  cx.textAlign = 'center';
+}
 // sigil layer: the panel between the hands, power animations, cast mode, toasts
 const CAST_RING = { x: W/2, y: 430, r: 40 };
 function drawSigils(t) {
@@ -1512,31 +1565,38 @@ function drawSigils(t) {
   }
   // cast mode dims the lanes first, so the sigil panel and the ring read above them
   if (G.cast) { cx.fillStyle = `rgba(7,3,15,${.55 * Math.min(1, (t - G.cast.at) / 0.2)})`; cx.fillRect(X0 - 12, TOP_Y - 30, LANES_W + 24, HIT_Y + 72 - (TOP_Y - 30)); }
-  // the panel: every sigil's name is always visible (dim until owned), with its charges
+  // the panel: every sigil's name is always visible (dim until owned), with its charges. In cast mode — when time
+  // is slowed and you have a moment to read — it opens into the spellbook: what each sigil does, where to earn it
+  if (G.cast) drawSpellbook(t);
+  else {
   const px = W/2 - 50, py = TOP_Y - 30;
   cx.fillStyle = 'rgba(10,4,24,.72)'; rr(px, py, 100, 262, 10); cx.fill();
   cx.strokeStyle = '#3a1a5e'; rr(px, py, 100, 262, 10); cx.stroke();
   cx.textAlign = 'center'; cx.fillStyle = PAL.dim; cx.font = 'bold 9px ui-monospace, Menlo, monospace'; cx.fillText('SIGILS · Space', W/2, py + 13);
-  const buf = G.cast ? G.cast.buf : '';
   Object.keys(POWERS).forEach((key, i) => {
     const P = POWERS[key], n = G.sigils[key] || 0, y = py + 22 + i * 44, owned = n > 0;
-    const lit = G.cast && owned && P.name.startsWith(buf);
     const flash = G.sigilFlash && G.sigilFlash.key === key && t - G.sigilFlash.at < 0.9 ? 1 - (t - G.sigilFlash.at) / 0.9 : 0;
     if (flash) { cx.fillStyle = P.color; cx.globalAlpha = .25 * flash; rr(px + 3, y, 94, 40, 7); cx.fill(); cx.globalAlpha = 1; }
-    cx.globalAlpha = owned ? (G.cast && !lit ? .35 : 1) : .35;
+    cx.globalAlpha = owned ? 1 : .35;
     cx.fillStyle = PAL.ink; cx.beginPath(); cx.arc(px + 16, y + 17, 11, 0, 7); cx.fill();
     cx.strokeStyle = P.color; cx.lineWidth = 1.5; if (owned) { cx.shadowColor = P.color; cx.shadowBlur = 8; }
     cx.beginPath(); cx.arc(px + 16, y + 17, 11, 0, 7); cx.stroke(); cx.shadowBlur = 0; cx.lineWidth = 1;
     cx.fillStyle = P.color; cx.font = 'bold 12px Georgia, serif'; cx.fillText(P.glyph, px + 16, y + 21);
     cx.textAlign = 'left'; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
     cx.fillStyle = owned ? P.color : PAL.dim; cx.fillText(P.name, px + 32, y + 15);
-    if (lit && buf) { cx.fillStyle = '#fff'; cx.shadowColor = P.color; cx.shadowBlur = 10; cx.fillText(buf, px + 32, y + 15); cx.shadowBlur = 0; } // typed prefix glows
     for (let j = 0; j < SIGIL_MAX; j++) { cx.fillStyle = j < n ? P.color : '#2a1a44'; cx.beginPath(); cx.arc(px + 36 + j * 9, y + 27, 3, 0, 7); cx.fill(); }
-    cx.textAlign = 'center'; cx.globalAlpha = 1;
+    cx.globalAlpha = 1;
+    if (G.unseen.has(key)) { // learned but not yet read: a NEW tag pulls you to open the spellbook
+      cx.fillStyle = PAL.gold; cx.globalAlpha = .75 + .25 * Math.sin(t * 6); cx.font = 'bold 8px ui-monospace, Menlo, monospace';
+      cx.fillText('NEW', px + 68, y + 29); cx.globalAlpha = 1;
+    }
+    cx.textAlign = 'center';
   });
   // flawless meter: three flawless spells grant the current school's sigil
   cx.fillStyle = '#2a1a44'; rr(px + 10, py + 246, 80, 6, 3); cx.fill();
   cx.fillStyle = PAL.gold; cx.shadowColor = PAL.gold; cx.shadowBlur = 6; rr(px + 10, py + 246, 80 * G.meter, 6, 3); cx.fill(); cx.shadowBlur = 0;
+  }
+  drawSigilStatus(t);
   // cast mode: lanes dim, a rune ring turns, the typed name glows at its heart
   const R = CAST_RING;
   if (G.cast) {

@@ -348,7 +348,18 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
 
   Every name is always listed in the panel between the hands (dim until
   owned, with charge pips and the flawless meter); cast mode dims the lanes,
-  turns a rune ring and glows the typed prefix on the matching name. Open:
+  turns a rune ring and glows the typed prefix on the matching name.
+
+  **Teaching the sigils (playtest: "you'd have to memorize them; you can't read
+  the unlock message mid-fight").** Explanations move to the moments you can
+  read: (1) **the spellbook** — opening cast mode expands the panel into a
+  list of every sigil with its name, effect, charges, or where to earn it;
+  time is slowed there, so reading is free; (2) **NEW tags** on freshly earned
+  sigils until the spellbook has been opened; (3) **live status chips** in the
+  left margin while an effect runs ("VEIL · 5 runes · any finger key",
+  "BULWARK · next strike blocked") — you learn what a sigil does by watching
+  it work. The unlock toast only says "press Space to read it". This is what
+  makes adding more sigils viable: none of them has to be memorized up front. Open:
   timed casting (bonus for casting on the click), more sigils, whether
   perfect-heal should give way to charges.
 - **Meta-progression** — spellbook, unlockable elements/areas, score/rank,
