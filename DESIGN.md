@@ -317,6 +317,19 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > Tribal drums were cut (didn't fit); darker arcane synthwave variants were
   > generated and tried, but after playtesting the original synthwave stayed the
   > best, so it is the only track (on/off in settings).
+
+  > **Prototype answer (sound effects):** ACE-Step can't make one-shots (every
+  > request returns 60 s of music, whatever the duration asked), so foley comes
+  > from **MiniMax-H3**, a video model that generates a synchronized soundtrack:
+  > each sound is prompted as a filmed event ("a skeleton archer releases an
+  > arrow, bowstring twang…"), two candidates per sound, and the audio track is
+  > cut to a one-shot automatically (onset → −40 dB tail, click-free fades,
+  > loudness-normalized), choosing the candidate whose energy is most
+  > concentrated in one event. Sampled: spell casts per element, bolt impact,
+  > enemy strike loosed, hit taken, shield block, enemy defeated, sigil earned,
+  > time slowing / resuming, fizzle, sigil cast, chapter horn, game over.
+  > Timing-critical sounds stay synthesized (rune hits, wrong key, name ticks,
+  > the metronome) — they must be instant and sample-accurate.
   > Each track is started on a click at its measured first beat and time-scaled
   > so its beat is the game's beat (resampling, so pitch follows tempo). The
   > metronome stays as the enemy's heartbeat under the track.

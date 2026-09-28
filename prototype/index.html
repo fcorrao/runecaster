@@ -74,7 +74,7 @@
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
       <li><b>Calibration:</b> if the click doesn't land when the letter crosses the line, slide <i>audio</i>. If your presses sit consistently early/late on the error bar, press "set input from last 20 hits" (or slide <i>input</i>). Both are saved in this browser.</li>
     </ul>
-    Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. The synthwave soundtrack is locked to the beat and runs at the speed of the letters; music needs an http server — file:// plays silent.
+    Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. The synthwave soundtrack is locked to the beat and runs at the speed of the letters; music and sampled effects need an http server — file:// plays the synthesized fallbacks. Audition every effect on the <a href="sfx.html" style="color:#f3a5e6">sound board</a>.
   </div>
 </aside>
 <script>
@@ -303,41 +303,63 @@ function beep(t, f, dur, type, vol) {
   g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   o.connect(g).connect(AC.destination); o.start(t); o.stop(t + dur + 0.02);
 }
+// ---- sound effects: foley generated with MiniMax-H3 (video+audio model), trimmed to one-shots in audio/sfx/.
+// Timing-critical sounds (rune hits, wrong key, name ticks, the metronome) stay synthesized: sample-accurate and
+// instant. Every sampled event keeps its synthesized version for file:// (where fetch of samples fails).
+const SFX_FILES = ['cast_fire', 'cast_water', 'cast_earth', 'cast_air', 'impact', 'arrow_loose', 'hit_player', 'ward_block',
+  'defeat', 'sigil_earn', 'slow_down', 'speed_up', 'fizzle', 'sigil_cast', 'game_over', 'chapter'];
+const SFX = {}; let sfxGain = null, sfxLoaded = false;
+function loadSfx() {
+  if (sfxLoaded) return; sfxLoaded = true;
+  for (const n of SFX_FILES) fetch(`audio/sfx/${n}.wav`).then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status))
+    .then(b => AC.decodeAudioData(b)).then(buf => { SFX[n] = buf; }).catch(() => {});
+}
+function sfx(name, vol = 1) { // plays a sample if loaded; false → caller uses the synthesized version
+  const b = SFX[name]; if (!AC || !b) return false;
+  if (!sfxGain) { sfxGain = AC.createGain(); sfxGain.gain.value = 0.8; sfxGain.connect(AC.destination); }
+  const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = b; g.gain.value = vol;
+  s.connect(g).connect(sfxGain); s.start(); return true;
+}
 function hitSnd(g) { if (AC) { const t = AC.currentTime; beep(t, g==='perfect'?880:620, .07, 'triangle', .18); } }
 function wrongSnd() { if (AC) { const t = AC.currentTime; beep(t, 160, .12, 'square', .12); } }
-function fizzleSnd() { if (AC) { const t = AC.currentTime; const o = AC.createOscillator(), g = AC.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(400,t); o.frequency.exponentialRampToValueAtTime(60,t+.4); g.gain.setValueAtTime(.15,t); g.gain.exponentialRampToValueAtTime(.001,t+.4); o.connect(g).connect(AC.destination); o.start(t); o.stop(t+.45); } }
+function fizzleSnd() { if (!AC || sfx('fizzle', .9)) return; const t = AC.currentTime; const o = AC.createOscillator(), g = AC.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(400,t); o.frequency.exponentialRampToValueAtTime(60,t+.4); g.gain.setValueAtTime(.15,t); g.gain.exponentialRampToValueAtTime(.001,t+.4); o.connect(g).connect(AC.destination); o.start(t); o.stop(t+.45); }
 const CAST_TIMBRE = { fire:'sawtooth', water:'sine', earth:'triangle', air:'square' };
 function castSnd(el, power) {
-  if (!AC) return; const t = AC.currentTime + 0.02;
+  if (!AC || sfx('cast_' + el, 0.55 + 0.45 * Math.min(1, power))) return; const t = AC.currentTime + 0.02;
   const base = {fire:196, water:220, earth:165, air:247}[el] || 220;
   const vol = 0.06 + 0.12 * power;
   const wave = CAST_TIMBRE[el] || 'triangle';
   for (const [i, m] of [1, 1.25, 1.5].entries()) beep(t + i*0.03, base*m, 0.5, wave, vol);
 }
-function impactSnd(power) { // bolt landing on the archer
-  if (!AC) return; const t = AC.currentTime;
+function impactSnd(power) { // bolt landing on the enemy
+  if (!AC || sfx('impact', 0.6 + 0.4 * Math.min(1, power))) return; const t = AC.currentTime;
   beep(t, 90 + 60*power, 0.16, 'sine', 0.22 + 0.15*power);
   beep(t + 0.015, 180, 0.07, 'triangle', 0.10);
 }
-function sigilSnd() { if (!AC) return; const t = AC.currentTime; [523, 659, 784, 1047].forEach((f, i) => beep(t + i * 0.06, f, 0.18, 'triangle', 0.08)); } // sigil earned
-function openSnd() { if (!AC) return; const t = AC.currentTime; beep(t, 330, 0.25, 'sine', 0.08); beep(t + 0.05, 495, 0.25, 'sine', 0.06); } // cast mode opens
+function sigilSnd() { if (!AC || sfx('sigil_earn')) return; const t = AC.currentTime; [523, 659, 784, 1047].forEach((f, i) => beep(t + i * 0.06, f, 0.18, 'triangle', 0.08)); } // sigil earned
+function openSnd() { if (!AC || sfx('slow_down')) return; const t = AC.currentTime; beep(t, 330, 0.25, 'sine', 0.08); beep(t + 0.05, 495, 0.25, 'sine', 0.06); } // cast mode: time slows
+function resumeSnd() { if (!AC || sfx('speed_up', .8)) return; const t = AC.currentTime; beep(t, 495, 0.18, 'sine', 0.06); beep(t + 0.05, 660, 0.18, 'sine', 0.05); } // time resumes
 function tickSnd(n) { if (AC) beep(AC.currentTime, 600 + n * 90, 0.05, 'triangle', 0.08); } // a letter of the name lands
-function castSigilSnd(key) { // the sigil fires: a rising chord in its school's element timbre
-  if (!AC) return; const t = AC.currentTime, wave = CAST_TIMBRE[{ storm: 'air', stone: 'earth', shadow: 'air', tide: 'water', flame: 'fire' }[POWERS[key].school]];
+function castSigilSnd(key) { // the sigil fires
+  if (!AC || sfx('sigil_cast')) return; const t = AC.currentTime, wave = CAST_TIMBRE[{ storm: 'air', stone: 'earth', shadow: 'air', tide: 'water', flame: 'fire' }[POWERS[key].school]];
   [1, 1.26, 1.5, 2].forEach((m, i) => beep(t + i * 0.04, 262 * m, 0.6, wave, 0.07));
 }
-function whooshSnd() { // enemy arrow in flight
-  if (!AC) return; const t = AC.currentTime;
+function whooshSnd() { // enemy strike loosed
+  if (!AC || sfx('arrow_loose', .8)) return; const t = AC.currentTime;
   const len = 0.22, buf = AC.createBuffer(1, AC.sampleRate*len, AC.sampleRate), d = buf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * (1 - i/d.length);
   const src = AC.createBufferSource(), g = AC.createGain(), f = AC.createBiquadFilter();
   src.buffer = buf; f.type = 'bandpass'; f.frequency.value = 1600; f.Q.value = 0.8;
   g.gain.value = 0.12; src.connect(f).connect(g).connect(AC.destination); src.start(t);
 }
-function thudSnd() { // enemy arrow hitting you
-  if (!AC) return; const t = AC.currentTime;
+function thudSnd() { // enemy strike hitting you
+  if (!AC || sfx('hit_player')) return; const t = AC.currentTime;
   beep(t, 70, 0.2, 'sine', 0.3); beep(t, 210, 0.09, 'square', 0.08);
 }
+function wardSnd() { if (!sfx('ward_block')) thudSnd(); }       // Bulwark takes a strike
+function defeatSnd() { sfx('defeat'); }                          // enemy falls (the victory burst carries it visually if missing)
+function gameOverSnd() { sfx('game_over'); }
+function chapterSnd() { sfx('chapter', .8); }
 
 // ================= state =================
 let G = null, started = false;
@@ -370,6 +392,7 @@ function startEncounter() {
   G.enemy = { kind, name: kind === 'boss' ? ch.boss : E.label, hp: E.hp(G.ci), max: E.hp(G.ci), dmg: E.dmg, color: E.color, school };
   G.bpm = Math.min(200, G.baseBpm + ch.bpm); // cavalry ramps reset with every new encounter
   const newCh = G.ei === 0;
+  if (newCh) chapterSnd();
   G.banner = {
     title: newCh ? `CHAPTER ${G.ci + 1} — ${ch.name.toUpperCase()}` : G.enemy.name.toUpperCase(),
     sub: newCh ? `${G.enemy.name} · ${['', 'two-word spells', 'longer words', 'three-word invocations', 'numbers join the runes', 'symbols join the runes', 'the full tongue'][Math.min(6, ch.tier)]}`
@@ -596,10 +619,12 @@ function applyImpact(b) { // spell bolt reached the enemy
   if (G.enemy.hp <= 0) return; // already falling: the next enemy isn't on stage yet
   const dmg = Math.round(8 * b.power); // hp/8 = full-power casts to clear an encounter
   G.enemy.hp -= dmg;
+  impactSnd(b.power);
   G.foeFlash = now();
   burst(ARC_X, ARC_AY - 44, ELC[b.el], 14 + Math.round(22*b.power), 180 + 240*b.power, b.el);
   if (G.enemy.hp <= 0) { // encounter cleared: the enemy falls, the run advances (§7)
     popup(G.enemy.name.toUpperCase() + ' DEFEATED', PAL.gold, W/2, 150);
+    defeatSnd();
     burst(ARC_X, ARC_AY - 40, PAL.gold, 60, 340);
     G.shake = 12;
     G.foeDead = now(); G.foeEnter = now() + 0.9;
@@ -613,7 +638,7 @@ function applyStrike(s) { // enemy arrow reached the caster — the counter's sh
     G.ward = null; G.wardBreak = now();
     burst(WIZ_X + 52, WIZ_AY - 56, POWERS.bulwark.color, 26, 220, 'earth');
     popup('-0 · WARDED', POWERS.bulwark.color, WIZ_X + 30, WIZ_AY - 120);
-    thudSnd(); return;
+    wardSnd(); return;
   }
   G.hp -= s.dmg; G.redFlash = now();
   G.wizHurt = now();
@@ -621,7 +646,7 @@ function applyStrike(s) { // enemy arrow reached the caster — the counter's sh
   thudSnd();
   burst(WIZ_X + 26, WIZ_AY - 56, PAL.bad, 8 + Math.round(10 * s.dmg/DMG), 140 + 120*s.dmg/DMG);
   popup('-' + s.dmg + (s.why ? ' · ' + s.why : ''), PAL.bad, WIZ_X + 30, WIZ_AY - 120);
-  if (G.hp <= 0) { G.hp = 0; G.over = true; }
+  if (G.hp <= 0) { G.hp = 0; G.over = true; gameOverSnd(); }
 }
 
 // ================= sigils (§8 powers): earned from enemies, cast by typing their names =================
@@ -683,7 +708,7 @@ function castMusicRate(slow) { // the soundtrack slows with the rhythm (tape-sty
   if (slow) { pr.cancelScheduledValues(a); pr.setValueAtTime(musicRate(segAt(a).beat) * CAST_K, a); }
   else rescheduleMusicRates();
 }
-function leaveCast() { castTick(); G.cast = null; castMusicRate(false); G.unseen.clear(); } // the spellbook was on screen: nothing is NEW any more
+function leaveCast() { castTick(); G.cast = null; castMusicRate(false); G.unseen.clear(); resumeSnd(); } // the spellbook was on screen: nothing is NEW any more
 function closeCast(text) { leaveCast(); G.castFx = { kind: 'close', at: now(), text }; }
 function castLetter(k) {
   const buf = G.cast.buf + k;
@@ -775,6 +800,7 @@ addEventListener('keydown', e => {
 cv.addEventListener('click', () => {
   if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' }); }
   AC.resume();
+  loadSfx();
   if (!started) { started = true; newGame(); syncOpts(); startRun(); musicPlay(); }
   else if (G.over) { newGame(); syncOpts(); startRun(); musicPlay(); }
 });

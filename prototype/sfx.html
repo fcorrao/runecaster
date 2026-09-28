@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Runecaster — sound board</title>
+<style>
+  body { margin:0; padding:24px; background:#07030f; color:#d9c8f0; font:13px/1.5 ui-monospace, Menlo, monospace; }
+  h1 { font:italic 900 20px "Trebuchet MS", sans-serif; color:#f3a5e6; text-shadow:0 0 8px #d225d1; margin:0 0 4px; }
+  p { color:#a993c9; margin:0 0 18px; }
+  #grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:10px; }
+  button { display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; background:rgba(20,8,44,.7);
+    color:#f3a5e6; border:1px solid #5c15bd; border-radius:8px; padding:10px 12px; font:inherit; cursor:pointer; }
+  button:hover { box-shadow:0 0 10px #d225d1; } button b { color:#fff; } button span { color:#a993c9; font-size:11.5px; }
+</style>
+</head>
+<body>
+<h1>RUNECASTER — SOUND BOARD</h1>
+<p>Audition the generated effects (audio/sfx/). Click to play; each shows when it fires in the game.</p>
+<div id="grid"></div>
+<script>
+// the game's sampled events: file → when it plays
+const SOUNDS = {
+  cast_fire: 'a spell completes, fire element', cast_water: 'a spell completes, water element',
+  cast_earth: 'a spell completes, earth element', cast_air: 'a spell completes, air element',
+  impact: 'your bolt hits the enemy', arrow_loose: 'the enemy looses a strike', hit_player: 'a strike hits you',
+  ward_block: 'Bulwark blocks a strike', defeat: 'an enemy falls', sigil_earn: 'you earn a sigil',
+  slow_down: 'Space: cast mode opens, time slows', speed_up: 'cast mode closes, time resumes',
+  fizzle: 'a spell or sigil fizzles', sigil_cast: 'a sigil is cast', chapter: 'a new chapter begins', game_over: 'struck down',
+};
+let ac = null; const bufs = {};
+document.getElementById('grid').innerHTML = Object.entries(SOUNDS).map(([k, v]) => `<button data-k="${k}"><b>${k}</b><span>${v}</span></button>`).join('');
+document.getElementById('grid').addEventListener('click', async e => {
+  const k = e.target.closest('button')?.dataset.k; if (!k) return;
+  ac = ac || new AudioContext();
+  bufs[k] = bufs[k] || await fetch(`audio/sfx/${k}.wav`).then(r => r.arrayBuffer()).then(b => ac.decodeAudioData(b));
+  const s = ac.createBufferSource(); s.buffer = bufs[k]; s.connect(ac.destination); s.start();
+});
+</script>
+</body>
+</html>
