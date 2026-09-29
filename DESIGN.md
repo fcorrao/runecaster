@@ -327,7 +327,13 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > loudness-normalized), choosing the candidate whose energy is most
   > concentrated in one event. Sampled: spell casts per element, bolt impact,
   > enemy strike loosed, hit taken, shield block, enemy defeated, sigil earned,
-  > time slowing / resuming, fizzle, sigil cast, chapter horn, game over.
+  > time resuming, fizzle, sigil cast, chapter horn, game over. Playtest
+  > fixes: the earth cast was re-prompted as an earthquake rumble (the first
+  > take sounded like the fizzle); the impact is cut to its 0.28 s crack; enemy
+  > defeat is synthesized instead (a low pitch-dropping boom with a brief
+  > C-major shimmer — "triumphant, not overdone"), since generated takes stayed
+  > crackly; time slowing stays synthesized (the sample didn't read as
+  > slowing).
   > Timing-critical sounds stay synthesized (rune hits, wrong key, name ticks,
   > the metronome) — they must be instant and sample-accurate.
   > Each track is started on a click at its measured first beat and time-scaled

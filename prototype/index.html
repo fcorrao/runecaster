@@ -307,7 +307,7 @@ function beep(t, f, dur, type, vol) {
 // Timing-critical sounds (rune hits, wrong key, name ticks, the metronome) stay synthesized: sample-accurate and
 // instant. Every sampled event keeps its synthesized version for file:// (where fetch of samples fails).
 const SFX_FILES = ['cast_fire', 'cast_water', 'cast_earth', 'cast_air', 'impact', 'arrow_loose', 'hit_player', 'ward_block',
-  'defeat', 'sigil_earn', 'slow_down', 'speed_up', 'fizzle', 'sigil_cast', 'game_over', 'chapter'];
+  'defeat', 'sigil_earn', 'speed_up', 'fizzle', 'sigil_cast', 'game_over', 'chapter'];
 const SFX = {}; let sfxGain = null, sfxLoaded = false;
 function loadSfx() {
   if (sfxLoaded) return; sfxLoaded = true;
@@ -337,7 +337,7 @@ function impactSnd(power) { // bolt landing on the enemy
   beep(t + 0.015, 180, 0.07, 'triangle', 0.10);
 }
 function sigilSnd() { if (!AC || sfx('sigil_earn')) return; const t = AC.currentTime; [523, 659, 784, 1047].forEach((f, i) => beep(t + i * 0.06, f, 0.18, 'triangle', 0.08)); } // sigil earned
-function openSnd() { if (!AC || sfx('slow_down')) return; const t = AC.currentTime; beep(t, 330, 0.25, 'sine', 0.08); beep(t + 0.05, 495, 0.25, 'sine', 0.06); } // cast mode: time slows
+function openSnd() { if (!AC) return; const t = AC.currentTime; beep(t, 330, 0.25, 'sine', 0.08); beep(t + 0.05, 495, 0.25, 'sine', 0.06); } // cast mode: time slows (synthesized: the sampled version didn't read as slowing)
 function resumeSnd() { if (!AC || sfx('speed_up', .8)) return; const t = AC.currentTime; beep(t, 495, 0.18, 'sine', 0.06); beep(t + 0.05, 660, 0.18, 'sine', 0.05); } // time resumes
 function tickSnd(n) { if (AC) beep(AC.currentTime, 600 + n * 90, 0.05, 'triangle', 0.08); } // a letter of the name lands
 function castSigilSnd(key) { // the sigil fires
