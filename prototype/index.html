@@ -309,9 +309,10 @@ function beep(t, f, dur, type, vol) {
 const SFX_FILES = ['cast_fire', 'cast_water', 'cast_earth', 'cast_air', 'impact', 'arrow_loose', 'hit_player', 'ward_block',
   'defeat', 'sigil_earn', 'speed_up', 'fizzle', 'sigil_cast', 'game_over', 'chapter'];
 const SFX = {}; let sfxGain = null, sfxLoaded = false;
+const SFX_V = 2; // bump when any file in audio/sfx changes: the URL changes, so browsers can't serve a cached old take
 function loadSfx() {
   if (sfxLoaded) return; sfxLoaded = true;
-  for (const n of SFX_FILES) fetch(`audio/sfx/${n}.wav`).then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status))
+  for (const n of SFX_FILES) fetch(`audio/sfx/${n}.wav?v=${SFX_V}`).then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status))
     .then(b => AC.decodeAudioData(b)).then(buf => { SFX[n] = buf; }).catch(() => {});
 }
 function sfx(name, vol = 1) { // plays a sample if loaded; false → caller uses the synthesized version

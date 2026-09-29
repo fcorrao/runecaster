@@ -32,7 +32,7 @@ document.getElementById('grid').innerHTML = Object.entries(SOUNDS).map(([k, v]) 
 document.getElementById('grid').addEventListener('click', async e => {
   const k = e.target.closest('button')?.dataset.k; if (!k) return;
   ac = ac || new AudioContext();
-  bufs[k] = bufs[k] || await fetch(`audio/sfx/${k}.wav`).then(r => r.arrayBuffer()).then(b => ac.decodeAudioData(b));
+  bufs[k] = bufs[k] || await fetch(`audio/sfx/${k}.wav?v=${Date.now()}`).then(r => r.arrayBuffer()).then(b => ac.decodeAudioData(b));
   const s = ac.createBufferSource(); s.buffer = bufs[k]; s.connect(ac.destination); s.start();
 });
 </script>
