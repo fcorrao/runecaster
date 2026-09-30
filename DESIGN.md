@@ -397,6 +397,22 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   was too tight; 5 s spans the whole on-screen countdown, so casting at any
   point of it holds).
 
+  **Decided (playtest): the countdown must reach you while you watch the
+  glyphs.** Your eyes are on the hit line, so the warning comes there and to
+  the periphery: a **doom pulse** each countdown beat (detuned saw stack through
+  a closing low-pass, a step higher each beat, the first doubled), the **hit
+  line turns red** and beats with it, and the **enemy's screen edge flashes
+  red** on each beat (until you ward).
+
+  **Empowered window — the caster's mirror of the charge.** A ring over the
+  caster fills with every glyph you hit (perfect 1, good ½; 16 to fill). Full,
+  a bright rising chime plays and a **5 s window** opens: cyan aura, the
+  seconds counting down over his head, "cast a bolt!", and the caster's screen
+  edge glowing cyan. Every bolt cast in it hits **×2** (stacks with weakness and
+  Kindle). Its fill source is accuracy, so it pays the accuracy gradient the way
+  perfect-heal used to; the window lives on the rhythm timeline like the ward
+  (cast mode slows it).
+
   **Flawless powers** — the old castable runes, now triggered directly by an
   all-perfect spell of that school:
 
