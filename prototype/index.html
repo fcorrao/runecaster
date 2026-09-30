@@ -70,7 +70,7 @@
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
       <li><b>Runes are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no glyph missed) earns a rune of its element (the lane most of its glyphs ride: fire, water, earth, air); defeating an enemy earns a <b>mend</b> rune (bosses 2). Press <b>Space</b> — time slows to a crawl and letters hide — the panel opens into the <b>spellbook</b>; type a name to cast: <i>vorkai</i> fire, <i>gamkai</i> water, <i>brykai</i> earth, <i>wynkai</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar), <i>pyrhal</i> mend (+30 HP), <i>dunfen</i> ward (always ready). A wrong letter fizzles (charge kept) — fizzle twice in a row and it <b>backfires</b> for 12 damage (a successful cast resets it); Space again cancels; the ring closes itself when a glyph reaches the line.</li>
-      <li><b>Charged attacks:</b> every enemy charges a big attack — the ring over its head fills; in the last bar it counts down the beats. Cast <i>dunfen</i> then: the ward holds for a bar and <b>counters</b> the charged attack back at the enemy. Missed glyphs still let the enemy hit you.</li>
+      <li><b>Charged attacks:</b> every enemy charges a big attack — the ring over its head fills; in the last bar it counts down the beats. Cast <i>dunfen</i> then: the ward holds for 5 seconds and <b>counters</b> the charged attack back at the enemy. Missed glyphs still let the enemy hit you.</li>
       <li><b>Flawless spells</b> (every glyph PERFECT) trigger the incantation's school power at once, no cast needed: storm Gale (glyphs and the charge pushed back a bar), stone Bulwark (next strike blocked), shadow Veil (next 6 glyphs take any key of the right finger), tide Stillwater (next 2 spells 20% slower), flame Kindle (next bolt ×2).</li>
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
@@ -670,15 +670,17 @@ function hurt(dmg, why) { // the caster takes damage: an enemy strike, or his ow
 // is kept); Space again cancels. Cast mode closes itself, free, when a glyph reaches its window.
 // Each name = a noun of the tongue + a verb (kai strike, hal mend, fen ward).
 const BACKFIRE_DMG = 12; // a second fizzle in a row backfires on the caster (a successful cast clears the streak)
-const RUNE_DMG = 6, WEAK_X = 2, MEND_HP = 30, WARD_BEATS = 4, COUNTER_DMG = 12, CHARGE_F = 0.6, WARN_BEATS = 4;
+const RUNE_DMG = 6, WEAK_X = 2, MEND_HP = 30, WARD_S = 5, COUNTER_DMG = 12, CHARGE_F = 0.6, WARN_BEATS = 4;
 const RUNES = {
   fire:  { name: 'vorkai', label: 'FIRE',  el: 'fire',  color: ELC.fire,  icon: '✦', desc: `fire bolt · ${RUNE_DMG} damage`,  earn: 'clean fire spells' },
   water: { name: 'gamkai', label: 'WATER', el: 'water', color: ELC.water, icon: '≈', desc: `water bolt · ${RUNE_DMG} damage`, earn: 'clean water spells' },
   earth: { name: 'brykai', label: 'EARTH', el: 'earth', color: ELC.earth, icon: '▲', desc: `earth bolt · ${RUNE_DMG} damage`, earn: 'clean earth spells' },
   air:   { name: 'wynkai', label: 'AIR',   el: 'air',   color: ELC.air,   icon: '≋', desc: `air bolt · ${RUNE_DMG} damage`,   earn: 'clean air spells' },
   mend:  { name: 'pyrhal', label: 'MEND',  color: '#ff9ad5', icon: '✚', desc: `heals ${MEND_HP} HP`, earn: 'defeat enemies' },
-  ward:  { name: 'dunfen', label: 'WARD',  color: PAL.gold,  icon: '◎', desc: 'blocks for a bar · counters a charged attack', earn: 'always ready' },
+  ward:  { name: 'dunfen', label: 'WARD',  color: PAL.gold,  icon: '◎', desc: `blocks for ${WARD_S} s · counters a charged attack`, earn: 'always ready' },
 };
+// what a rune's name says in the tongue — noun + verb, shown under the name so nobody has to memorize it: vorkai (flame strike)
+for (const R of Object.values(RUNES)) { const n = R.name.slice(0, 3), v = R.name.slice(3); R.gloss = `(${Object.values(SCHOOLS).find(sc => sc[n])[n]} ${VERBS[v]})`; }
 const RUNE_MAX = 3;
 const owns = key => key === 'ward' || (G.runes[key] || 0) > 0; // the ward is innate: the charged attack must always be answerable
 // flawless spells (every glyph perfect) wake their school's power directly — the old castable runes
@@ -784,8 +786,8 @@ function castRune(key) {
     popup(`+${got} HP · MEND`, S.color, WIZ_X + 30, WIZ_AY - 120);
     burst(WIZ_X + 20, WIZ_AY - 60, S.color, 30, 160, 'water');
     castRuneSnd();
-  } else { // ward: one bar, measured from now, plus the flight of a charged attack loosed at its end
-    G.guard = { at: now(), until: now() - OPT.inOff / 1000 + WARD_BEATS * segAt(now()).beat + CHARGE_F };
+  } else { // ward: WARD_S seconds from the cast — as long as the charge countdown is on screen, so casting at any point of it holds
+    G.guard = { at: now(), until: now() - OPT.inOff / 1000 + WARD_S };
     castRuneSnd();
   }
 }
@@ -1645,10 +1647,13 @@ function drawSpellbook(t) {
     if (match) { cx.fillStyle = '#fff'; cx.shadowColor = S.color; cx.shadowBlur = 10; cx.fillText(buf, x0 + 56, y + 17); cx.shadowBlur = 0; }
     const nw = cx.measureText(S.name).width;
     cx.font = 'italic 900 11px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(S.label, x0 + 64 + nw, y + 17);
-    if (G.unseen.has(key)) { cx.fillStyle = PAL.gold; cx.font = 'bold 9px ui-monospace, Menlo, monospace'; cx.fillText('NEW', x0 + 72 + nw + cx.measureText(S.label).width + 14, y + 16); }
-    cx.fillStyle = PAL.text; cx.font = '11.5px ui-monospace, Menlo, monospace'; cx.fillText(S.desc, x0 + 56, y + 33);
+    let tx = x0 + 78 + nw + cx.measureText(S.label).width;
+    if (G.unseen.has(key)) { cx.fillStyle = PAL.gold; cx.font = 'bold 9px ui-monospace, Menlo, monospace'; cx.fillText('NEW', tx, y + 16); tx += 30; }
+    if (weak) { cx.fillStyle = PAL.bad; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(`×2 vs ${G.enemy.name}`, tx, y + 16); }
+    cx.fillStyle = S.color; cx.font = 'italic 12px Georgia, serif'; cx.fillText(S.gloss, x0 + 56, y + 33);
+    const gw = cx.measureText(S.gloss).width;
+    cx.fillStyle = PAL.text; cx.font = '11.5px ui-monospace, Menlo, monospace'; cx.fillText('· ' + S.desc, x0 + 62 + gw, y + 33);
     cx.textAlign = 'right';
-    if (weak) { cx.fillStyle = PAL.bad; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(`×2 · ${G.enemy.name} is weak to it`, x0 + w - 14, y + 33); }
     if (key === 'ward') { cx.fillStyle = S.color; cx.font = 'bold 14px ui-monospace, Menlo, monospace'; cx.fillText('∞', x0 + w - 16, y + 19); }
     else if (owned) for (let j = 0; j < RUNE_MAX; j++) { cx.fillStyle = j < n ? S.color : '#2a1a44'; cx.beginPath(); cx.arc(x0 + w - 20 - j * 11, y + 14, 3.5, 0, 7); cx.fill(); }
     else { cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillText(S.earn, x0 + w - 14, y + 17); }
@@ -1658,7 +1663,7 @@ function drawSpellbook(t) {
 // active effects, stated in words while they run (left HUD column): you learn what a power did by seeing it work
 function drawRuneStatus(t) {
   const lines = [], tg = t - OPT.inOff / 1000;
-  if (G.guard) { const b = Math.max(0, Math.ceil((G.guard.until - CHARGE_F - tg) / segAt(tg).beat)); lines.push([RUNES.ward, b ? `${b} beat${b > 1 ? 's' : ''} · counters a charge` : 'fading']); }
+  if (G.guard) lines.push([RUNES.ward, `${Math.max(1, Math.ceil(G.guard.until - tg))} s · counters a charge`]);
   if (G.bulwark) lines.push([BOONS.bulwark, 'next strike blocked']);
   const veiled = G.spells.reduce((a, s) => a + (s.done ? 0 : s.glyphs.filter(r => r.veil && r.status === 'pending').length), 0) + G.veilLeft;
   if (veiled) lines.push([BOONS.veil, `${veiled} glyph${veiled > 1 ? 's' : ''} · any finger key`]);
@@ -1702,28 +1707,29 @@ function drawRunes(t) {
   // is slowed and you have a moment to read — it opens into the spellbook: what each rune does, where to earn it
   if (G.cast) drawSpellbook(t);
   else {
-  const px = W/2 - 50, py = TOP_Y - 30, RH = 38;
-  cx.fillStyle = 'rgba(10,4,24,.72)'; rr(px, py, 100, 262, 10); cx.fill();
-  cx.strokeStyle = '#3a1a5e'; rr(px, py, 100, 262, 10); cx.stroke();
+  const px = W/2 - 50, py = TOP_Y - 30, RH = 42, ph = 26 + Object.keys(RUNES).length * RH;
+  cx.fillStyle = 'rgba(10,4,24,.72)'; rr(px, py, 100, ph, 10); cx.fill();
+  cx.strokeStyle = '#3a1a5e'; rr(px, py, 100, ph, 10); cx.stroke();
   cx.textAlign = 'center'; cx.fillStyle = PAL.dim; cx.font = 'bold 9px ui-monospace, Menlo, monospace'; cx.fillText('RUNES · Space', W/2, py + 13);
   Object.keys(RUNES).forEach((key, i) => {
     const S = RUNES[key], n = G.runes[key] || 0, y = py + 22 + i * RH, owned = owns(key), weak = S.el && S.el === G.enemy.weak;
     const flash = G.runeFlash && G.runeFlash.key === key && t - G.runeFlash.at < 0.9 ? 1 - (t - G.runeFlash.at) / 0.9 : 0;
-    if (flash) { cx.fillStyle = S.color; cx.globalAlpha = .25 * flash; rr(px + 3, y - 1, 94, RH - 2, 7); cx.fill(); cx.globalAlpha = 1; }
+    if (flash) { cx.fillStyle = S.color; cx.globalAlpha = .25 * flash; rr(px + 3, y - 1, 94, RH - 1, 7); cx.fill(); cx.globalAlpha = 1; }
     cx.globalAlpha = owned ? 1 : .35;
-    cx.fillStyle = PAL.ink; cx.beginPath(); cx.arc(px + 16, y + 16, 11, 0, 7); cx.fill();
+    cx.fillStyle = PAL.ink; cx.beginPath(); cx.arc(px + 14, y + 11, 9, 0, 7); cx.fill();
     cx.strokeStyle = S.color; cx.lineWidth = 1.5; if (owned) { cx.shadowColor = S.color; cx.shadowBlur = 8; }
-    cx.beginPath(); cx.arc(px + 16, y + 16, 11, 0, 7); cx.stroke(); cx.shadowBlur = 0; cx.lineWidth = 1;
-    cx.fillStyle = S.color; cx.font = 'bold 12px Georgia, serif'; cx.fillText(S.icon, px + 16, y + 20);
+    cx.beginPath(); cx.arc(px + 14, y + 11, 9, 0, 7); cx.stroke(); cx.shadowBlur = 0; cx.lineWidth = 1;
+    cx.fillStyle = S.color; cx.font = 'bold 10px Georgia, serif'; cx.fillText(S.icon, px + 14, y + 14.5);
+    cx.font = 'italic 10px Georgia, serif'; cx.fillText(S.gloss, W/2, y + 27); // what the name means, under it
     cx.textAlign = 'left'; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
-    cx.fillStyle = owned ? S.color : PAL.dim; cx.fillText(S.name, px + 32, y + 14);
-    if (key === 'ward') { cx.fillStyle = S.color; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.fillText('∞', px + 33, y + 29); }
-    else for (let j = 0; j < RUNE_MAX; j++) { cx.fillStyle = j < n ? S.color : '#2a1a44'; cx.beginPath(); cx.arc(px + 36 + j * 9, y + 26, 3, 0, 7); cx.fill(); }
+    cx.fillStyle = owned ? S.color : PAL.dim; cx.fillText(S.name, px + 29, y + 15);
+    if (key === 'ward') { cx.fillStyle = S.color; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.fillText('∞', px + 29, y + 39); }
+    else for (let j = 0; j < RUNE_MAX; j++) { cx.fillStyle = j < n ? S.color : '#2a1a44'; cx.beginPath(); cx.arc(px + 32 + j * 9, y + 35, 3, 0, 7); cx.fill(); }
     cx.globalAlpha = 1;
     if (G.unseen.has(key)) { // learned but not yet read: a NEW tag pulls you to open the spellbook
       cx.fillStyle = PAL.gold; cx.globalAlpha = .75 + .25 * Math.sin(t * 6); cx.font = 'bold 8px ui-monospace, Menlo, monospace';
-      cx.fillText('NEW', px + 68, y + 29); cx.globalAlpha = 1;
-    } else if (weak) { cx.fillStyle = PAL.bad; cx.font = 'bold 9px ui-monospace, Menlo, monospace'; cx.fillText('×2', px + 70, y + 29); } // the enemy's weakness
+      cx.fillText('NEW', px + 66, y + 38); cx.globalAlpha = 1;
+    } else if (weak) { cx.fillStyle = PAL.bad; cx.font = 'bold 9px ui-monospace, Menlo, monospace'; cx.fillText('×2', px + 68, y + 38); } // the enemy's weakness
     cx.textAlign = 'center';
   });
   }

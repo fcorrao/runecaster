@@ -364,7 +364,9 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
 
   Cast: **Space opens cast mode, you type the rune's name** — a noun of the
   tongue + a verb (`kai` strike, `hal` mend, `fen` ward), prefix-free so it
-  fires on the last letter. A letter that fits no owned name **fizzles** (mode
+  fires on the last letter; its meaning is shown under it in parentheses —
+  `vorkai` *(flame strike)* — so nothing has to be memorized (playtest). A
+  letter that fits no owned name **fizzles** (mode
   closes, charge kept); Space again cancels. Max 3 charges each.
   **Decided (playtest): fizzling has a cost.** Two fizzles in a row
   **backfire** — 12 damage to the caster (straight to HP; the ward doesn't
@@ -376,7 +378,7 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   |---|---|---|
   | Fire / Water / Earth / Air | `vorkai` `gamkai` `brykai` `wynkai` | bolt, 6 damage; ×2 against the enemy's weakness |
   | Mend | `pyrhal` | +30 HP |
-  | Ward | `dunfen` | innate (∞): blocks every strike for one bar; a **charged attack** that hits it is **countered** (12 damage back) |
+  | Ward | `dunfen` | innate (∞): blocks every strike for 5 s; a **charged attack** that hits it is **countered** (12 damage back) |
 
   **Elemental weakness (§4) is live:** each school is weak to one element
   (flame→water, storm→earth, stone→air, tide→fire, shadow→fire), shown on the
@@ -391,7 +393,9 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   dunfen`. The charge lives on the rhythm timeline, so cast mode slows it with
   everything else. The ward is innate rather than earned so the charged attack
   is always answerable: the skill is reading the telegraph and casting in time
-  (the ward lasts one bar plus the attack's flight).
+  (**decided, playtest: the ward lasts 5 s** — one bar plus the attack's flight
+  was too tight; 5 s spans the whole on-screen countdown, so casting at any
+  point of it holds).
 
   **Flawless powers** — the old castable runes, now triggered directly by an
   all-perfect spell of that school:
