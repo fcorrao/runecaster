@@ -405,13 +405,13 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   red** on each beat (until you ward).
 
   **Empowered window — the caster's mirror of the charge.** A ring over the
-  caster fills with every glyph you hit (perfect 1, good ½; 16 to fill). Full,
-  a bright rising chime plays and a **5 s window** opens: cyan aura, the
+  caster fills on a **timer** (20 beats, from the first spell; decided in
+  playtest over filling it with hit glyphs — a true mirror of the enemy's).
+  Full, a bright rising chime plays and a **5 s window** opens: cyan aura, the
   seconds counting down over his head, "cast a bolt!", and the caster's screen
   edge glowing cyan. Every bolt cast in it hits **×2** (stacks with weakness and
-  Kindle). Its fill source is accuracy, so it pays the accuracy gradient the way
-  perfect-heal used to; the window lives on the rhythm timeline like the ward
-  (cast mode slows it).
+  Kindle). When it closes the next charge starts. Both the charge and the
+  window live on the rhythm timeline (cast mode slows them).
 
   **Flawless powers** — the old castable runes, now triggered directly by an
   all-perfect spell of that school:

@@ -71,7 +71,7 @@
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
       <li><b>Runes are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no glyph missed) earns a rune of its element (the lane most of its glyphs ride: fire, water, earth, air); defeating an enemy earns a <b>mend</b> rune (bosses 2). Press <b>Space</b> — time slows to a crawl and letters hide — the panel opens into the <b>spellbook</b>; type a name to cast: <i>vorkai</i> fire, <i>gamkai</i> water, <i>brykai</i> earth, <i>wynkai</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar), <i>pyrhal</i> mend (+30 HP), <i>dunfen</i> ward (always ready). A wrong letter fizzles (charge kept) — fizzle twice in a row and it <b>backfires</b> for 12 damage (a successful cast resets it); Space again cancels; the ring closes itself when a glyph reaches the line.</li>
       <li><b>Charged attacks:</b> every enemy charges a big attack — the ring over its head fills; in the last bar it counts down the beats. Cast <i>dunfen</i> then: the ward holds for 5 seconds and <b>counters</b> the charged attack back at the enemy. Missed glyphs still let the enemy hit you. The countdown is loud on purpose: a rising doom pulse each beat, the hit line turns red, the enemy's screen edge flashes.</li>
-      <li><b>Empowered:</b> you charge too — the ring over the caster fills with every glyph you hit (perfect counts double). Full, it rings a bright chime and opens 5 seconds (cyan aura, cyan screen edge) in which every bolt rune hits ×2.</li>
+      <li><b>Empowered:</b> you charge too — the ring over the caster fills over 20 beats, like the enemy's. Full, it rings a bright chime and opens 5 seconds (cyan aura, cyan screen edge) in which every bolt rune hits ×2.</li>
       <li><b>Flawless spells</b> (every glyph PERFECT) trigger the incantation's school power at once, no cast needed: storm Gale (glyphs and the charge pushed back a bar), stone Bulwark (next strike blocked), shadow Veil (next 6 glyphs take any key of the right finger), tide Stillwater (next 2 spells 20% slower), flame Kindle (next bolt ×2).</li>
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
@@ -399,7 +399,7 @@ function newGame() {
     // runes (§8): charges per rune, cast mode; the ward is known from the start (NEW until the spellbook is read)
     runes: {}, learned: new Set(['ward']), unseen: new Set(['ward']), cast: null, castFx: null, toast: null, runeFlash: null,
     fizzles: 0, // cast fizzles in a row: the second backfires
-    focus: 0, empower: null, empowerEnd: -9, // the caster's own charge (filled by hit glyphs) and the bolt-bonus window it opens
+    focusFrom: null, focusAt: null, empower: null, empowerEnd: -9, // the caster's own charge (a timer, like the enemy's) and the bolt-bonus window it opens
     guard: null, guardBreak: -9, foeCharge: -9, // the ward rune's counter-shield; when the enemy last loosed its charged attack
     // flawless-spell powers (boons) running now
     bulwark: null, bulwarkBreak: -9, veilLeft: 0, stillLeft: 0, stillFx: -9, kindle: null, galeFx: -9,
@@ -592,10 +592,6 @@ function grade(r, g, delta, raw) {
   const mult = 1 + Math.min(3, G.combo/10);
   G.score += Math.round((g === 'perfect' ? 100 : 50) * mult);
   G.hits[g]++;
-  if (!G.empower) { // the caster charges too: perfects fill it twice as fast as goods; full → the empowered window
-    G.focus += g === 'perfect' ? 1 : 0.5;
-    if (G.focus >= FOCUS_NEED) { G.focus = 0; G.empower = { at: now(), until: now() - OPT.inOff / 1000 + EMPOWER_S }; empowerSnd(); }
-  }
   G.deltas.push({ d: delta, raw, g }); if (G.deltas.length > 200) G.deltas.shift();
   showCalib();
   // tell the learner WHICH way and HOW FAR the timing was off (§6: mistakes are lessons)
@@ -685,8 +681,8 @@ function hurt(dmg, why) { // the caster takes damage: an enemy strike, or his ow
 // (names are prefix-free); a letter that fits no owned name fizzles and closes the mode (the charge
 // is kept); Space again cancels. Cast mode closes itself, free, when a glyph reaches its window.
 // Each name = a noun of the tongue + a verb (kai strike, hal mend, fen ward).
-// the caster's mirror of the enemy charge: FOCUS_NEED glyph-hits (perfect 1, good ½) open EMPOWER_S seconds in which bolts hit ×EMPOWER_X
-const FOCUS_NEED = 16, EMPOWER_S = 5, EMPOWER_X = 2, EMPOWER_C = '#7cf7ff'; // the caster's rim-light cyan
+// the caster's mirror of the enemy charge: every FOCUS_BEATS beats it fills and opens EMPOWER_S seconds in which bolts hit ×EMPOWER_X
+const FOCUS_BEATS = 20, EMPOWER_S = 5, EMPOWER_X = 2, EMPOWER_C = '#7cf7ff'; // the caster's rim-light cyan
 const BACKFIRE_DMG = 12; // a second fizzle in a row backfires on the caster (a successful cast clears the streak)
 const RUNE_DMG = 6, WEAK_X = 2, MEND_HP = 30, WARD_S = 5, COUNTER_DMG = 12, CHARGE_F = 0.6, WARN_BEATS = 4;
 const RUNES = {
@@ -758,6 +754,7 @@ function dilate(sh) {
   const E = G.enemy; if (E.chargeAt > tg) { E.chargeAt += sh; E.chargeFrom += sh; }
   if (G.guard && G.guard.until > tg) G.guard.until += sh;
   if (G.empower && G.empower.until > tg) G.empower.until += sh;
+  if (G.focusAt > tg) { G.focusAt += sh; G.focusFrom += sh; }
 }
 function castTick() { const t = now(); dilate((t - G.cast.t) * (1 - CAST_K)); G.cast.t = t; } // called every frame while casting
 function castMusicRate(slow) { // the soundtrack slows with the rhythm (tape-style pitch drop), then re-locks
@@ -934,7 +931,13 @@ function frame(ts) {
       }
     }
     if (G.guard && tg > G.guard.until) { G.guard = null; G.guardBreak = now(); } // the ward ran out
-    if (G.empower && tg > G.empower.until) { G.empower = null; G.empowerEnd = now(); } // the caster's window closed
+    // the caster's charge: a timer from the first spell; full → the empowered window; when it closes, the next charge starts
+    if (G.focusAt === null) { G.focusFrom = G.nextT0; G.focusAt = G.nextT0 + FOCUS_BEATS * segAt(G.nextT0).beat; }
+    else if (!G.empower && tg >= G.focusAt) { G.empower = { at: now(), until: tg + EMPOWER_S }; empowerSnd(); }
+    if (G.empower && tg > G.empower.until) {
+      G.empower = null; G.empowerEnd = now(); // the caster's window closed
+      G.focusFrom = tg; G.focusAt = tg + FOCUS_BEATS * segAt(tg).beat;
+    }
   }
   // effects: dt-driven motion for bolts, arrows, particles, shake
   if (musicSrc && G.over) musicStop();
@@ -1062,7 +1065,7 @@ function drawWizard(t, phase) { // long-haired caster, glyph-trimmed cloak strea
   }
   cx.restore();
 }
-// the caster's mirror of the enemy gauge: a ring over his head fills with hit glyphs; full, it opens the empowered
+// the caster's mirror of the enemy gauge: a ring over his head fills with time; full, it opens the empowered
 // window — a cyan aura, the seconds left, and the prompt to cast a bolt now (stage-local coordinates)
 function drawFocus(t) {
   if (G.over) return;
@@ -1071,7 +1074,9 @@ function drawFocus(t) {
     const g = cx.createRadialGradient(x, WIZ_Y - 60, 4, x, WIZ_Y - 60, 90); g.addColorStop(0, c + '55'); g.addColorStop(1, c + '00');
     cx.globalAlpha = .7 + .3 * Math.sin(t * 10); cx.fillStyle = g; cx.beginPath(); cx.ellipse(x, WIZ_Y - 60, 70, 90, 0, 0, 7); cx.fill(); cx.globalAlpha = 1;
   }
-  const k = emp ? Math.max(0, (emp.until - (t - OPT.inOff / 1000)) / EMPOWER_S) : G.focus / FOCUS_NEED;
+  if (G.focusAt === null) return;
+  const tg = t - OPT.inOff / 1000;
+  const k = emp ? Math.max(0, (emp.until - tg) / EMPOWER_S) : Math.max(0, Math.min(1, (tg - G.focusFrom) / (G.focusAt - G.focusFrom)));
   cx.fillStyle = 'rgba(10,4,24,.85)'; cx.beginPath(); cx.arc(x, hy, 15, 0, 7); cx.fill();
   cx.strokeStyle = '#1d3a4a'; cx.lineWidth = 3; cx.beginPath(); cx.arc(x, hy, 13, 0, 7); cx.stroke();
   cx.strokeStyle = c; cx.shadowColor = c; cx.shadowBlur = emp ? 16 : 5; cx.globalAlpha = emp ? 1 : .8;
