@@ -69,7 +69,7 @@
     <ul>
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
-      <li><b>Sigils are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no rune missed) earns a sigil of its element (the lane most of its runes ride: fire, water, earth, air); defeating an enemy earns a <b>mend</b> sigil (bosses 2). Press <b>Space</b> — time slows to a crawl and letters hide — the panel opens into the <b>spellbook</b>; type a name to cast: <i>vorkai</i> fire, <i>gamkai</i> water, <i>brykai</i> earth, <i>wynkai</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar), <i>pyrhal</i> mend (+30 HP), <i>dunfen</i> ward (always ready). A wrong letter fizzles (charge kept); Space again cancels; the ring closes itself when a rune reaches the line.</li>
+      <li><b>Sigils are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no rune missed) earns a sigil of its element (the lane most of its runes ride: fire, water, earth, air); defeating an enemy earns a <b>mend</b> sigil (bosses 2). Press <b>Space</b> — time slows to a crawl and letters hide — the panel opens into the <b>spellbook</b>; type a name to cast: <i>vorkai</i> fire, <i>gamkai</i> water, <i>brykai</i> earth, <i>wynkai</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar), <i>pyrhal</i> mend (+30 HP), <i>dunfen</i> ward (always ready). A wrong letter fizzles (charge kept) — fizzle twice in a row and it <b>backfires</b> for 12 damage (a successful cast resets it); Space again cancels; the ring closes itself when a rune reaches the line.</li>
       <li><b>Charged attacks:</b> every enemy charges a big attack — the ring over its head fills; in the last bar it counts down the beats. Cast <i>dunfen</i> then: the ward holds for a bar and <b>counters</b> the charged attack back at the enemy. Missed runes still let the enemy hit you.</li>
       <li><b>Flawless spells</b> (every rune PERFECT) trigger the incantation's school power at once, no cast needed: storm Gale (runes and the charge pushed back a bar), stone Bulwark (next strike blocked), shadow Veil (next 6 runes take any key of the right finger), tide Stillwater (next 2 spells 20% slower), flame Kindle (next bolt ×2).</li>
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
@@ -387,6 +387,7 @@ function newGame() {
     wizCast: null, wizHurt: -9, foeEnter: -9, foeDead: -9,
     // sigils (§8): charges per sigil, cast mode; the ward is known from the start (NEW until the spellbook is read)
     sigils: {}, learned: new Set(['ward']), unseen: new Set(['ward']), cast: null, castFx: null, toast: null, sigilFlash: null,
+    fizzles: 0, // cast fizzles in a row: the second backfires
     guard: null, guardBreak: -9, foeCharge: -9, // the ward sigil's counter-shield; when the enemy last loosed its charged attack
     // flawless-spell powers (boons) running now
     bulwark: null, bulwarkBreak: -9, veilLeft: 0, stillLeft: 0, stillFx: -9, kindle: null, galeFx: -9,
@@ -651,12 +652,15 @@ function applyStrike(s) { // an enemy strike reached the caster
     popup('-0 · BULWARK', BOONS.bulwark.color, WIZ_X + 30, WIZ_AY - 120);
     wardSnd(); return;
   }
-  G.hp -= s.dmg; G.redFlash = now();
+  hurt(s.dmg, s.why);
+}
+function hurt(dmg, why) { // the caster takes damage: an enemy strike, or his own backfire
+  G.hp -= dmg; G.redFlash = now();
   G.wizHurt = now();
-  G.shake = Math.max(G.shake, 3 + 6 * (s.dmg/DMG));
+  G.shake = Math.max(G.shake, 3 + 6 * (dmg/DMG));
   thudSnd();
-  burst(WIZ_X + 26, WIZ_AY - 56, PAL.bad, 8 + Math.round(10 * s.dmg/DMG), 140 + 120*s.dmg/DMG);
-  popup('-' + s.dmg + (s.why ? ' · ' + s.why : ''), PAL.bad, WIZ_X + 30, WIZ_AY - 120);
+  burst(WIZ_X + 26, WIZ_AY - 56, PAL.bad, 8 + Math.round(10 * dmg/DMG), 140 + 120*dmg/DMG);
+  popup('-' + dmg + (why ? ' · ' + why : ''), PAL.bad, WIZ_X + 30, WIZ_AY - 120);
   if (G.hp <= 0) { G.hp = 0; G.over = true; gameOverSnd(); }
 }
 
@@ -665,6 +669,7 @@ function applyStrike(s) { // an enemy strike reached the caster
 // (names are prefix-free); a letter that fits no owned name fizzles and closes the mode (the charge
 // is kept); Space again cancels. Cast mode closes itself, free, when a rune reaches its window.
 // Each name = a noun of the tongue + a verb (kai strike, hal mend, fen ward).
+const BACKFIRE_DMG = 12; // a second fizzle in a row backfires on the caster (a successful cast clears the streak)
 const SIGIL_DMG = 6, WEAK_X = 2, MEND_HP = 30, WARD_BEATS = 4, COUNTER_DMG = 12, CHARGE_F = 0.6, WARN_BEATS = 4;
 const SIGILS = {
   fire:  { name: 'vorkai', label: 'FIRE',  el: 'fire',  color: ELC.fire,  glyph: '✦', desc: `fire bolt · ${SIGIL_DMG} damage`,  earn: 'clean fire spells' },
@@ -745,16 +750,20 @@ function closeCast(text) { leaveCast(); G.castFx = { kind: 'close', at: now(), t
 function castLetter(k) {
   const buf = G.cast.buf + k;
   const fits = Object.keys(SIGILS).filter(p => owns(p) && SIGILS[p].name.startsWith(buf));
-  if (!fits.length) { // fizzle: the mode closes, the charge is kept
+  if (!fits.length) { // fizzle: the mode closes, the charge is kept; twice in a row and the magic backfires
     const known = Object.keys(SIGILS).find(p => SIGILS[p].name.startsWith(buf));
     leaveCast();
-    G.castFx = { kind: 'fizzle', at: now(), buf, text: known ? `no ${SIGILS[known].label} charges` : `"${buf}" is no sigil` };
-    fizzleSnd(); return;
+    const backfire = ++G.fizzles >= 2;
+    G.castFx = { kind: 'fizzle', at: now(), buf, backfire, text: known ? `no ${SIGILS[known].label} charges` : `"${buf}" is no sigil` };
+    fizzleSnd();
+    if (backfire) { G.fizzles = 0; hurt(BACKFIRE_DMG, 'BACKFIRE'); burst(CAST_X, CAST_AY, PAL.pink, 24, 200, 'fire'); }
+    return;
   }
   G.cast.buf = buf;
   const done = fits.find(p => SIGILS[p].name === buf);
   if (!done) { tickSnd(buf.length); return; }
   if (done !== 'ward') G.sigils[done]--;
+  G.fizzles = 0;
   leaveCast();
   G.castFx = { kind: 'cast', key: done, at: now() };
   castSigil(done);
@@ -1754,8 +1763,9 @@ function drawSigils(t) {
         cx.beginPath(); cx.moveTo(R.x + Math.cos(a) * d, R.y + Math.sin(a) * d); cx.lineTo(R.x + Math.cos(a + 0.18) * (d + 10), R.y + Math.sin(a + 0.18) * (d + 10)); cx.stroke(); }
       cx.fillStyle = 'rgba(60,40,80,.5)'; cx.beginPath(); cx.arc(R.x, R.y - 20 * k, 20 + 40 * k, 0, 7); cx.fill();
       cx.globalAlpha = Math.min(1, (1.2 - age) / 0.3); cx.textAlign = 'center';
-      cx.fillStyle = PAL.bad; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText('FIZZLE', R.x, R.y - 6);
-      cx.fillStyle = PAL.text; cx.font = '11px ui-monospace, Menlo, monospace'; cx.fillText(F.text + ' · charge kept', R.x, R.y + 14);
+      cx.fillStyle = PAL.bad; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(F.backfire ? 'BACKFIRE' : 'FIZZLE', R.x, R.y - 6);
+      cx.fillStyle = PAL.text; cx.font = '11px ui-monospace, Menlo, monospace';
+      cx.fillText(F.text + (F.backfire ? ` · second fizzle in a row: -${BACKFIRE_DMG} HP` : ' · charge kept · fizzle again and it backfires'), R.x, R.y + 14);
       cx.globalAlpha = 1; cx.lineWidth = 1;
     } else if (F.kind === 'close' && age < 1.3) {
       cx.globalAlpha = Math.min(1, (1.3 - age) / 0.4); cx.textAlign = 'center';

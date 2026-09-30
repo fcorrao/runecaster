@@ -361,6 +361,11 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   tongue + a verb (`kai` strike, `hal` mend, `fen` ward), prefix-free so it
   fires on the last letter. A letter that fits no owned name **fizzles** (mode
   closes, charge kept); Space again cancels. Max 3 charges each.
+  **Decided (playtest): fizzling has a cost.** Two fizzles in a row
+  **backfire** — 12 damage to the caster (straight to HP; the ward doesn't
+  stop your own magic). A successful cast clears the streak; cancelling or the
+  ring closing itself neither counts nor clears. The first fizzle warns
+  "fizzle again and it backfires".
 
   | sigil | name | effect |
   |---|---|---|
