@@ -69,7 +69,9 @@
     <ul>
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
-      <li><b>Sigils (thumb):</b> defeating an enemy earns its school's sigil (bosses give 2); three flawless spells earn one too. Press <b>Space</b> and time slows to a crawl (the same slow speed at any tempo; letters are hidden so it can't be used to read ahead), the panel between your hands opens into a <b>spellbook</b> showing what every sigil does (new ones are tagged NEW until you've read them) — then type the sigil's name — <i>wynkai</i> Gale (push the runes back a bar), <i>dunfen</i> Bulwark (block the next strike), <i>moxquo</i> Veil (next 6 runes take any key of the right finger), <i>gamsel</i> Stillwater (next 2 spells 20% slower), <i>vorlum</i> Kindle (next spell at double power). A wrong letter fizzles (charge kept); Space again cancels; the ring can open any time, and closes itself only when a rune reaches the line (you still have the late half of its window to hit it). The runes keep creeping while you cast — that distance is the price.</li>
+      <li><b>Sigils are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no rune missed) earns a sigil of its element (the lane most of its runes ride: fire, water, earth, air); defeating an enemy earns a <b>mend</b> sigil (bosses 2). Press <b>Space</b> — time slows to a crawl and letters hide — the panel opens into the <b>spellbook</b>; type a name to cast: <i>vorkai</i> fire, <i>gamkai</i> water, <i>brykai</i> earth, <i>wynkai</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar), <i>pyrhal</i> mend (+30 HP), <i>dunfen</i> ward (always ready). A wrong letter fizzles (charge kept); Space again cancels; the ring closes itself when a rune reaches the line.</li>
+      <li><b>Charged attacks:</b> every enemy charges a big attack — the ring over its head fills; in the last bar it counts down the beats. Cast <i>dunfen</i> then: the ward holds for a bar and <b>counters</b> the charged attack back at the enemy. Missed runes still let the enemy hit you.</li>
+      <li><b>Flawless spells</b> (every rune PERFECT) trigger the incantation's school power at once, no cast needed: storm Gale (runes and the charge pushed back a bar), stone Bulwark (next strike blocked), shadow Veil (next 6 runes take any key of the right finger), tide Stillwater (next 2 spells 20% slower), flame Kindle (next bolt ×2).</li>
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
       <li><b>Calibration:</b> if the click doesn't land when the letter crosses the line, slide <i>audio</i>. If your presses sit consistently early/late on the error bar, press "set input from last 20 hits" (or slide <i>input</i>). Both are saved in this browser.</li>
@@ -154,7 +156,7 @@ const GROUND_Y = 178, STAGE_TOP = HIT_Y - GROUND_Y, STAGE_H = H - STAGE_TOP;
 const WIZ_X = 96, WIZ_Y = GROUND_Y, ARC_X = 1030, ARC_Y = GROUND_Y, CAST_X = WIZ_X + 64, CAST_Y = WIZ_Y - 88;
 const WIZ_AY = STAGE_TOP + WIZ_Y, ARC_AY = STAGE_TOP + ARC_Y, CAST_AY = STAGE_TOP + CAST_Y; // absolute anchors (CAST = the caster's spell hand)
 const FLOOR_Y = HIT_Y + 96; // the duel line on the floor: under the keycap row, above the error meter
-const PW = 0.055, GW = 0.14, DMG = 18, REST = 1.2, HEAL = 2;
+const PW = 0.055, GW = 0.14, DMG = 18, REST = 1.2;
 const LAPSE_GRACE = 0.05; // frame lapse waits this long past the window so a queued in-window keypress is graded by its own timestamp first
 const EARLY_SHOW = 0.6;   // correct key up to this far before the window says EARLY (with ms); earlier presses are strays
 const BOLT_F = 0.38, ARROW_F = 0.45; // casting feel: bolt flight, enemy-arrow flight
@@ -172,6 +174,8 @@ const SCHOOLS = {
   tide:   { gam:'tide', cyl:'frost' },
   shadow: { mox:'shadow', jex:'hex' },
 };
+// §4 elemental weakness: each school takes double damage from one element's bolts
+const SCHOOL_WEAK = { flame: 'water', storm: 'earth', stone: 'air', tide: 'fire', shadow: 'fire' };
 const plural = g => g + (/[sx]$/.test(g) ? 'es' : 's');
 const SUF2 = { a: g => 'great ' + g, en: plural, is: g => 'of ' + g };                                    // tier 2+
 const SUF3 = { eth: g => 'ancient ' + g, ara: g => 'bright ' + g, ondo: g => 'endless ' + g, ium: g => 'circle of ' + g }; // tier 3+
@@ -231,10 +235,11 @@ function chapterAt(ci) { // past the last chapter the Archmage loop repeats, 4 b
 }
 // archers: steady volleys (learn accuracy) · cavalry: the charge accelerates every spell (speed)
 // · boss: incantations follow rhythm patterns, off-beats included (rhythm) — §5 enemy structures
+// dmg = a fully missed spell's strike; charge = beats to fill its charged attack, cdmg = what that attack deals
 const ENEMIES = {
-  archer:  { label: 'Archer',  hp: ci => 12 + 4 * ci, dmg: 18, color: '#ff3d6e' },
-  cavalry: { label: 'Cavalry', hp: ci => 18 + 4 * ci, dmg: 18, color: '#ff8a3d', ramp: 1.04 },
-  boss:    { label: 'Boss',    hp: ci => 28 + 6 * ci, dmg: 24, color: '#c77dff' },
+  archer:  { label: 'Archer',  hp: ci => 12 + 4 * ci, dmg: 18, charge: 24, cdmg: 30, color: '#ff3d6e' },
+  cavalry: { label: 'Cavalry', hp: ci => 18 + 4 * ci, dmg: 18, charge: 20, cdmg: 30, color: '#ff8a3d', ramp: 1.04 },
+  boss:    { label: 'Boss',    hp: ci => 28 + 6 * ci, dmg: 24, charge: 16, cdmg: 40, color: '#c77dff' },
 };
 // boss bars: beat positions inside one 4-beat bar
 const BOSS_BARS = [
@@ -341,10 +346,12 @@ function sigilSnd() { if (!AC || sfx('sigil_earn')) return; const t = AC.current
 function openSnd() { if (!AC) return; const t = AC.currentTime; beep(t, 330, 0.25, 'sine', 0.08); beep(t + 0.05, 495, 0.25, 'sine', 0.06); } // cast mode: time slows (synthesized: the sampled version didn't read as slowing)
 function resumeSnd() { if (!AC || sfx('speed_up', .8)) return; const t = AC.currentTime; beep(t, 495, 0.18, 'sine', 0.06); beep(t + 0.05, 660, 0.18, 'sine', 0.05); } // time resumes
 function tickSnd(n) { if (AC) beep(AC.currentTime, 600 + n * 90, 0.05, 'triangle', 0.08); } // a letter of the name lands
-function castSigilSnd(key) { // the sigil fires
-  if (!AC || sfx('sigil_cast')) return; const t = AC.currentTime, wave = CAST_TIMBRE[{ storm: 'air', stone: 'earth', shadow: 'air', tide: 'water', flame: 'fire' }[POWERS[key].school]];
-  [1, 1.26, 1.5, 2].forEach((m, i) => beep(t + i * 0.04, 262 * m, 0.6, wave, 0.07));
+function castSigilSnd() { // a mend/ward sigil fires, or a flawless spell's power wakes
+  if (!AC || sfx('sigil_cast')) return; const t = AC.currentTime;
+  [1, 1.26, 1.5, 2].forEach((m, i) => beep(t + i * 0.04, 262 * m, 0.6, 'triangle', 0.07));
 }
+function warnSnd(n) { if (AC) { const t = AC.currentTime; beep(t, 150 + 40 * (4 - n), 0.14, 'sawtooth', 0.07); } } // charged-attack countdown, one growl per beat
+function chargeSnd() { if (!AC) return; whooshSnd(); const t = AC.currentTime; beep(t, 55, 0.35, 'sawtooth', 0.12); } // the charged attack is loosed
 function whooshSnd() { // enemy strike loosed
   if (!AC || sfx('arrow_loose', .8)) return; const t = AC.currentTime;
   const len = 0.22, buf = AC.createBuffer(1, AC.sampleRate*len, AC.sampleRate), d = buf.getChannelData(0);
@@ -357,7 +364,7 @@ function thudSnd() { // enemy strike hitting you
   if (!AC || sfx('hit_player')) return; const t = AC.currentTime;
   beep(t, 70, 0.2, 'sine', 0.3); beep(t, 210, 0.09, 'square', 0.08);
 }
-function wardSnd() { if (!sfx('ward_block')) thudSnd(); }       // Bulwark takes a strike
+function wardSnd() { if (!sfx('ward_block')) thudSnd(); }       // a ward or Bulwark takes a strike
 function defeatSnd() { sfx('defeat'); }                          // enemy falls (the victory burst carries it visually if missing)
 function gameOverSnd() { sfx('game_over'); }
 function chapterSnd() { sfx('chapter', .8); }
@@ -378,9 +385,11 @@ function newGame() {
     shake: 0, foeFlash: 0, lastT: 0,
     // stage sprite state (all timestamp-driven poses, no animation loop needed)
     wizCast: null, wizHurt: -9, foeEnter: -9, foeDead: -9,
-    // sigils (§8): charges per power, the flawless meter, cast mode, and live effects
-    sigils: {}, learned: new Set(), unseen: new Set(), meter: 0, cast: null, castFx: null, toast: null, sigilFlash: null,
-    ward: null, wardBreak: -9, veilLeft: 0, stillLeft: 0, stillFx: -9, kindle: null, galeFx: -9,
+    // sigils (§8): charges per sigil, cast mode; the ward is known from the start (NEW until the spellbook is read)
+    sigils: {}, learned: new Set(['ward']), unseen: new Set(['ward']), cast: null, castFx: null, toast: null, sigilFlash: null,
+    guard: null, guardBreak: -9, foeCharge: -9, // the ward sigil's counter-shield; when the enemy last loosed its charged attack
+    // flawless-spell powers (boons) running now
+    bulwark: null, bulwarkBreak: -9, veilLeft: 0, stillLeft: 0, stillFx: -9, kindle: null, galeFx: -9,
   };
   startEncounter();
 }
@@ -390,14 +399,15 @@ function startEncounter() {
   const schools = Object.keys(SCHOOLS).filter(s => s !== G.lastSchool);
   const school = kind === 'boss' ? ch.bossSchool : schools[Math.floor(Math.random() * schools.length)];
   G.lastSchool = school;
-  G.enemy = { kind, name: kind === 'boss' ? ch.boss : E.label, hp: E.hp(G.ci), max: E.hp(G.ci), dmg: E.dmg, color: E.color, school };
+  G.enemy = { kind, name: kind === 'boss' ? ch.boss : E.label, hp: E.hp(G.ci), max: E.hp(G.ci), dmg: E.dmg, color: E.color, school,
+    weak: SCHOOL_WEAK[school], chargeBeats: E.charge, cdmg: E.cdmg, chargeFrom: null, chargeAt: null, warned: 0 }; // charge starts with its first spell (frame)
   G.bpm = Math.min(200, G.baseBpm + ch.bpm); // cavalry ramps reset with every new encounter
   const newCh = G.ei === 0;
   if (newCh) chapterSnd();
   G.banner = {
     title: newCh ? `CHAPTER ${G.ci + 1} — ${ch.name.toUpperCase()}` : G.enemy.name.toUpperCase(),
     sub: newCh ? `${G.enemy.name} · ${['', 'two-word spells', 'longer words', 'three-word invocations', 'numbers join the runes', 'symbols join the runes', 'the full tongue'][Math.min(6, ch.tier)]}`
-               : `${{ archer: 'steady volleys', cavalry: 'the charge speeds up every spell', boss: 'follow its rhythm' }[kind]} · school of ${school}`,
+               : `${{ archer: 'steady volleys', cavalry: 'the charge speeds up every spell', boss: 'follow its rhythm' }[kind]} · school of ${school} · weak to ${SCHOOL_WEAK[school]}`,
     until: now() + 2.2,
   };
 }
@@ -502,7 +512,7 @@ function makeSpell(t0) {
     else runes.push({ ch: c, lane: KEY2LANE[c], time, status: 'pending', hitAt: 0, wordStart: i > 0 && chars[i - 1] === ' ' });
   });
   const last = runes[runes.length-1];
-  const spell = { word: inc.text, gloss: inc.gloss, runes, rests, t0, end: last.time, done: false, fizzled: false, power: 1,
+  const spell = { word: inc.text, gloss: inc.gloss, school: foe.school, runes, rests, t0, end: last.time, done: false, fizzled: false,
     arrow: { from: t0 - beat, to: last.time + GW + 0.12 }, still };
   G.spells.push(spell);
   markVeil();
@@ -573,10 +583,6 @@ function grade(r, g, delta, raw) {
   showCalib();
   // tell the learner WHICH way and HOW FAR the timing was off (§6: mistakes are lessons)
   judge(r.lane, g === 'perfect' ? 'PERFECT' : 'GOOD', fmtMs(delta), g === 'perfect' ? PAL.gold : PAL.good);
-  if (g === 'perfect' && G.hp < 100) { // precision heals
-    G.hp = Math.min(100, G.hp + HEAL);
-    popup('+' + HEAL + ' HP · PERFECT', PAL.good, WIZ_X + 30, WIZ_AY - 120);
-  }
   G.fx.push({ kind:'ring', color: g==='perfect' ? PAL.gold : PAL.good, t0: now(), dur: .25, x: LNX[r.lane], y: HIT_Y });
   burst(LNX[r.lane], HIT_Y, g === 'perfect' ? PAL.gold : PAL.good, g === 'perfect' ? 12 : 5, 150);
   hitSnd(g);
@@ -587,58 +593,62 @@ function resolveCast(sp) {
   for (const r of sp.runes) { if (r.status === 'perfect') p++; else if (r.status === 'good') g++; }
   const elCount = {};
   for (const r of sp.runes) { const e = LANE[r.lane].el; elCount[e] = (elCount[e]||0)+1; }
-  const el = Object.entries(elCount).sort((a,b)=>b[1]-a[1])[0][0];
-  sp.element = el;
-  sp.power = OPT.pen === 'strict' ? 1 : (sp.runes.length ? (p + 0.6*g) / sp.runes.length : 1);
-  if (G.kindle && sp.power > 0) { sp.power *= 2; sp.kindled = true; G.kindle = null; } // Kindle: this spell at double power
-  if (p === sp.runes.length) { // flawless: fills the sigil meter; a full meter grants the current school's sigil
-    G.meter += 1 / 3;
-    if (G.meter > 0.999) { G.meter = 0; grantSigil(powerOfSchool(G.enemy.school), 1, 'three flawless spells'); }
-  }
-  // Damage model (playtest call): only lapsed runes draw the enemy's arrow —
-  // goods cost spell power, never health; perfects heal. Partial lapses
-  // counter for the missed share of DMG, proportional to how many lapsed.
+  const el = Object.entries(elCount).sort((a,b)=>b[1]-a[1])[0][0]; // the spell's element: the lane most of its runes ride
+  // Typing no longer attacks (playtest: sigils are the fun): a clean spell — no rune missed — becomes a sigil of
+  // its element; a flawless one (all perfect) also wakes its school's power at once. Each missed rune still draws
+  // its share of the enemy's strike.
   const missed = sp.runes.length - p - g;
-  const counter = Math.round(G.enemy.dmg * missed / (sp.runes.length || 1));
-  G.wizCast = { el, until: now() + 0.5 }; // caster raises his staff
-  if (sp.power <= 0) {
+  if (!missed) {
+    G.fx.push({ kind:'ring', color: ELC[el], t0: now(), dur: .6, x: W/2, y: HIT_Y, big: 1 });
+    grantSigil(el, 1);
+    if (p === sp.runes.length) wakeBoon(BOON_OF[sp.school]);
+  } else if (missed === sp.runes.length) {
     popup('FIZZLE', PAL.bad, W/2, HIT_Y - 60);
     fizzleSnd();
     G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: G.enemy.dmg, why: 'ALL RUNES LAPSED' });
     whooshSnd();
   } else {
-    G.bolts.push({ word: sp.word, el, power: sp.power, t0: now(), at: now() + BOLT_F,
-      x0: CAST_X, y0: CAST_AY, x1: ARC_X, y1: ARC_AY - 44 });
-    G.fx.push({ kind:'ring', color: ELC[el], t0: now(), dur: .45 + .35*sp.power, x: W/2, y: HIT_Y, big: sp.power });
-    popup((el.toUpperCase()) + (sp.kindled ? ' — KINDLED ×2' : sp.power > .99 ? ' — FULL POWER' : ` — ${Math.round(sp.power*100)}%`), ELC[el], W/2, HIT_Y - 85);
-    castSnd(el, sp.power);
-    if (counter > 0) G.strikes.push({ t0: now() + BOLT_F, at: now() + BOLT_F + ARROW_F,
-      dmg: counter, why: missed + (missed > 1 ? ' RUNES MISSED' : ' RUNE MISSED') });
+    popup(`${missed} MISSED · NO SIGIL`, PAL.bad, W/2, HIT_Y - 85);
+    G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: Math.round(G.enemy.dmg * missed / sp.runes.length),
+      why: missed + (missed > 1 ? ' RUNES MISSED' : ' RUNE MISSED') });
+    whooshSnd();
   }
 }
-function applyImpact(b) { // spell bolt reached the enemy
+function applyImpact(b) { // a bolt reached the enemy
   if (G.enemy.hp <= 0) return; // already falling: the next enemy isn't on stage yet
-  const dmg = Math.round(8 * b.power); // hp/8 = full-power casts to clear an encounter
-  G.enemy.hp -= dmg;
+  G.enemy.hp -= b.dmg;
   impactSnd(b.power);
   G.foeFlash = now();
-  burst(ARC_X, ARC_AY - 44, ELC[b.el], 14 + Math.round(22*b.power), 180 + 240*b.power, b.el);
+  burst(ARC_X, ARC_AY - 44, b.color, 14 + Math.round(22*b.power), 180 + 240*b.power, b.el || 'fire');
+  popup('-' + b.dmg + (b.tag ? ' · ' + b.tag : ''), b.color, ARC_X - 20, ARC_AY - 170);
   if (G.enemy.hp <= 0) { // encounter cleared: the enemy falls, the run advances (§7)
     popup(G.enemy.name.toUpperCase() + ' DEFEATED', PAL.gold, W/2, 150);
     defeatSnd();
     burst(ARC_X, ARC_AY - 40, PAL.gold, 60, 340);
     G.shake = 12;
     G.foeDead = now(); G.foeEnter = now() + 0.9;
-    G.strikes = []; // a fallen enemy's counters never land
-    grantSigil(powerOfSchool(G.enemy.school), G.enemy.kind === 'boss' ? 2 : 1, G.enemy.name + ' defeated');
+    G.strikes = []; // a fallen enemy's strikes never land
+    grantSigil('mend', G.enemy.kind === 'boss' ? 2 : 1, G.enemy.name + ' defeated');
     nextEncounter();
   }
 }
-function applyStrike(s) { // enemy arrow reached the caster — the counter's shortfall lands
-  if (G.ward) { // Bulwark takes the hit
-    G.ward = null; G.wardBreak = now();
-    burst(WIZ_X + 52, WIZ_AY - 56, POWERS.bulwark.color, 26, 220, 'earth');
-    popup('-0 · WARDED', POWERS.bulwark.color, WIZ_X + 30, WIZ_AY - 120);
+function applyStrike(s) { // an enemy strike reached the caster
+  const tg = now() - OPT.inOff / 1000;
+  if (G.guard && tg <= G.guard.until) { // the ward holds for its bar: blocks everything, turns a charged attack back
+    burst(WIZ_X + 52, WIZ_AY - 56, SIGILS.ward.color, 26, 220, 'earth');
+    wardSnd();
+    if (!s.charged) { popup('-0 · WARDED', SIGILS.ward.color, WIZ_X + 30, WIZ_AY - 120); return; }
+    G.guard = null; G.guardBreak = now();
+    popup('COUNTERED!', SIGILS.ward.color, WIZ_X + 40, WIZ_AY - 120);
+    G.shake = Math.max(G.shake, 6);
+    G.bolts.push({ word: 'COUNTER', el: null, color: SIGILS.ward.color, dmg: COUNTER_DMG, power: 1.3, tag: 'COUNTER',
+      t0: now(), at: now() + BOLT_F, x0: WIZ_X + 52, y0: WIZ_AY - 56, x1: ARC_X, y1: ARC_AY - 44 });
+    return;
+  }
+  if (G.bulwark) { // Bulwark takes the hit
+    G.bulwark = null; G.bulwarkBreak = now();
+    burst(WIZ_X + 52, WIZ_AY - 56, BOONS.bulwark.color, 26, 220, 'earth');
+    popup('-0 · BULWARK', BOONS.bulwark.color, WIZ_X + 30, WIZ_AY - 120);
     wardSnd(); return;
   }
   G.hp -= s.dmg; G.redFlash = now();
@@ -650,36 +660,55 @@ function applyStrike(s) { // enemy arrow reached the caster — the counter's sh
   if (G.hp <= 0) { G.hp = 0; G.over = true; gameOverSnd(); }
 }
 
-// ================= sigils (§8 powers): earned from enemies, cast by typing their names =================
+// ================= sigils (§8): the way you fight — earned by typing, cast by typing their names =================
 // Space opens cast mode; typing an owned sigil's name casts it the moment the name is complete
 // (names are prefix-free); a letter that fits no owned name fizzles and closes the mode (the charge
 // is kept); Space again cancels. Cast mode closes itself, free, when a rune reaches its window.
-// Each name = the school's noun + a verb of the tongue.
-const POWERS = {
-  gale:    { name: 'wynkai', label: 'GALE',       school: 'storm',  color: '#b36bff', glyph: '≋', desc: 'blows every incoming rune a bar further away' },
-  bulwark: { name: 'dunfen', label: 'BULWARK',    school: 'stone',  color: '#3cf0a0', glyph: '⬢', desc: 'a shield blocks the next enemy strike' },
-  veil:    { name: 'moxquo', label: 'VEIL',       school: 'shadow', color: '#e85cff', glyph: '◐', desc: 'next 6 runes: any key of the right finger' },
-  still:   { name: 'gamsel', label: 'STILLWATER', school: 'tide',   color: '#38c8ff', glyph: '≈', desc: 'next 2 spells play 20% slower' },
-  kindle:  { name: 'vorlum', label: 'KINDLE',     school: 'flame',  color: '#ff6a3d', glyph: '✦', desc: 'next spell hits at double power' },
+// Each name = a noun of the tongue + a verb (kai strike, hal mend, fen ward).
+const SIGIL_DMG = 6, WEAK_X = 2, MEND_HP = 30, WARD_BEATS = 4, COUNTER_DMG = 12, CHARGE_F = 0.6, WARN_BEATS = 4;
+const SIGILS = {
+  fire:  { name: 'vorkai', label: 'FIRE',  el: 'fire',  color: ELC.fire,  glyph: '✦', desc: `fire bolt · ${SIGIL_DMG} damage`,  earn: 'clean fire spells' },
+  water: { name: 'gamkai', label: 'WATER', el: 'water', color: ELC.water, glyph: '≈', desc: `water bolt · ${SIGIL_DMG} damage`, earn: 'clean water spells' },
+  earth: { name: 'brykai', label: 'EARTH', el: 'earth', color: ELC.earth, glyph: '▲', desc: `earth bolt · ${SIGIL_DMG} damage`, earn: 'clean earth spells' },
+  air:   { name: 'wynkai', label: 'AIR',   el: 'air',   color: ELC.air,   glyph: '≋', desc: `air bolt · ${SIGIL_DMG} damage`,   earn: 'clean air spells' },
+  mend:  { name: 'pyrhal', label: 'MEND',  color: '#ff9ad5', glyph: '✚', desc: `heals ${MEND_HP} HP`, earn: 'defeat enemies' },
+  ward:  { name: 'dunfen', label: 'WARD',  color: PAL.gold,  glyph: '◎', desc: 'blocks for a bar · counters a charged attack', earn: 'always ready' },
 };
-const SIGIL_MAX = 3, VEIL_RUNES = 6, STILL_SPELLS = 2, STILL_RATE = 0.8;
+const SIGIL_MAX = 3;
+const owns = key => key === 'ward' || (G.sigils[key] || 0) > 0; // the ward is innate: the charged attack must always be answerable
+// flawless spells (every rune perfect) wake their school's power directly — the old castable sigils
+const BOONS = {
+  gale:    { label: 'GALE',       school: 'storm',  color: '#b36bff', glyph: '≋', desc: 'runes and the enemy charge pushed back a bar' },
+  bulwark: { label: 'BULWARK',    school: 'stone',  color: '#3cf0a0', glyph: '⬢', desc: 'the next enemy strike is blocked' },
+  veil:    { label: 'VEIL',       school: 'shadow', color: '#e85cff', glyph: '◐', desc: 'next 6 runes: any key of the right finger' },
+  still:   { label: 'STILLWATER', school: 'tide',   color: '#38c8ff', glyph: '≈', desc: 'next 2 spells play 20% slower' },
+  kindle:  { label: 'KINDLE',     school: 'flame',  color: '#ff6a3d', glyph: '✦', desc: 'next bolt hits ×2' },
+};
+const BOON_OF = Object.fromEntries(Object.entries(BOONS).map(([k, b]) => [b.school, k]));
+const VEIL_RUNES = 6, STILL_SPELLS = 2, STILL_RATE = 0.8;
 // cast mode slows the whole rhythm to a fixed crawl — runes, clicks and music together, so everything is
 // still on the beat when it closes. The runes keep creeping (the cost of casting) with their letters hidden.
 const CAST_PXS = 36, CAST_K = CAST_PXS / PXS; // field speed while casting, px/s — the same at any tempo
-const powerOfSchool = school => Object.keys(POWERS).find(k => POWERS[k].school === school);
 function grantSigil(key, n, why) {
-  const had = G.sigils[key] || 0, got = Math.min(SIGIL_MAX, had + n) - had;
-  if (got <= 0) return;
+  const S = SIGILS[key], had = G.sigils[key] || 0, got = Math.min(SIGIL_MAX, had + n) - had;
+  if (got <= 0) { popup(`${S.label} FULL`, PAL.dim, W/2, HIT_Y - 85); return; }
   G.sigils[key] = had + got;
-  const P = POWERS[key], first = !G.learned.has(key);
+  const first = !G.learned.has(key);
   G.learned.add(key);
-  if (first) G.unseen.add(key); // flagged NEW until you read it in the spellbook (cast mode)
-  G.toast = { key, text: `+${got} ${P.label}`, sub: first ? 'new sigil — press Space to read it and cast' : why, at: now(), until: now() + (first ? 3.4 : 2) };
+  if (first) { // flagged NEW until you read it in the spellbook (cast mode); only the first of each gets a toast
+    G.unseen.add(key);
+    G.toast = { key, text: `+${got} ${S.label} SIGIL`, sub: 'new sigil — press Space to read it and cast', at: now(), until: now() + 3.4 };
+  }
+  popup(`+${got} ${S.label} SIGIL` + (why ? ' · ' + why : ''), S.color, W/2, HIT_Y - 85);
   G.sigilFlash = { key, at: now() };
   sigilSnd();
 }
+function wakeBoon(key) {
+  BOON_EFFECT[key]();
+  popup(`FLAWLESS · ${BOONS[key].label}`, BOONS[key].color, W/2, HIT_Y - 112);
+  castSigilSnd();
+}
 function openCast() {
-  if (!Object.keys(POWERS).some(k => G.sigils[k] > 0)) { G.castFx = { kind: 'close', at: now(), text: 'no sigils yet — defeat enemies to earn them' }; return; }
   const tg = now() - OPT.inOff / 1000;
   if (G.spells.some(s => !s.done && s.runes.some(r => r.status === 'pending' && tg >= r.time))) { G.castFx = { kind: 'close', at: now(), text: 'a rune is on the line — hit it first' }; return; }
   G.cast = { buf: '', at: now(), t: now() };
@@ -701,6 +730,8 @@ function dilate(sh) {
   for (const sg of G.segs) if (sg.t0 > tg) sg.t0 += sh;
   if (curPast) { cur.t0 += sh; while (cur.t0 > tg) cur.t0 -= cur.beat; }
   G.nextT0 += sh; G.nextBeat += sh;
+  const E = G.enemy; if (E.chargeAt > tg) { E.chargeAt += sh; E.chargeFrom += sh; }
+  if (G.guard && G.guard.until > tg) G.guard.until += sh;
 }
 function castTick() { const t = now(); dilate((t - G.cast.t) * (1 - CAST_K)); G.cast.t = t; } // called every frame while casting
 function castMusicRate(slow) { // the soundtrack slows with the rhythm (tape-style pitch drop), then re-locks
@@ -713,21 +744,41 @@ function leaveCast() { castTick(); G.cast = null; castMusicRate(false); G.unseen
 function closeCast(text) { leaveCast(); G.castFx = { kind: 'close', at: now(), text }; }
 function castLetter(k) {
   const buf = G.cast.buf + k;
-  const owned = Object.keys(POWERS).filter(p => G.sigils[p] > 0);
-  const fits = owned.filter(p => POWERS[p].name.startsWith(buf));
+  const fits = Object.keys(SIGILS).filter(p => owns(p) && SIGILS[p].name.startsWith(buf));
   if (!fits.length) { // fizzle: the mode closes, the charge is kept
-    const known = Object.keys(POWERS).find(p => POWERS[p].name.startsWith(buf));
+    const known = Object.keys(SIGILS).find(p => SIGILS[p].name.startsWith(buf));
     leaveCast();
-    G.castFx = { kind: 'fizzle', at: now(), buf, text: known ? `no ${POWERS[known].label} charges` : `"${buf}" is no sigil` };
+    G.castFx = { kind: 'fizzle', at: now(), buf, text: known ? `no ${SIGILS[known].label} charges` : `"${buf}" is no sigil` };
     fizzleSnd(); return;
   }
   G.cast.buf = buf;
-  const done = fits.find(p => POWERS[p].name === buf);
+  const done = fits.find(p => SIGILS[p].name === buf);
   if (!done) { tickSnd(buf.length); return; }
-  G.sigils[done]--; leaveCast();
+  if (done !== 'ward') G.sigils[done]--;
+  leaveCast();
   G.castFx = { kind: 'cast', key: done, at: now() };
-  SIGIL_EFFECT[done]();
-  castSigilSnd(done);
+  castSigil(done);
+}
+function castSigil(key) {
+  const S = SIGILS[key];
+  if (S.el) { // an elemental bolt: the enemy's weakness doubles it, Kindle doubles it again
+    const weak = G.enemy.weak === S.el, kindled = !!G.kindle;
+    const dmg = SIGIL_DMG * (weak ? WEAK_X : 1) * (kindled ? 2 : 1);
+    if (kindled) G.kindle = null;
+    G.wizCast = { el: S.el, until: now() + 0.5 }; // caster raises his staff
+    G.bolts.push({ word: S.name, el: S.el, color: S.color, dmg, power: Math.min(1.5, dmg / 12),
+      tag: [weak && 'WEAK', kindled && 'KINDLED'].filter(Boolean).join(' · '),
+      t0: now(), at: now() + BOLT_F, x0: CAST_X, y0: CAST_AY, x1: ARC_X, y1: ARC_AY - 44 });
+    castSnd(S.el, 1);
+  } else if (key === 'mend') {
+    const got = Math.min(MEND_HP, 100 - G.hp); G.hp += got;
+    popup(`+${got} HP · MEND`, S.color, WIZ_X + 30, WIZ_AY - 120);
+    burst(WIZ_X + 20, WIZ_AY - 60, S.color, 30, 160, 'water');
+    castSigilSnd();
+  } else { // ward: one bar, measured from now, plus the flight of a charged attack loosed at its end
+    G.guard = { at: now(), until: now() - OPT.inOff / 1000 + WARD_BEATS * segAt(now()).beat + CHARGE_F };
+    castSigilSnd();
+  }
 }
 function markVeil() { // Veil covers the next runes in time order, including spells scheduled after the cast
   if (G.veilLeft <= 0) return;
@@ -740,7 +791,7 @@ function rescheduleMusicRates() { // the tempo map changed under already-schedul
   pr.cancelScheduledValues(a); pr.setValueAtTime(musicRate(segAt(a).beat), a);
   for (const s of G.segs) if (s.t0 + d > a) pr.setValueAtTime(musicRate(s.beat), s.t0 + d);
 }
-const SIGIL_EFFECT = {
+const BOON_EFFECT = {
   gale() { // every rune not yet in its window moves one bar later (whole bar of the current tempo: stays on the grid)
     const tg = now() - OPT.inOff / 1000, cut = tg + GW, dt = 4 * segAt(now()).beat;
     for (const s of G.spells) {
@@ -752,10 +803,11 @@ const SIGIL_EFFECT = {
     }
     for (const sg of G.segs) if (sg.t0 > cut) sg.t0 += dt;
     G.nextT0 += dt;
+    if (G.enemy.chargeAt > cut) G.enemy.chargeAt += dt; // the enemy's charged attack is blown back too
     rescheduleMusicRates();
     G.galeFx = now();
   },
-  bulwark() { G.ward = { at: now() }; },
+  bulwark() { G.bulwark = { at: now() }; },
   veil() { G.veilLeft = VEIL_RUNES; markVeil(); },
   still() { G.stillLeft = STILL_SPELLS; G.stillFx = now(); },
   kindle() { G.kindle = { at: now() }; },
@@ -838,7 +890,20 @@ function frame(ts) {
     // time is slowed while casting, so the ring may open any time; it closes itself (free) only when a rune
     // reaches the line — the late half of that rune's window is still yours to hit it
     if (G.cast && G.spells.some(s => !s.done && s.runes.some(r => r.status === 'pending' && tg >= r.time))) closeCast('a rune reaches the line');
-    if (G.kindle && Math.random() < 0.35) burst(CAST_X, CAST_AY, POWERS.kindle.color, 1, 50, 'fire'); // Kindle smoulders in the hand
+    if (G.kindle && Math.random() < 0.35) burst(CAST_X, CAST_AY, BOONS.kindle.color, 1, 50, 'fire'); // Kindle smoulders in the hand
+    // the enemy's charged attack: fills over its beats from its first spell, growls each beat of the last bar, then flies
+    const E = G.enemy;
+    if (E.chargeAt === null) { E.chargeFrom = G.nextT0; E.chargeAt = G.nextT0 + E.chargeBeats * segAt(G.nextT0).beat; }
+    else if (t >= G.foeEnter) {
+      const left = Math.ceil((E.chargeAt - tg) / segAt(tg).beat - 1e-6);
+      if (left >= 1 && left <= WARN_BEATS && left !== E.warned) { E.warned = left; warnSnd(left); }
+      if (tg >= E.chargeAt) {
+        G.strikes.push({ t0: now(), at: now() + CHARGE_F, dmg: E.cdmg, why: 'CHARGED ATTACK', charged: true });
+        chargeSnd(); G.foeCharge = now(); G.shake = Math.max(G.shake, 4);
+        E.chargeFrom = E.chargeAt; E.chargeAt += E.chargeBeats * segAt(tg).beat; E.warned = 0;
+      }
+    }
+    if (G.guard && tg > G.guard.until) { G.guard = null; G.guardBreak = now(); } // the ward's bar ran out
   }
   // effects: dt-driven motion for bolts, arrows, particles, shake
   if (musicSrc && G.over) musicStop();
@@ -966,6 +1031,12 @@ function drawWizard(t, phase) { // long-haired caster, rune-trimmed cloak stream
   }
   cx.restore();
 }
+// the enemy's charged attack at draw time t: progress k (0..1), whole beats left, and whether its last bar has begun
+function chargeState(t) {
+  const E = G.enemy; if (E.chargeAt === null || G.over || t < G.foeEnter) return null;
+  const tg = t - OPT.inOff / 1000, left = Math.ceil((E.chargeAt - tg) / segAt(tg).beat - 1e-6);
+  return { k: Math.max(0, Math.min(1, (tg - E.chargeFrom) / (E.chargeAt - E.chargeFrom))), left, warn: left >= 1 && left <= WARN_BEATS };
+}
 // enemies face left (toward the caster); all poses are timestamp-driven
 function drawEnemy(t) {
   if (t >= G.foeDead && t < G.foeEnter) return; // fell; the next one is on its way
@@ -978,7 +1049,31 @@ function drawEnemy(t) {
   cx.save();
   cx.translate(ARC_X + dx - (fl < 0.25 ? 10 * (1 - fl/0.25) : 0), ARC_Y - (fl < 0.25 ? 3 : 0));
   const kind = G.enemy.kind;
-  if (kind === 'cavalry') drawRider(t, pull); else if (kind === 'boss') { cx.save(); cx.scale(0.88, 0.88); drawBoss(t, pull); cx.restore(); } else drawArcher(pull);
+  const ck = chargeState(t), hy = { archer: -122, cavalry: -128, boss: -168 }[kind];
+  if (ck && ck.k > 0.5) { // the charge gathers around the body, pulsing red in the last bar
+    const c = ck.warn ? PAL.bad : G.enemy.color, g = cx.createRadialGradient(0, hy / 2, 4, 0, hy / 2, -hy * 0.75);
+    g.addColorStop(0, c + '66'); g.addColorStop(1, c + '00');
+    cx.globalAlpha = (ck.k - 0.5) * 2 * (ck.warn ? .7 + .3 * Math.sin(t * 20) : .6); cx.fillStyle = g;
+    cx.beginPath(); cx.ellipse(0, hy / 2, -hy * 0.6, -hy * 0.75, 0, 0, 7); cx.fill(); cx.globalAlpha = 1;
+  }
+  const pull2 = t - G.foeCharge < 0.3 ? 1 : pull; // the charged attack is loosed with the same wind-up
+  if (kind === 'cavalry') drawRider(t, pull2); else if (kind === 'boss') { cx.save(); cx.scale(0.88, 0.88); drawBoss(t, pull2); cx.restore(); } else drawArcher(pull2);
+  if (ck) { // gauge: a ring that fills with the charge; the last bar counts down its beats and asks for the ward
+    const c = ck.warn ? PAL.bad : G.enemy.color;
+    cx.fillStyle = 'rgba(10,4,24,.85)'; cx.beginPath(); cx.arc(0, hy, 15, 0, 7); cx.fill();
+    cx.strokeStyle = '#3a1a5e'; cx.lineWidth = 3; cx.beginPath(); cx.arc(0, hy, 13, 0, 7); cx.stroke();
+    cx.strokeStyle = c; cx.shadowColor = c; cx.shadowBlur = ck.warn ? 14 : 6;
+    cx.beginPath(); cx.arc(0, hy, 13, -Math.PI / 2, -Math.PI / 2 + ck.k * Math.PI * 2); cx.stroke(); cx.shadowBlur = 0; cx.lineWidth = 1;
+    cx.textAlign = 'center'; cx.fillStyle = ck.warn ? '#fff' : c;
+    cx.font = ck.warn ? 'bold 15px ui-monospace, Menlo, monospace' : 'bold 11px ui-monospace, Menlo, monospace';
+    cx.fillText(ck.warn ? String(ck.left) : '⚡', 0, hy + (ck.warn ? 5 : 4));
+    if (ck.warn) {
+      const warded = !!G.guard;
+      cx.fillStyle = warded ? SIGILS.ward.color : PAL.bad; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
+      cx.fillText(warded ? 'WARDED ◎' : 'CHARGED ATTACK', 0, hy - 24);
+      if (!warded) { cx.fillStyle = SIGILS.ward.color; cx.globalAlpha = .75 + .25 * Math.sin(t * 8); cx.fillText('ward: dunfen', 0, hy - 38); cx.globalAlpha = 1; }
+    }
+  }
   if (fl < 0.25) { // bolt impact flash, sized to the body
     const [rx, ry, cy] = { archer: [26, 46, -42], cavalry: [52, 42, -44], boss: [48, 78, -80] }[kind];
     cx.globalAlpha = .85 * (1 - fl/0.25); cx.fillStyle = '#ffffff';
@@ -1241,7 +1336,13 @@ function draw(t) {
     cx.shadowColor = '#000'; cx.shadowBlur = 4; cx.fillText(label, x + 8, BAR_Y + 12); cx.shadowBlur = 0;
   };
   bar(16, G.hp / 100, G.hp > 40 ? PAL.cyan : PAL.crimson, G.hp > 40 ? '#3cf0a0' : PAL.pink, 'CASTER ' + G.hp);
-  bar(W - 16 - HALF, G.enemy.hp / G.enemy.max, PAL.wine, G.enemy.color, G.enemy.name.toUpperCase() + '  ' + Math.max(0, G.enemy.hp));
+  bar(W - 16 - HALF, G.enemy.hp / G.enemy.max, PAL.wine, G.enemy.color, G.enemy.name.toUpperCase() + '  ' + Math.max(0, G.enemy.hp) + '  · weak to ' + G.enemy.weak.toUpperCase());
+  const ck = chargeState(t); // the charged attack filling, under the enemy's health
+  if (ck) {
+    cx.fillStyle = '#14082c'; rr(W - 16 - HALF, BAR_Y + BAR_H + 4, HALF, 5, 2.5); cx.fill();
+    cx.fillStyle = ck.warn ? PAL.bad : G.enemy.color; cx.globalAlpha = ck.warn ? .7 + .3 * Math.sin(t * 20) : .8;
+    rr(W - 16 - HALF, BAR_Y + BAR_H + 4, HALF * ck.k, 5, 2.5); cx.fill(); cx.globalAlpha = 1;
+  }
 
   // spells: connectors + runes
   for (const s of G.spells) {
@@ -1293,7 +1394,7 @@ function draw(t) {
           cx.fillText('\u21E7', cxr + 17, y - 13);
         }
         if (s.still) { // Stillwater: a slow cyan shimmer on the slowed spell's runes
-          cx.strokeStyle = POWERS.still.color; cx.globalAlpha = .45 + .25 * Math.sin(t * 5 + r.time); cx.setLineDash([4, 5]);
+          cx.strokeStyle = BOONS.still.color; cx.globalAlpha = .45 + .25 * Math.sin(t * 5 + r.time); cx.setLineDash([4, 5]);
           cx.beginPath(); cx.arc(cxr, y, 30, t * 0.8, t * 0.8 + 6.2); cx.stroke(); cx.setLineDash([]); cx.globalAlpha = 1;
         }
         if (r.veil) { // Veil: smoke wraps the rune, the letter stays faintly readable, the ring says "any key of this finger"
@@ -1301,7 +1402,7 @@ function draw(t) {
             const a = t * 1.8 + i * 2.1 + r.time;
             cx.fillStyle = 'rgba(40,10,60,.55)'; cx.beginPath(); cx.arc(cxr + Math.cos(a) * 9, y + Math.sin(a) * 9, 15, 0, 7); cx.fill();
           }
-          cx.strokeStyle = POWERS.veil.color; cx.lineWidth = 2; cx.shadowColor = POWERS.veil.color; cx.shadowBlur = 10; cx.setLineDash([3, 4]);
+          cx.strokeStyle = BOONS.veil.color; cx.lineWidth = 2; cx.shadowColor = BOONS.veil.color; cx.shadowBlur = 10; cx.setLineDash([3, 4]);
           cx.beginPath(); cx.arc(cxr, y, 29, -t * 2, -t * 2 + 6.28); cx.stroke(); cx.setLineDash([]); cx.shadowBlur = 0; cx.lineWidth = 1;
         }
       } else if (r.hitAt && t - r.hitAt < 0.25) {
@@ -1379,9 +1480,9 @@ function draw(t) {
     cx.beginPath(); cx.arc(f.x, f.y, (f.big ? 40 : 20) + p * (f.big ? 120 : 50), 0, 7); cx.stroke();
     cx.globalAlpha = 1; cx.lineWidth = 1;
   }
-  // spell bolts in flight: the incantation dives from the spell hand onto the duel line and runs the floor to the enemy
+  // sigil bolts in flight: the sigil's name dives from the spell hand onto the duel line and runs the floor to the enemy
   for (const b of G.bolts) {
-    const p = (t - b.t0) / (b.at - b.t0), e = ELC[b.el];
+    const p = (t - b.t0) / (b.at - b.t0), e = b.color;
     const [bx, by] = floorPath(b.x0, b.y0, b.x1, b.y1, 0, p);
     cx.strokeStyle = e; cx.globalAlpha = .45; cx.lineWidth = 3; // comet trail along the path
     cx.beginPath();
@@ -1400,7 +1501,8 @@ function draw(t) {
     const pt = floorPath(ARC_X - 56, ARC_AY - 48, WIZ_X + 26, WIZ_AY - 56, 10, e), pn = floorPath(ARC_X - 56, ARC_AY - 48, WIZ_X + 26, WIZ_AY - 56, 10, Math.min(1, e + 0.01));
     const ax = pt[0], ay = pt[1], ang = Math.atan2(pn[1] - ay, pn[0] - ax);
     cx.save(); cx.translate(ax, ay); cx.rotate(ang);
-    cx.shadowColor = c; cx.shadowBlur = 10; cx.strokeStyle = c; cx.fillStyle = c; cx.lineWidth = 3;
+    if (s.charged) cx.scale(1.9, 1.9); // the charged attack: the same weapon, twice the size
+    cx.shadowColor = c; cx.shadowBlur = s.charged ? 22 : 10; cx.strokeStyle = c; cx.fillStyle = c; cx.lineWidth = 3;
     if (G.enemy.kind === 'boss') {
       cx.shadowBlur = 18; cx.beginPath(); cx.arc(0, 0, 9, 0, 7); cx.fill();
       cx.globalAlpha = .4; cx.beginPath(); cx.moveTo(-8, -6); cx.lineTo(-40, 0); cx.lineTo(-8, 6); cx.fill(); cx.globalAlpha = 1;
@@ -1475,29 +1577,44 @@ function draw(t) {
     ], 'click to retry');
   }
 }
-// Bulwark: a stone hex shield before the caster (stage-local coordinates); shatters when it takes a strike
+// Bulwark (flawless stone): a hex shield before the caster that shatters on the next strike. Ward (sigil): a gold
+// rune oval held for its bar, flickering as it runs out, bursting when it turns a charged attack (stage-local coordinates)
 function drawWard(t) {
-  const x = WIZ_X + 52, y = WIZ_Y - 56, c = POWERS.bulwark.color;
+  const x = WIZ_X + 52, y = WIZ_Y - 56, c = BOONS.bulwark.color;
   const hex = (r, rot) => { cx.beginPath(); for (let i = 0; i < 6; i++) { const a = rot + i * Math.PI / 3; cx[i ? 'lineTo' : 'moveTo'](x + Math.cos(a) * r * 0.6, y + Math.sin(a) * r); } cx.closePath(); };
-  if (G.ward) {
-    const up = Math.min(1, (t - G.ward.at) / 0.3), pulse = 0.5 + 0.5 * Math.sin(t * 4);
+  if (G.bulwark) {
+    const up = Math.min(1, (t - G.bulwark.at) / 0.3), pulse = 0.5 + 0.5 * Math.sin(t * 4);
     cx.save(); cx.globalAlpha = up;
     hex(40 * up, Math.PI / 6); cx.fillStyle = c + '22'; cx.fill();
     cx.strokeStyle = c; cx.lineWidth = 2.5; cx.shadowColor = c; cx.shadowBlur = 10 + 8 * pulse; cx.stroke();
     hex(26 * up, Math.PI / 6); cx.lineWidth = 1; cx.globalAlpha = up * .5; cx.stroke();
     cx.restore();
-  } else if (t - G.wardBreak < 0.45) { // shattering: the hex bursts outward
-    const k = (t - G.wardBreak) / 0.45;
+  } else if (t - G.bulwarkBreak < 0.45) { // shattering: the hex bursts outward
+    const k = (t - G.bulwarkBreak) / 0.45;
     cx.save(); cx.globalAlpha = 1 - k; cx.strokeStyle = c; cx.lineWidth = 2; cx.shadowColor = c; cx.shadowBlur = 12;
     for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * Math.PI / 3, d = 40 + 50 * k;
       cx.beginPath(); cx.moveTo(x + Math.cos(a) * d * 0.6, y + Math.sin(a) * d); cx.lineTo(x + Math.cos(a + 0.6) * d * 0.6, y + Math.sin(a + 0.6) * d); cx.stroke(); }
     cx.restore();
   }
+  const w = SIGILS.ward.color, ox = x + 18;
+  if (G.guard) {
+    const up = Math.min(1, (t - G.guard.at) / 0.25), left = G.guard.until - (t - OPT.inOff / 1000);
+    cx.save(); cx.globalAlpha = up * (left < 0.8 ? 0.55 + 0.45 * Math.sin(t * 30) : 1);
+    cx.fillStyle = w + '1a'; cx.beginPath(); cx.ellipse(ox, y, 22 * up, 60 * up, 0, 0, 7); cx.fill();
+    cx.strokeStyle = w; cx.shadowColor = w; cx.shadowBlur = 16; cx.lineWidth = 3; cx.stroke();
+    cx.lineWidth = 1.5; cx.setLineDash([4, 6]); cx.lineDashOffset = -t * 40;
+    cx.beginPath(); cx.ellipse(ox, y, 30 * up, 70 * up, 0, 0, 7); cx.stroke(); cx.setLineDash([]);
+    cx.restore();
+  } else if (t - G.guardBreak < 0.4) { // released: the oval flares outward and fades
+    const k = (t - G.guardBreak) / 0.4;
+    cx.save(); cx.globalAlpha = 1 - k; cx.strokeStyle = w; cx.shadowColor = w; cx.shadowBlur = 16; cx.lineWidth = 3;
+    cx.beginPath(); cx.ellipse(ox + 20 * k, y, 22 + 30 * k, 60 + 30 * k, 0, 0, 7); cx.stroke(); cx.restore();
+  }
 }
 // the spellbook: cast mode's view of the sigil panel, readable because time is slowed. Every sigil: glyph, the
-// name to type (typed prefix glowing), what it does, charges — or where to earn it.
+// name to type (typed prefix glowing), what it does, charges — or where to earn it; the bolt the enemy is weak to is marked
 function drawSpellbook(t) {
-  const buf = G.cast.buf, x0 = W/2 - 230, y0 = TOP_Y - 30, rowH = 46, w = 460, h = 30 + 5 * rowH + 6;
+  const keys = Object.keys(SIGILS), buf = G.cast.buf, x0 = W/2 - 230, y0 = TOP_Y - 30, rowH = 40, w = 460, h = 30 + keys.length * rowH + 6;
   const open = Math.min(1, (t - G.cast.at) / 0.2);
   cx.save(); cx.globalAlpha = open;
   cx.fillStyle = 'rgba(10,4,24,.94)'; rr(x0, y0, w, h, 12); cx.fill();
@@ -1506,39 +1623,42 @@ function drawSpellbook(t) {
   cx.fillText('SPELLBOOK', x0 + 16, y0 + 20);
   cx.textAlign = 'right'; cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace';
   cx.fillText('time is slowed · type a name · Space closes', x0 + w - 14, y0 + 20);
-  Object.keys(POWERS).forEach((key, i) => {
-    const P = POWERS[key], n = G.sigils[key] || 0, owned = n > 0, y = y0 + 30 + i * rowH;
-    const match = owned && buf && P.name.startsWith(buf);
+  keys.forEach((key, i) => {
+    const S = SIGILS[key], n = G.sigils[key] || 0, owned = owns(key), y = y0 + 30 + i * rowH, weak = S.el && S.el === G.enemy.weak;
+    const match = owned && buf && S.name.startsWith(buf);
     cx.globalAlpha = open * (owned ? (buf && !match ? .4 : 1) : .45);
-    if (match) { cx.strokeStyle = P.color; cx.shadowColor = P.color; cx.shadowBlur = 10; rr(x0 + 8, y + 2, w - 16, rowH - 4, 8); cx.stroke(); cx.shadowBlur = 0; }
-    cx.fillStyle = PAL.ink; cx.beginPath(); cx.arc(x0 + 30, y + rowH / 2, 15, 0, 7); cx.fill();
-    cx.strokeStyle = P.color; cx.lineWidth = 2; cx.beginPath(); cx.arc(x0 + 30, y + rowH / 2, 15, 0, 7); cx.stroke(); cx.lineWidth = 1;
-    cx.textAlign = 'center'; cx.fillStyle = P.color; cx.font = 'bold 16px Georgia, serif'; cx.fillText(P.glyph, x0 + 30, y + rowH / 2 + 6);
+    if (match) { cx.strokeStyle = S.color; cx.shadowColor = S.color; cx.shadowBlur = 10; rr(x0 + 8, y + 1, w - 16, rowH - 2, 8); cx.stroke(); cx.shadowBlur = 0; }
+    cx.fillStyle = PAL.ink; cx.beginPath(); cx.arc(x0 + 30, y + rowH / 2, 14, 0, 7); cx.fill();
+    cx.strokeStyle = S.color; cx.lineWidth = 2; cx.beginPath(); cx.arc(x0 + 30, y + rowH / 2, 14, 0, 7); cx.stroke(); cx.lineWidth = 1;
+    cx.textAlign = 'center'; cx.fillStyle = S.color; cx.font = 'bold 15px Georgia, serif'; cx.fillText(S.glyph, x0 + 30, y + rowH / 2 + 5);
     cx.textAlign = 'left'; cx.font = 'bold 14px ui-monospace, Menlo, monospace';
-    cx.fillStyle = P.color; cx.fillText(P.name, x0 + 56, y + 20);
-    if (match) { cx.fillStyle = '#fff'; cx.shadowColor = P.color; cx.shadowBlur = 10; cx.fillText(buf, x0 + 56, y + 20); cx.shadowBlur = 0; }
-    const nw = cx.measureText(P.name).width;
-    cx.font = 'italic 900 11px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(P.label, x0 + 64 + nw, y + 20);
-    if (G.unseen.has(key)) { cx.fillStyle = PAL.gold; cx.font = 'bold 9px ui-monospace, Menlo, monospace'; cx.fillText('NEW', x0 + 72 + nw + cx.measureText(P.label).width + 14, y + 19); }
-    cx.fillStyle = PAL.text; cx.font = '11.5px ui-monospace, Menlo, monospace'; cx.fillText(P.desc, x0 + 56, y + 37);
+    cx.fillStyle = S.color; cx.fillText(S.name, x0 + 56, y + 17);
+    if (match) { cx.fillStyle = '#fff'; cx.shadowColor = S.color; cx.shadowBlur = 10; cx.fillText(buf, x0 + 56, y + 17); cx.shadowBlur = 0; }
+    const nw = cx.measureText(S.name).width;
+    cx.font = 'italic 900 11px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(S.label, x0 + 64 + nw, y + 17);
+    if (G.unseen.has(key)) { cx.fillStyle = PAL.gold; cx.font = 'bold 9px ui-monospace, Menlo, monospace'; cx.fillText('NEW', x0 + 72 + nw + cx.measureText(S.label).width + 14, y + 16); }
+    cx.fillStyle = PAL.text; cx.font = '11.5px ui-monospace, Menlo, monospace'; cx.fillText(S.desc, x0 + 56, y + 33);
     cx.textAlign = 'right';
-    if (owned) for (let j = 0; j < SIGIL_MAX; j++) { cx.fillStyle = j < n ? P.color : '#2a1a44'; cx.beginPath(); cx.arc(x0 + w - 20 - j * 11, y + 17, 3.5, 0, 7); cx.fill(); }
-    else { cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillText(`defeat ${P.school} foes`, x0 + w - 14, y + 20); }
+    if (weak) { cx.fillStyle = PAL.bad; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(`×2 · ${G.enemy.name} is weak to it`, x0 + w - 14, y + 33); }
+    if (key === 'ward') { cx.fillStyle = S.color; cx.font = 'bold 14px ui-monospace, Menlo, monospace'; cx.fillText('∞', x0 + w - 16, y + 19); }
+    else if (owned) for (let j = 0; j < SIGIL_MAX; j++) { cx.fillStyle = j < n ? S.color : '#2a1a44'; cx.beginPath(); cx.arc(x0 + w - 20 - j * 11, y + 14, 3.5, 0, 7); cx.fill(); }
+    else { cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillText(S.earn, x0 + w - 14, y + 17); }
   });
   cx.restore(); cx.textAlign = 'center';
 }
-// active sigils, stated in words while they run (left HUD column): you learn what a sigil did by seeing it work
+// active effects, stated in words while they run (left HUD column): you learn what a power did by seeing it work
 function drawSigilStatus(t) {
-  const lines = [];
-  if (G.ward) lines.push(['bulwark', 'next strike blocked']);
+  const lines = [], tg = t - OPT.inOff / 1000;
+  if (G.guard) { const b = Math.max(0, Math.ceil((G.guard.until - CHARGE_F - tg) / segAt(tg).beat)); lines.push([SIGILS.ward, b ? `${b} beat${b > 1 ? 's' : ''} · counters a charge` : 'fading']); }
+  if (G.bulwark) lines.push([BOONS.bulwark, 'next strike blocked']);
   const veiled = G.spells.reduce((a, s) => a + (s.done ? 0 : s.runes.filter(r => r.veil && r.status === 'pending').length), 0) + G.veilLeft;
-  if (veiled) lines.push(['veil', `${veiled} rune${veiled > 1 ? 's' : ''} · any finger key`]);
+  if (veiled) lines.push([BOONS.veil, `${veiled} rune${veiled > 1 ? 's' : ''} · any finger key`]);
   const slowed = G.stillLeft + G.spells.filter(s => s.still && !s.done).length;
-  if (slowed) lines.push(['still', `${slowed} spell${slowed > 1 ? 's' : ''} slowed`]);
-  if (G.kindle) lines.push(['kindle', 'next spell ×2 power']);
-  if (t - G.galeFx < 1.5) lines.push(['gale', 'runes blown back a bar']);
-  lines.forEach(([key, text], i) => {
-    const P = POWERS[key], y = 146 + i * 36;
+  if (slowed) lines.push([BOONS.still, `${slowed} spell${slowed > 1 ? 's' : ''} slowed`]);
+  if (G.kindle) lines.push([BOONS.kindle, 'next bolt ×2']);
+  if (t - G.galeFx < 1.5) lines.push([BOONS.gale, 'runes + charge blown back']);
+  lines.forEach(([P, text], i) => {
+    const y = 146 + i * 36;
     cx.fillStyle = 'rgba(10,4,24,.85)'; rr(12, y, 156, 30, 7); cx.fill();
     cx.strokeStyle = P.color; cx.shadowColor = P.color; cx.shadowBlur = 8; rr(12, y, 156, 30, 7); cx.stroke(); cx.shadowBlur = 0;
     cx.textAlign = 'left'; cx.fillStyle = P.color; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(`${P.glyph} ${P.label}`, 20, y + 12);
@@ -1547,11 +1667,11 @@ function drawSigilStatus(t) {
   cx.textAlign = 'center';
 }
 // sigil layer: the panel between the hands, power animations, cast mode, toasts
-const CAST_RING = { x: W/2, y: 430, r: 40 };
+const CAST_RING = { x: W/2, y: 440, r: 40 }; // just under the six-row spellbook
 function drawSigils(t) {
   // Gale: wind streaks tear up the lanes
   if (t - G.galeFx < 0.7) {
-    const k = (t - G.galeFx) / 0.7, c = POWERS.gale.color;
+    const k = (t - G.galeFx) / 0.7, c = BOONS.gale.color;
     cx.strokeStyle = c; cx.lineWidth = 2; cx.shadowColor = c; cx.shadowBlur = 8;
     for (const l of LANES) for (let j = 0; j < 3; j++) {
       const x = LNX[l.id] - 24 + j * 24, y = HIT_Y - ((k * 1.6 + j * 0.23) % 1) * (HIT_Y - TOP_Y);
@@ -1561,7 +1681,7 @@ function drawSigils(t) {
   }
   // Stillwater: ripples spread across the lanes
   if (t - G.stillFx < 1.1) {
-    const k = (t - G.stillFx) / 1.1, c = POWERS.still.color;
+    const k = (t - G.stillFx) / 1.1, c = BOONS.still.color;
     cx.strokeStyle = c; cx.lineWidth = 2;
     for (let j = 0; j < 3; j++) { const kk = Math.max(0, k - j * 0.15); if (kk <= 0) continue;
       cx.globalAlpha = (1 - kk) * .7; cx.beginPath(); cx.ellipse(W/2, 340, 60 + kk * 460, 20 + kk * 150, 0, 0, 7); cx.stroke(); }
@@ -1573,32 +1693,30 @@ function drawSigils(t) {
   // is slowed and you have a moment to read — it opens into the spellbook: what each sigil does, where to earn it
   if (G.cast) drawSpellbook(t);
   else {
-  const px = W/2 - 50, py = TOP_Y - 30;
+  const px = W/2 - 50, py = TOP_Y - 30, RH = 38;
   cx.fillStyle = 'rgba(10,4,24,.72)'; rr(px, py, 100, 262, 10); cx.fill();
   cx.strokeStyle = '#3a1a5e'; rr(px, py, 100, 262, 10); cx.stroke();
   cx.textAlign = 'center'; cx.fillStyle = PAL.dim; cx.font = 'bold 9px ui-monospace, Menlo, monospace'; cx.fillText('SIGILS · Space', W/2, py + 13);
-  Object.keys(POWERS).forEach((key, i) => {
-    const P = POWERS[key], n = G.sigils[key] || 0, y = py + 22 + i * 44, owned = n > 0;
+  Object.keys(SIGILS).forEach((key, i) => {
+    const S = SIGILS[key], n = G.sigils[key] || 0, y = py + 22 + i * RH, owned = owns(key), weak = S.el && S.el === G.enemy.weak;
     const flash = G.sigilFlash && G.sigilFlash.key === key && t - G.sigilFlash.at < 0.9 ? 1 - (t - G.sigilFlash.at) / 0.9 : 0;
-    if (flash) { cx.fillStyle = P.color; cx.globalAlpha = .25 * flash; rr(px + 3, y, 94, 40, 7); cx.fill(); cx.globalAlpha = 1; }
+    if (flash) { cx.fillStyle = S.color; cx.globalAlpha = .25 * flash; rr(px + 3, y - 1, 94, RH - 2, 7); cx.fill(); cx.globalAlpha = 1; }
     cx.globalAlpha = owned ? 1 : .35;
-    cx.fillStyle = PAL.ink; cx.beginPath(); cx.arc(px + 16, y + 17, 11, 0, 7); cx.fill();
-    cx.strokeStyle = P.color; cx.lineWidth = 1.5; if (owned) { cx.shadowColor = P.color; cx.shadowBlur = 8; }
-    cx.beginPath(); cx.arc(px + 16, y + 17, 11, 0, 7); cx.stroke(); cx.shadowBlur = 0; cx.lineWidth = 1;
-    cx.fillStyle = P.color; cx.font = 'bold 12px Georgia, serif'; cx.fillText(P.glyph, px + 16, y + 21);
+    cx.fillStyle = PAL.ink; cx.beginPath(); cx.arc(px + 16, y + 16, 11, 0, 7); cx.fill();
+    cx.strokeStyle = S.color; cx.lineWidth = 1.5; if (owned) { cx.shadowColor = S.color; cx.shadowBlur = 8; }
+    cx.beginPath(); cx.arc(px + 16, y + 16, 11, 0, 7); cx.stroke(); cx.shadowBlur = 0; cx.lineWidth = 1;
+    cx.fillStyle = S.color; cx.font = 'bold 12px Georgia, serif'; cx.fillText(S.glyph, px + 16, y + 20);
     cx.textAlign = 'left'; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
-    cx.fillStyle = owned ? P.color : PAL.dim; cx.fillText(P.name, px + 32, y + 15);
-    for (let j = 0; j < SIGIL_MAX; j++) { cx.fillStyle = j < n ? P.color : '#2a1a44'; cx.beginPath(); cx.arc(px + 36 + j * 9, y + 27, 3, 0, 7); cx.fill(); }
+    cx.fillStyle = owned ? S.color : PAL.dim; cx.fillText(S.name, px + 32, y + 14);
+    if (key === 'ward') { cx.fillStyle = S.color; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.fillText('∞', px + 33, y + 29); }
+    else for (let j = 0; j < SIGIL_MAX; j++) { cx.fillStyle = j < n ? S.color : '#2a1a44'; cx.beginPath(); cx.arc(px + 36 + j * 9, y + 26, 3, 0, 7); cx.fill(); }
     cx.globalAlpha = 1;
     if (G.unseen.has(key)) { // learned but not yet read: a NEW tag pulls you to open the spellbook
       cx.fillStyle = PAL.gold; cx.globalAlpha = .75 + .25 * Math.sin(t * 6); cx.font = 'bold 8px ui-monospace, Menlo, monospace';
       cx.fillText('NEW', px + 68, y + 29); cx.globalAlpha = 1;
-    }
+    } else if (weak) { cx.fillStyle = PAL.bad; cx.font = 'bold 9px ui-monospace, Menlo, monospace'; cx.fillText('×2', px + 70, y + 29); } // the enemy's weakness
     cx.textAlign = 'center';
   });
-  // flawless meter: three flawless spells grant the current school's sigil
-  cx.fillStyle = '#2a1a44'; rr(px + 10, py + 246, 80, 6, 3); cx.fill();
-  cx.fillStyle = PAL.gold; cx.shadowColor = PAL.gold; cx.shadowBlur = 6; rr(px + 10, py + 246, 80 * G.meter, 6, 3); cx.fill(); cx.shadowBlur = 0;
   }
   drawSigilStatus(t);
   // cast mode: lanes dim, a rune ring turns, the typed name glows at its heart
@@ -1621,7 +1739,7 @@ function drawSigils(t) {
   if (F) {
     const age = t - F.at;
     if (F.kind === 'cast' && age < 0.9) {
-      const P = POWERS[F.key], k = age / 0.9;
+      const P = SIGILS[F.key], k = age / 0.9;
       cx.strokeStyle = P.color; cx.shadowColor = P.color; cx.shadowBlur = 18;
       for (let j = 0; j < 2; j++) { const kk = Math.max(0, k - j * 0.18); cx.globalAlpha = (1 - kk); cx.lineWidth = 4 - j * 2;
         cx.beginPath(); cx.arc(R.x, R.y, R.r + kk * 260, 0, 7); cx.stroke(); }
@@ -1648,7 +1766,7 @@ function drawSigils(t) {
   }
   // earned-sigil toast
   if (G.toast && t < G.toast.until) {
-    const P = POWERS[G.toast.key], a = Math.min(1, (G.toast.until - t) / 0.4, (t - G.toast.at) / 0.2);
+    const P = SIGILS[G.toast.key], a = Math.min(1, (G.toast.until - t) / 0.4, (t - G.toast.at) / 0.2);
     cx.globalAlpha = Math.max(0, Math.min(1, a)); cx.textAlign = 'center';
     cx.fillStyle = 'rgba(10,4,24,.94)'; rr(W/2 - 190, 176, 380, 52, 10); cx.fill();
     cx.strokeStyle = P.color; cx.shadowColor = P.color; cx.shadowBlur = 12; rr(W/2 - 190, 176, 380, 52, 10); cx.stroke();

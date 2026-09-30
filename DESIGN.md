@@ -39,6 +39,12 @@ usual typing-game obsession with WPM.
 4. If you're accurate, the spell casts and counters the attack.
 5. If you miss, the spell **fizzles** and the enemy hits you.
 
+> **Decided (playtest: "casting sigils has been the fun"):** sigils are now the
+> core loop, not power-ups. Typing the incantation *earns* a sigil (a clean
+> spell → a sigil of its element); you attack, heal and block by **casting
+> sigils** (Space, type the name). Missed runes still let the enemy hit you, and
+> every enemy charges a big attack you answer with the ward. See §8 Powers.
+
 The enemy's attack cadence is the rhythm. The beat has stakes: miss it and you
 take damage.
 
@@ -236,12 +242,12 @@ harsh (full fizzle, strong enemies). The difficulty curve isn't just "faster
 notes" — it's also "harsher penalties."
 
 > **Prototype decision (playtested):** the damage model is **miss-only,
-> proportional, with perfects healing**. Goods cost spell power but never
-> health ("all good" = zero damage); each lapsed rune draws its share of the
-> enemy's arrow (full lapse = 18, one of four = 5); every perfect *heals* 2.
-> A leaky "sloppy timing" arrow — punishing tempo while the learner is still
-> accuracy-focused — tested hostile and was removed. Perfect-heal makes the
-> accuracy gradient pay directly in survival.
+> proportional**. Goods never cost health; each lapsed rune draws its share of
+> the enemy's arrow (full lapse = 18, one of four = 5). A leaky "sloppy timing"
+> arrow — punishing tempo while the learner is still accuracy-focused — tested
+> hostile and was removed. Perfect-heal (+2 per perfect) was replaced in the
+> sigil-core rework: accuracy now pays as sigils (a clean spell earns one), and
+> perfection as the flawless-spell powers (§8); healing is the mend sigil.
 
 ---
 
@@ -291,8 +297,9 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   accelerates within its encounter via the tempo map (§5).
 - **Spell content** — prototype answer: the invented tongue (§4). Open: a
   larger lexicon, per-school verbs, meaning that matters in play.
-- **Elemental weakness system** — only the aggregation rule is open (a spell's
-  element is derived from its letters, §4): majority element, first letter, …
+- **Elemental weakness system** — prototype: majority element (the lane most
+  of a spell's runes ride) decides which bolt sigil it earns; weaknesses per
+  school double bolt damage (§8 Powers).
 - **Timing windows & latency calibration** — perfect/good/miss thresholds are
   playable in the prototype (§5); calibration is manual (audio delay + input
   offset, or "set from last 20 hits"). Open: a guided first-run calibration step.
@@ -339,13 +346,53 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > Each track is started on a click at its measured first beat and time-scaled
   > so its beat is the game's beat (resampling, so pitch follows tempo). The
   > metronome stays as the enemy's heartbeat under the track.
-- **Powers (sigils) — prototype, playtest pending.** The thumb's job once the
-  space lane was cut. Earned: defeating an enemy grants its school's sigil
-  (bosses 2); three flawless (all-perfect) spells grant the current school's
-  sigil; max 3 charges each. Cast: **Space opens cast mode, you type the
-  sigil's name** — a noun of its school + a verb of the tongue, prefix-free so
-  it fires on the last letter. A letter that fits no owned name **fizzles**
-  (mode closes, charge kept); Space again cancels.
+- **Powers (sigils) — the core loop (playtest rework).** The thumb's job once
+  the space lane was cut, and after playtesting the part that was fun — so
+  sigils became *how you fight*. **Typing no longer attacks.**
+
+  | source | what you get |
+  |---|---|
+  | clean spell (no rune missed) | +1 sigil of the spell's element — the lane most of its runes ride |
+  | flawless spell (every rune perfect) | its school's power fires at once, no cast (below) |
+  | enemy defeated | +1 mend sigil (boss +2) — still has to be cast |
+  | a missed rune | its share of the enemy's strike, no sigil (unchanged) |
+
+  Cast: **Space opens cast mode, you type the sigil's name** — a noun of the
+  tongue + a verb (`kai` strike, `hal` mend, `fen` ward), prefix-free so it
+  fires on the last letter. A letter that fits no owned name **fizzles** (mode
+  closes, charge kept); Space again cancels. Max 3 charges each.
+
+  | sigil | name | effect |
+  |---|---|---|
+  | Fire / Water / Earth / Air | `vorkai` `gamkai` `brykai` `wynkai` | bolt, 6 damage; ×2 against the enemy's weakness |
+  | Mend | `pyrhal` | +30 HP |
+  | Ward | `dunfen` | innate (∞): blocks every strike for one bar; a **charged attack** that hits it is **countered** (12 damage back) |
+
+  **Elemental weakness (§4) is live:** each school is weak to one element
+  (flame→water, storm→earth, stone→air, tide→fire, shadow→fire), shown on the
+  enemy's health bar, in its banner, and as ×2 on the sigil. Which element you
+  earn depends on the incantation's letters, so saving the right bolt is the
+  choice.
+
+  **Charged attacks.** Every enemy fills a charge over its beats (archer 24,
+  cavalry 20, boss 16; dealing 30 / 30 / 40), starting with its first spell. A
+  ring over its head and a thin bar under its health fill; the last bar (4
+  beats) turns red, counts down, growls on each beat and prompts `ward:
+  dunfen`. The charge lives on the rhythm timeline, so cast mode slows it with
+  everything else. The ward is innate rather than earned so the charged attack
+  is always answerable: the skill is reading the telegraph and casting in time
+  (the ward lasts one bar plus the attack's flight).
+
+  **Flawless powers** — the old castable sigils, now triggered directly by an
+  all-perfect spell of that school:
+
+  | power | school | effect |
+  |---|---|---|
+  | Gale | storm | runes not yet in their window, and the enemy's charge, move one bar later |
+  | Bulwark | stone | the next strike deals 0 |
+  | Veil | shadow | next 6 runes accept any key of the right finger |
+  | Stillwater | tide | next 2 spells play at 80% tempo |
+  | Kindle | flame | next bolt ×2 (stacks with weakness) |
 
   **Decided (playtest): cast mode slows time.** Typing a name in the gap between
   spells was too tight, worse as the pace rose. Now opening cast mode slows the
@@ -358,30 +405,18 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   in their windows; it closes itself (free) only when a rune reaches the line,
   leaving the late half of that rune's window to hit it.
 
-  | sigil | name | school | effect | animation |
-  |---|---|---|---|---|
-  | Gale | `wynkai` | storm | runes not yet in their window move one bar later (whole bar: stays on the grid; tempo map + music rates shift with them) | wind streaks up the lanes, runes ease back |
-  | Bulwark | `dunfen` | stone | the next strike deals 0 | hex shield before the caster, shatters on the hit |
-  | Veil | `moxquo` | shadow | next 6 runes accept any key of the right finger (letter stays faintly visible) | smoke orbits the rune, dashed finger ring |
-  | Stillwater | `gamsel` | tide | next 2 spells play at 80% tempo (tempo map) | ripples across the lanes, cyan shimmer on the slowed runes |
-  | Kindle | `vorlum` | flame | next spell casts at double power | embers smoulder in the spell hand |
-
-  Every name is always listed in the panel between the hands (dim until
-  owned, with charge pips and the flawless meter); cast mode dims the lanes,
-  turns a rune ring and glows the typed prefix on the matching name.
-
   **Teaching the sigils (playtest: "you'd have to memorize them; you can't read
   the unlock message mid-fight").** Explanations move to the moments you can
   read: (1) **the spellbook** — opening cast mode expands the panel into a
-  list of every sigil with its name, effect, charges, or where to earn it;
-  time is slowed there, so reading is free; (2) **NEW tags** on freshly earned
-  sigils until the spellbook has been opened; (3) **live status chips** in the
-  left margin while an effect runs ("VEIL · 5 runes · any finger key",
-  "BULWARK · next strike blocked") — you learn what a sigil does by watching
-  it work. The unlock toast only says "press Space to read it". This is what
-  makes adding more sigils viable: none of them has to be memorized up front. Open:
-  timed casting (bonus for casting on the click), more sigils, whether
-  perfect-heal should give way to charges.
+  list of every sigil with its name, effect, charges, or where to earn it, and
+  which bolt the enemy is weak to; time is slowed there, so reading is free;
+  (2) **NEW tags** on freshly earned sigils (and the ward, from the start)
+  until the spellbook has been opened; only the first of each sigil gets a
+  toast; (3) **live status chips** in the left margin while an effect runs
+  ("WARD · 3 beats · counters a charge", "VEIL · 5 runes · any finger key").
+  **[OPEN]** after playtest: whether flawless powers fire too often at high
+  skill (every all-perfect spell), whether a spell with one miss should still
+  earn a sigil for beginners, timed casting, bolt damage vs enemy HP.
 - **Meta-progression** — spellbook, unlockable elements/areas, score/rank,
   replay.
 - **Controls & input** — key event handling, input buffering, key-rollover for
