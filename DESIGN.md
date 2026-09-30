@@ -22,7 +22,7 @@ of the finger that should type it. The lane teaches you touch typing — which
 finger goes to which key — and over time the association becomes automatic.
 
 The theme is a **spellcaster**. You type incantations (real words) to cast
-spells. The characters are runes. The lanes are **elements** (fire, water,
+spells. The characters are glyphs. The lanes are **elements** (fire, water,
 earth, air), which gives the finger mapping a non-arbitrary meaning.
 
 **Design philosophy:** accuracy is paramount; speed comes later. The game
@@ -39,10 +39,10 @@ usual typing-game obsession with WPM.
 4. If you're accurate, the spell casts and counters the attack.
 5. If you miss, the spell **fizzles** and the enemy hits you.
 
-> **Decided (playtest: "casting sigils has been the fun"):** sigils are now the
-> core loop, not power-ups. Typing the incantation *earns* a sigil (a clean
-> spell → a sigil of its element); you attack, heal and block by **casting
-> sigils** (Space, type the name). Missed runes still let the enemy hit you, and
+> **Decided (playtest: "casting runes has been the fun"):** runes are now the
+> core loop, not power-ups. Typing the incantation *earns* a rune (a clean
+> spell → a rune of its element); you attack, heal and block by **casting
+> runes** (Space, type the name). Missed glyphs still let the enemy hit you, and
 > every enemy charges a big attack you answer with the ward. See §8 Powers.
 
 The enemy's attack cadence is the rhythm. The beat has stakes: miss it and you
@@ -65,7 +65,7 @@ take damage.
 
 **Travel cues.** A per-finger lane is ambiguous within the lane: F and G both
 ride the left-index lane, and the lane alone doesn't say which the note wants.
-Each rune therefore carries a small movement marker relative to that finger's
+Each glyph therefore carries a small movement marker relative to that finger's
 **home key**: home keys (A S D F J K L ;) show a dot ("finger stays put"),
 off-home keys show a chevron in the direction the finger travels from home —
 G = right of F, R = upper-left, V = down, etc. The lane answers *which finger*;
@@ -89,7 +89,7 @@ word boundary.
 
 **Space key — decided (playtest): no space lane.** A typed space took a whole
 lane of screen and gave the thumb almost nothing to do. Word breaks are now
-**rests**: the space keeps its time slot in the rhythm but has no rune (a small
+**rests**: the space keeps its time slot in the rhythm but has no glyph (a small
 diamond falls through the gap between the hands, and the connector breaks
 between words). The eight finger lanes widened into the freed space, and the
 gap between the hands is reserved for the thumb's new job: **cast mode** for
@@ -103,7 +103,12 @@ enforces. The lanes teach; you learn by using them.
 
 ## 4. The Spellcaster Theme
 
-- **Characters are runes.** You type incantations to cast spells.
+- **Naming — decided (playtest):** the falling letters are **glyphs**; the
+  things you earn and cast are **runes** (they were "runes" and "sigils" until
+  the rune-core rework: a *Runecaster* casts runes, and runes as earned-then-
+  spent spell ammo is the familiar reading; "glyph" = one written character,
+  already the chapter-5 word, and avoids reusing "sigil" in the opposite sense).
+- **Characters are glyphs.** You type incantations to cast spells.
 - **Elements are the lanes.** Fire, water, earth, air — mapped to finger
   positions (see §3).
 - **Spells are incantations in an invented tongue.** **Decided (playtest):**
@@ -120,7 +125,7 @@ enforces. The lanes teach; you learn by using them.
   spells. You need to know which spell is water, and cast it at the right
   creature. This makes the elements meaningful beyond decoration.
 
-**Spell element is derived from its characters.** Each rune's element is the
+**Spell element is derived from its characters.** Each glyph's element is the
 element of the finger that types it (§3), so a word's element is a function of
 its letters; the aggregation rule (majority element, first letter, …) is
 **[OPEN]**. Enemy weaknesses then make **word choice = lane selection**: a
@@ -147,9 +152,9 @@ damage. Different enemies = different rhythms.
 - **Cavalry** — a speed variant. The charge *accelerates* (the rhythm speeds
   up). Tests speed once accuracy is down.
 
-> **Prototype implementation:** all three are encounters. Archers space runes
-> evenly; cavalry crams one extra rune per bar and raises the tempo 4% every
-> spell (reset when the encounter ends); a boss places runes on rhythm
+> **Prototype implementation:** all three are encounters. Archers space glyphs
+> evenly; cavalry crams one extra glyph per bar and raises the tempo 4% every
+> spell (reset when the encounter ends); a boss places glyphs on rhythm
 > patterns drawn per bar (off-beat eighths, gaps before the next phrase), hits
 > harder (24 vs 18) and has its own school — its roots orbit it on stage.
 
@@ -160,16 +165,16 @@ damage. Different enemies = different rhythms.
 - **Per-character beat grid — decided (playtest): the incantation fills
   whole bars.** "Word fits 4 beats" flowed better than one char per beat, but
   cramming long words into one bar was too hard. So a spell spans as many
-  4-beat bars as it needs, runes spread evenly across them, with a
-  per-chapter cap on runes per bar (5 → 7). The spell always starts on a
+  4-beat bars as it needs, glyphs spread evenly across them, with a
+  per-chapter cap on glyphs per bar (5 → 7). The spell always starts on a
   bar-aligned click and the next spell follows after whole beats of rest.
-- **Per-character grading, per-spell outcome.** Each rune is graded
+- **Per-character grading, per-spell outcome.** Each glyph is graded
   perfect / good / miss as you go; the word casts or fizzles as a whole.
 
 **The hierarchy, driven by "accuracy paramount":**
 1. **Correctness before the deadline is the gate.** The spell casts only if
-   you type the right characters before each rune passes the hit line. A
-   wrong key, or a rune that lapses untyped, = full fizzle.
+   you type the right characters before each glyph passes the hit line. A
+   wrong key, or a glyph that lapses untyped, = full fizzle.
 2. **Timing within the window is the amplifier.** Perfect = right character on
    the beat → full-power spell, big combo. Good = right character, off-beat →
    spell casts, reduced power. Timing never *blocks* a cast; it only scales
@@ -180,19 +185,19 @@ damage. Different enemies = different rhythms.
 > `t − r.time` against two constants (±55 ms perfect, ±140 ms good), where
 > `t` is the key's event timestamp on the *heard* audio clock
 > (`getOutputTimestamp`) minus a per-device input offset. Visuals are drawn on
-> the same clock (for the frame's display time), so a rune crosses the line
+> the same clock (for the frame's display time), so a glyph crosses the line
 > exactly when its click is heard.
 > - **When to press:** the letter crossing the white line — the tile filling
 >   its receptor slot. Dashed gold lines over the tiles mark the perfect window;
 >   a tile touching the line at all is inside the good window.
-> - **Routing:** a press goes to the nearest pending rune with that character.
->   A different rune inside its window → WRONG; the correct key up to 0.6 s
->   early → EARLY (unjudged, rune stays live); a past-due but not-yet-lapsed
->   rune → MISS on input. Frame lapses wait 50 ms of grace so a queued
+> - **Routing:** a press goes to the nearest pending glyph with that character.
+>   A different glyph inside its window → WRONG; the correct key up to 0.6 s
+>   early → EARLY (unjudged, glyph stays live); a past-due but not-yet-lapsed
+>   glyph → MISS on input. Frame lapses wait 50 ms of grace so a queued
 >   in-window press is always graded by its own timestamp.
 > - **Tempo map:** a tempo change (wave ramp, cavalry, slider) takes effect on
->   the first rune of the next scheduled spell; clicks, the line pulse and the
->   music follow it, so no cue ever disagrees with runes already on screen.
+>   the first glyph of the next scheduled spell; clicks, the line pulse and the
+>   music follow it, so no cue ever disagrees with glyphs already on screen.
 >   Music is started on a click at its measured first beat, scaled so one track
 >   beat = one game beat, and looped over whole bars.
 > - **Feedback:** every judgment shows its error in ms; a hit-error meter plots
@@ -222,7 +227,7 @@ encounter, so the model must support intra-encounter tempo curves.
    the whole spell** — no restart, no partial credit; the incantation fizzles
    and the enemy attack (3) lands. (Decision: accuracy is paramount.) In
    lenient early levels fizzle is disabled: a wrong key breaks combo (1),
-   consumes that rune as a miss, and the word continues.
+   consumes that glyph as a miss, and the word continues.
 3. **Enemy attack** (the consequence). A fizzle or missed note lets the enemy
    hit you. You have a health bar; attacks drain it.
 4. **Level fail.** Health reaches zero. Retry.
@@ -242,12 +247,12 @@ harsh (full fizzle, strong enemies). The difficulty curve isn't just "faster
 notes" — it's also "harsher penalties."
 
 > **Prototype decision (playtested):** the damage model is **miss-only,
-> proportional**. Goods never cost health; each lapsed rune draws its share of
+> proportional**. Goods never cost health; each lapsed glyph draws its share of
 > the enemy's arrow (full lapse = 18, one of four = 5). A leaky "sloppy timing"
 > arrow — punishing tempo while the learner is still accuracy-focused — tested
 > hostile and was removed. Perfect-heal (+2 per perfect) was replaced in the
-> sigil-core rework: accuracy now pays as sigils (a clean spell earns one), and
-> perfection as the flawless-spell powers (§8); healing is the mend sigil.
+> rune-core rework: accuracy now pays as runes (a clean spell earns one), and
+> perfection as the flawless-spell powers (§8); healing is the mend rune.
 
 ---
 
@@ -275,7 +280,7 @@ cavalry (learn speed), as encounter types that coexist rather than eras.
 > full-power casts, ~15 s) and grows per chapter; a bar of rest separates
 > encounters and a banner names the next enemy and its school.
 >
-> | ch | name | incantations | runes/bar | tempo | encounters |
+> | ch | name | incantations | glyphs/bar | tempo | encounters |
 > |---|---|---|---|---|---|
 > | 1 | Apprentice | verb + root ("kai vor") | 5 | start | archer, archer, boss |
 > | 2 | Adept | + suffixes ("kai vora") | 5 | +4 | archer, cavalry, boss |
@@ -298,7 +303,7 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
 - **Spell content** — prototype answer: the invented tongue (§4). Open: a
   larger lexicon, per-school verbs, meaning that matters in play.
 - **Elemental weakness system** — prototype: majority element (the lane most
-  of a spell's runes ride) decides which bolt sigil it earns; weaknesses per
+  of a spell's glyphs ride) decides which bolt rune it earns; weaknesses per
   school double bolt damage (§8 Powers).
 - **Timing windows & latency calibration** — perfect/good/miss thresholds are
   playable in the prototype (§5); calibration is manual (audio delay + input
@@ -310,13 +315,13 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > key art (`prototype/art/splash.jpg`, also the splash screen). Palette
   > sampled from it: night navy/indigo sky, violet and magenta haze, hot-pink
   > striped sun behind a gothic castle, neon elements (fire orange, water cyan,
-  > earth green, air violet — the art's Q/W/E/R rune colors). Runes are glowing
+  > earth green, air violet — the art's Q/W/E/R glyph colors). Glyphs are glowing
   > element rings with serif glyphs, the hit line a magenta laser, the stage a
   > vista with a perspective-grid floor, and the enemies an undead host
   > (skeleton archer, skeletal knight on a spectral horse, crowned lich).
   > The caster is deliberately off-palette for contrast (playtest: purple
-  > blended into the magenta night): teal cloth, gold rune band and belt, a
-  > cyan rim light and floor rune circle, a lit face.
+  > blended into the magenta night): teal cloth, gold glyph band and belt, a
+  > cyan rim light and floor glyph circle, a lit face.
 - **Audio** — the "beat" of the enemy's attack; how is it conveyed (SFX, music,
   screen pulse)?
 
@@ -333,31 +338,31 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > cut to a one-shot automatically (onset → −40 dB tail, click-free fades,
   > loudness-normalized), choosing the candidate whose energy is most
   > concentrated in one event. Sampled: spell casts per element, bolt impact,
-  > enemy strike loosed, hit taken, shield block, enemy defeated, sigil earned,
-  > time resuming, fizzle, sigil cast, chapter horn, game over. Playtest
+  > enemy strike loosed, hit taken, shield block, enemy defeated, rune earned,
+  > time resuming, fizzle, rune cast, chapter horn, game over. Playtest
   > fixes: the earth cast was re-prompted as an earthquake rumble (the first
   > take sounded like the fizzle); the impact is cut to its 0.28 s crack; enemy
   > defeat is synthesized instead (a low pitch-dropping boom with a brief
   > C-major shimmer — "triumphant, not overdone"), since generated takes stayed
   > crackly; time slowing stays synthesized (the sample didn't read as
   > slowing).
-  > Timing-critical sounds stay synthesized (rune hits, wrong key, name ticks,
+  > Timing-critical sounds stay synthesized (glyph hits, wrong key, name ticks,
   > the metronome) — they must be instant and sample-accurate.
   > Each track is started on a click at its measured first beat and time-scaled
   > so its beat is the game's beat (resampling, so pitch follows tempo). The
   > metronome stays as the enemy's heartbeat under the track.
-- **Powers (sigils) — the core loop (playtest rework).** The thumb's job once
+- **Powers (runes) — the core loop (playtest rework).** The thumb's job once
   the space lane was cut, and after playtesting the part that was fun — so
-  sigils became *how you fight*. **Typing no longer attacks.**
+  runes became *how you fight*. **Typing no longer attacks.**
 
   | source | what you get |
   |---|---|
-  | clean spell (no rune missed) | +1 sigil of the spell's element — the lane most of its runes ride |
-  | flawless spell (every rune perfect) | its school's power fires at once, no cast (below) |
-  | enemy defeated | +1 mend sigil (boss +2) — still has to be cast |
-  | a missed rune | its share of the enemy's strike, no sigil (unchanged) |
+  | clean spell (no glyph missed) | +1 rune of the spell's element — the lane most of its glyphs ride |
+  | flawless spell (every glyph perfect) | its school's power fires at once, no cast (below) |
+  | enemy defeated | +1 mend rune (boss +2) — still has to be cast |
+  | a missed glyph | its share of the enemy's strike, no rune (unchanged) |
 
-  Cast: **Space opens cast mode, you type the sigil's name** — a noun of the
+  Cast: **Space opens cast mode, you type the rune's name** — a noun of the
   tongue + a verb (`kai` strike, `hal` mend, `fen` ward), prefix-free so it
   fires on the last letter. A letter that fits no owned name **fizzles** (mode
   closes, charge kept); Space again cancels. Max 3 charges each.
@@ -367,7 +372,7 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   ring closing itself neither counts nor clears. The first fizzle warns
   "fizzle again and it backfires".
 
-  | sigil | name | effect |
+  | rune | name | effect |
   |---|---|---|
   | Fire / Water / Earth / Air | `vorkai` `gamkai` `brykai` `wynkai` | bolt, 6 damage; ×2 against the enemy's weakness |
   | Mend | `pyrhal` | +30 HP |
@@ -375,7 +380,7 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
 
   **Elemental weakness (§4) is live:** each school is weak to one element
   (flame→water, storm→earth, stone→air, tide→fire, shadow→fire), shown on the
-  enemy's health bar, in its banner, and as ×2 on the sigil. Which element you
+  enemy's health bar, in its banner, and as ×2 on the rune. Which element you
   earn depends on the incantation's letters, so saving the right bolt is the
   choice.
 
@@ -388,40 +393,40 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   is always answerable: the skill is reading the telegraph and casting in time
   (the ward lasts one bar plus the attack's flight).
 
-  **Flawless powers** — the old castable sigils, now triggered directly by an
+  **Flawless powers** — the old castable runes, now triggered directly by an
   all-perfect spell of that school:
 
   | power | school | effect |
   |---|---|---|
-  | Gale | storm | runes not yet in their window, and the enemy's charge, move one bar later |
+  | Gale | storm | glyphs not yet in their window, and the enemy's charge, move one bar later |
   | Bulwark | stone | the next strike deals 0 |
-  | Veil | shadow | next 6 runes accept any key of the right finger |
+  | Veil | shadow | next 6 glyphs accept any key of the right finger |
   | Stillwater | tide | next 2 spells play at 80% tempo |
   | Kindle | flame | next bolt ×2 (stacks with weakness) |
 
   **Decided (playtest): cast mode slows time.** Typing a name in the gap between
   spells was too tight, worse as the pace rose. Now opening cast mode slows the
   whole rhythm to a fixed crawl (the field creeps at 36 px/s — ~19% speed — at
-  any tempo): runes, tempo map, metronome and soundtrack together (the music
+  any tempo): glyphs, tempo map, metronome and soundtrack together (the music
   drops in pitch like slowed tape), so everything is still on the beat when the
   ring closes. **Letters are hidden** while it is open, so slow time is not a
-  free read-ahead. The runes keep creeping — that distance is the price of a
-  cast. Because time is slowed, the ring may open at any moment, even with runes
-  in their windows; it closes itself (free) only when a rune reaches the line,
-  leaving the late half of that rune's window to hit it.
+  free read-ahead. The glyphs keep creeping — that distance is the price of a
+  cast. Because time is slowed, the ring may open at any moment, even with glyphs
+  in their windows; it closes itself (free) only when a glyph reaches the line,
+  leaving the late half of that glyph's window to hit it.
 
-  **Teaching the sigils (playtest: "you'd have to memorize them; you can't read
+  **Teaching the runes (playtest: "you'd have to memorize them; you can't read
   the unlock message mid-fight").** Explanations move to the moments you can
   read: (1) **the spellbook** — opening cast mode expands the panel into a
-  list of every sigil with its name, effect, charges, or where to earn it, and
+  list of every rune with its name, effect, charges, or where to earn it, and
   which bolt the enemy is weak to; time is slowed there, so reading is free;
-  (2) **NEW tags** on freshly earned sigils (and the ward, from the start)
-  until the spellbook has been opened; only the first of each sigil gets a
+  (2) **NEW tags** on freshly earned runes (and the ward, from the start)
+  until the spellbook has been opened; only the first of each rune gets a
   toast; (3) **live status chips** in the left margin while an effect runs
-  ("WARD · 3 beats · counters a charge", "VEIL · 5 runes · any finger key").
+  ("WARD · 3 beats · counters a charge", "VEIL · 5 glyphs · any finger key").
   **[OPEN]** after playtest: whether flawless powers fire too often at high
   skill (every all-perfect spell), whether a spell with one miss should still
-  earn a sigil for beginners, timed casting, bolt damage vs enemy HP.
+  earn a rune for beginners, timed casting, bolt damage vs enemy HP.
 - **Meta-progression** — spellbook, unlockable elements/areas, score/rank,
   replay.
 - **Controls & input** — key event handling, input buffering, key-rollover for

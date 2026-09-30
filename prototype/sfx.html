@@ -20,12 +20,12 @@
 <script>
 // the game's sampled events: file → when it plays
 const SOUNDS = {
-  cast_fire: 'a spell completes, fire element', cast_water: 'a spell completes, water element',
-  cast_earth: 'a spell completes, earth element', cast_air: 'a spell completes, air element',
-  impact: 'your bolt hits the enemy', arrow_loose: 'the enemy looses a strike', hit_player: 'a strike hits you',
-  ward_block: 'Bulwark blocks a strike', defeat: 'an enemy falls', sigil_earn: 'you earn a sigil',
+  cast_fire: 'you cast a fire bolt rune', cast_water: 'you cast a water bolt rune',
+  cast_earth: 'you cast an earth bolt rune', cast_air: 'you cast an air bolt rune',
+  impact: 'a bolt hits the enemy', arrow_loose: 'the enemy looses a strike', hit_player: 'a strike (or a backfire) hits you',
+  ward_block: 'a ward or Bulwark blocks a strike', defeat: 'an enemy falls', rune_earn: 'you earn a rune',
   speed_up: 'cast mode closes, time resumes',
-  fizzle: 'a spell or sigil fizzles', sigil_cast: 'a sigil is cast', chapter: 'a new chapter begins', game_over: 'struck down',
+  fizzle: 'a spell or a rune cast fizzles', rune_cast: 'a mend/ward rune is cast, or a flawless spell wakes its power', chapter: 'a new chapter begins', game_over: 'struck down',
 };
 let ac = null; const bufs = {};
 document.getElementById('grid').innerHTML = Object.entries(SOUNDS).map(([k, v]) => `<button data-k="${k}"><b>${k}</b><span>${v}</span></button>`).join('');
