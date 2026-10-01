@@ -481,9 +481,20 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   if the next glyph is closer than **2 beats** it slips back by whole beats
   (music and clicks keep their phase), and a big beat count ("2 · 1 · ready")
   sits over the hit line until it arrives. Opening is still refused while a
-  glyph is on the line. **[OPEN]** casting is now free of time pressure —
-  watch whether the charged attack lost its tension (a real-time cast limit is
-  the lever if so); count-in length.
+  glyph is on the line. Count-in length **[OPEN]**.
+
+  **Decided (playtest): the stop is short, and speed is power.** An endless
+  stop killed the tension, so cast mode stays open only a few real seconds —
+  **6 s in chapter 1, 0.5 s less per chapter, 3.5 s from chapter 6** — shown as
+  an arc around the cast ring draining gold → orange → red (pulsing near the
+  end). Empty, the cast **fizzles** (counts toward backfire). The time left
+  when the name completes is the rune's **power**: ×1.5 instantly down to ×0.5
+  at the buzzer, linear, in tenths; it scales bolt damage (before weakness,
+  Kindle, empowered) and mend HP, shown live under the ring ("power ×1.3") and
+  on the cast. The ward has no power — it just has to land. Chosen over a
+  golf-swing release meter (Enter on a pulse): speed rewards the typing skill
+  itself and adds no step. **[OPEN]** curve and limits — reading the spellbook
+  early eats the bar.
 
   **Teaching the runes (playtest: "you'd have to memorize them; you can't read
   the unlock message mid-fight").** Explanations move to the moments you can
