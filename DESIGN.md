@@ -142,6 +142,26 @@ the finger mapping.
 a beat; you type spells to counter. The beat has stakes — miss it and you take
 damage. Different enemies = different rhythms.
 
+**Riffs — decided (playtest, under trial): glyphs come in key patterns, not
+single letters.** Playtest: one letter per slot at ~1.75 keys/s felt too slow,
+and faster was too hard — every glyph was a fresh read (which letter, which
+finger, which row). Rhythm games are fast because players read *patterns*
+(runs, trills, repeats) and play them as one movement; fluent typing is the
+same (motor chunks). So a spell is two bars of **chunks** — repeats (`jjjj`),
+trills (`fkfk`), finger rolls (`asdf`, `;lkj`), real words, later numbers and
+punctuation — each played on 8ths or 16ths with a breath between. The tempo
+stays; the bursts are what's fast (`jjjj` on 16ths at 84 bpm ≈ 5.6 keys/s for
+a beat). Tiers open keys row by row — home row only (8 keys, one per finger:
+an 8-button game) → g h + home-row words → top row → whole keyboard + numbers
+→ punctuation → fast phrases — so no key is excluded, only staged. Each
+encounter keeps 4 chunks in rotation (one swapped now and then) so they repeat
+and get chunked. Bosses may start chunks on off-beats. The runic-tongue words
+stay as a "words" setting for comparison; the tongue itself is no longer a
+goal. Not adopted: keys playing the melody / song-battle framing (overdone).
+A press goes to the **earliest** in-window glyph of its key, so a late press in
+a fast repeat fills the run in order. **[OPEN]** how the patterns connect to
+runes beyond the majority-lane element; chunk pool size, 16th rate per tier.
+
 **Enemy structures:**
 - **Wave (archers)** — the standard encounter. A line of archers fires volleys
   on a steady beat. Each volley is a beat; you type a spell to counter it.

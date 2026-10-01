@@ -46,6 +46,10 @@
       <label><input type="radio" name="pen" value="lenient" checked> lenient (learn)</label><br>
       <label><input type="radio" name="pen" value="strict"> strict fizzle</label>
     </fieldset>
+    <fieldset><legend>Glyphs</legend>
+      <label><input type="radio" name="glyphs" value="riffs" checked> riffs (key patterns, fast bursts)</label><br>
+      <label><input type="radio" name="glyphs" value="words"> words (the runic tongue)</label>
+    </fieldset>
     <fieldset><legend>Run (§7)</legend>
       start tempo <input id="bpm" type="range" min="60" max="140" value="84"><span id="bpmv">84</span> bpm<br>
       start at <select id="chapter"></select>
@@ -67,6 +71,7 @@
   <div id="help">
     <b>How a run goes:</b> chapters of short encounters — archers (steady volleys), cavalry (the charge speeds up each spell), and a boss (its incantations follow a rhythm pattern, off-beat glyphs included). Clear a chapter and the incantations grow: short two-word spells → longer derived words → three-word invocations → numbers → symbols. Spells are phrases in one invented tongue (the gloss under the word says what you're casting), and each encounter keeps to one school of words, so they repeat and become learnable.
     <ul>
+      <li><b>Riffs</b> (Glyphs setting, the default): glyphs come in key patterns — repeats, trills, finger rolls, real words — played in quick 8th/16th bursts with a breath between. Each encounter repeats a handful of them, so learn them as one movement. The chapters open the keyboard row by row, starting with the home row. "words" brings back the runic-tongue spells.</li>
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
       <li><b>Runes are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no glyph missed) earns a rune of its element (the lane most of its glyphs ride: fire, water, earth, air); defeating an enemy earns a <b>mend</b> rune (bosses 2). Press <b>Space</b> — time slows to a crawl and letters hide — the panel opens into the <b>spellbook</b>; type a name to cast: <i>vorkai</i> fire, <i>gamkai</i> water, <i>brykai</i> earth, <i>wynkai</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar), <i>pyrhal</i> mend (+30 HP), <i>dunfen</i> ward (always ready). A wrong letter fizzles (charge kept) — fizzle twice in a row and it <b>backfires</b> for 12 damage (a successful cast resets it); Space again cancels; the ring closes itself when a glyph reaches the line.</li>
@@ -219,6 +224,68 @@ function makeIncantation(tier, school) {
   return { text, gloss: words.map(w => w.gloss).join(' · ') };
 }
 
+// ---- riffs: glyphs come in finger patterns the hands learn as one movement (chunks), played in quick
+// bursts (8th/16th notes) with a breath between them — the tempo stays, the patterns are what get fast.
+// Each tier opens keys and pattern kinds; each encounter draws its spells from a small pool of chunks,
+// so they repeat and become learnable.
+const WORDS = (`as ad add ask all sad dad lad fad fall falls flask lass salad alas alfalfa salsa asks adds
+has had hall half glad flag gash dash flash shall sash gas lash slash glass hags flags halls
+the to of and in it is he for as on at be by we or are if so up her him his she they this that with
+from have here there their what will said see red tree free fire rite tide tire ride rise wise wire
+road word work world light right sight fight sword storm stone water wind flame frost ward spell type
+quiet queen quest quote equip your youth tower power true rule rose hope just jump dark deep keep
+hold gold old fold yellow pole slope four our hour rough tough fast first last kite lake silk whisper
+time come name game make take lazy dog fox zero zone maze vex box mix next black cave move mind bind
+blaze crown brave dream magic arcane cinder ember venom rune glyph caster wizard thunder winter`).split(/\s+/);
+const ROLLS = ['asdf', 'jkl;', 'qwer', 'uiop', 'zxcv', 'm,./', '1234', '7890', 'sdf', 'jkl', 'wer', 'uio', 'xcv', 'm,.', '234', '789'];
+// keys: what may fall; kinds: weighted pattern kinds; fast: chance a chunk plays in 16ths (else 8ths)
+const RIFF_TIERS = {
+  1: { keys: 'asdfjkl;',                                         kinds: { rep: 3, trill: 3, roll: 3 }, fast: 0.35, label: 'home row: repeats, trills, rolls' },
+  2: { keys: 'asdfghjkl;',                                       kinds: { rep: 1, trill: 2, roll: 3, word: 4 }, fast: 0.45, label: 'g h join · home-row words' },
+  3: { keys: 'asdfghjkl;qwertyuiop',                             kinds: { trill: 1, roll: 2, word: 6 }, fast: 0.4, label: 'the top row joins' },
+  4: { keys: 'abcdefghijklmnopqrstuvwxyz;,./1234567890',          kinds: { roll: 2, word: 6, num: 1 }, fast: 0.4, label: 'the whole keyboard · numbers' },
+  5: { keys: "abcdefghijklmnopqrstuvwxyz;,./1234567890'",         kinds: { roll: 1, word: 6, num: 1, punct: 1 }, fast: 0.5, label: 'punctuation joins' },
+  6: { keys: "abcdefghijklmnopqrstuvwxyz;,./1234567890'",         kinds: { roll: 1, word: 7, num: 1, punct: 1 }, fast: 0.6, label: 'fast phrases' },
+};
+const RIFF_BEATS = 8, RIFF_POOL = 4; // a spell is two bars of chunks; an encounter keeps four chunks in rotation
+const rnd = a => a[Math.floor(Math.random() * a.length)];
+const wpick = w => { let x = Math.random() * Object.values(w).reduce((a, b) => a + b, 0); for (const k in w) if ((x -= w[k]) < 0) return k; };
+const fits = (txt, keys) => [...txt].every(c => keys.includes(c));
+function riffChunk(tier) {
+  const T = RIFF_TIERS[tier < 2 || Math.random() < 0.65 ? Math.min(6, tier) : 1 + Math.floor(Math.random() * (Math.min(6, tier) - 1))];
+  const kind = wpick(T.kinds), letters = [...T.keys].filter(c => /[a-z;]/.test(c));
+  let text, fast = Math.random() < T.fast;
+  if (kind === 'rep') text = rnd(letters).repeat(2 + Math.floor(Math.random() * 3));
+  else if (kind === 'trill') { // two keys of different fingers, back and forth
+    const a = rnd(letters), b = rnd(letters.filter(c => KEY2LANE[c] !== KEY2LANE[a]));
+    text = (a + b).repeat(2); fast = fast && tier >= 2;
+  } else if (kind === 'roll') { // neighbouring fingers in a sweep, either way
+    const r = rnd(ROLLS.filter(x => /[a-z;,./]/.test(x[0]) && fits(x, T.keys)));
+    text = Math.random() < 0.5 ? r : [...r].reverse().join(''); fast = fast && tier >= 2;
+  } else if (kind === 'num') { const r = rnd(ROLLS.filter(x => /\d/.test(x[0]))); text = Math.random() < 0.5 ? r : [...r].reverse().join(''); }
+  else { // a real word made of the open keys; long words stay on 8ths
+    text = rnd(WORDS.filter(w => fits(w, T.keys) && w.length <= (tier >= 5 ? 7 : 5)));
+    if (kind === 'punct') text += rnd([',', '.', ';', "'s"]);
+    fast = fast && text.length <= 4 && tier >= 3;
+  }
+  return { text, kind, step: fast ? 0.25 : 0.5 };
+}
+function makeRiff(tier, boss) {
+  if (G.riffFor !== G.enemy) { G.riffFor = G.enemy; G.riffPool = Array.from({ length: RIFF_POOL }, () => riffChunk(tier)); }
+  else if (Math.random() < 0.25) G.riffPool[Math.floor(Math.random() * RIFF_POOL)] = riffChunk(tier); // the rotation drifts slowly
+  const text = [], offs = [], kinds = [];
+  for (let at = 0; ;) {
+    const c = rnd(G.riffPool), dur = (c.text.length - 1) * c.step;
+    if (kinds.length && at + dur > RIFF_BEATS - 0.5) break;
+    if (text.length) { text.push(' '); offs.push(null); }
+    [...c.text].forEach((ch, i) => { text.push(ch); offs.push(at + i * c.step); });
+    kinds.push(c.kind);
+    const unit = boss ? 0.5 : 1; // a breath of at least half a beat; the next chunk starts on a beat (a boss: off-beats too)
+    at = Math.ceil((at + dur + c.step + 0.5) / unit - 1e-9) * unit;
+  }
+  return { text: text.join(''), offs, gloss: kinds.join(' · ') };
+}
+
 // ================= progression (§7): chapters of short encounters =================
 // dens = max glyphs per 4-beat bar (a spell spans as many bars as it needs, glyphs spread
 // evenly across them); tier = incantation templates; bpm = offset from the start tempo.
@@ -263,6 +330,7 @@ function bossPositions(n, dens) { // beat offsets for n glyphs, bar by bar
 const OPT = {};
 function syncOpts() {
   OPT.pen = document.querySelector('input[name=pen]:checked').value;
+  OPT.glyphs = document.querySelector('input[name=glyphs]:checked').value;
   OPT.startCh = +document.getElementById('chapter').value;
   OPT.guide = document.getElementById('guide').checked;
   OPT.music = document.getElementById('music').checked;
@@ -419,7 +487,7 @@ function startEncounter() {
   if (newCh) chapterSnd();
   G.banner = {
     title: newCh ? `CHAPTER ${G.ci + 1} — ${ch.name.toUpperCase()}` : G.enemy.name.toUpperCase(),
-    sub: newCh ? `${G.enemy.name} · ${['', 'two-word spells', 'longer words', 'three-word invocations', 'numbers join the glyphs', 'symbols join the glyphs', 'the full tongue'][Math.min(6, ch.tier)]}`
+    sub: newCh ? `${G.enemy.name} · ${OPT.glyphs === 'riffs' ? RIFF_TIERS[Math.min(6, ch.tier)].label : ['', 'two-word spells', 'longer words', 'three-word invocations', 'numbers join the glyphs', 'symbols join the glyphs', 'the full tongue'][Math.min(6, ch.tier)]}`
                : `${{ archer: 'steady volleys', cavalry: 'the charge speeds up every spell', boss: 'follow its rhythm' }[kind]} · school of ${school} · weak to ${SCHOOL_WEAK[school]}`,
     until: now() + 2.2,
   };
@@ -504,7 +572,8 @@ function makeSpell(t0) {
   if (foe.kind === 'cavalry') G.bpm = Math.min(200, G.bpm * ENEMIES.cavalry.ramp);
   let bpm = G.bpm; const still = G.stillLeft > 0; // Stillwater: this spell plays slower (through the tempo map)
   if (still) { bpm *= STILL_RATE; G.stillLeft--; }
-  const inc = makeIncantation(ch.tier, foe.school), beat = 60/bpm, chars = [...inc.text];
+  const riff = OPT.glyphs === 'riffs';
+  const inc = riff ? makeRiff(ch.tier, foe.kind === 'boss') : makeIncantation(ch.tier, foe.school), beat = 60/bpm, chars = [...inc.text];
   // t0 is a click (previous spell spans whole beats); this spell's tempo starts here
   if (Math.abs(segAt(t0).beat - beat) > 1e-9) {
     G.segs.push({ t0, beat });
@@ -515,13 +584,14 @@ function makeSpell(t0) {
   // or on a boss's rhythm pattern; density per bar is capped by the chapter
   const n = chars.length, dens = ch.dens + (foe.kind === 'cavalry' ? 1 : 0);
   let bars, offs;
-  if (foe.kind === 'boss') { offs = bossPositions(n, ch.dens); bars = Math.floor(offs[n - 1] / 4) + 1; }
+  if (riff) { offs = inc.offs; bars = Math.floor(Math.max(...offs.filter(o => o !== null)) / 4) + 1; }
+  else if (foe.kind === 'boss') { offs = bossPositions(n, ch.dens); bars = Math.floor(offs[n - 1] / 4) + 1; }
   else { bars = Math.ceil(n / dens); offs = chars.map((_, i) => i * bars * 4 / n); }
   // a space keeps its time slot but has no glyph: it is a rest between words (the thumb plays nothing)
   const glyphs = [], rests = [];
   chars.forEach((c, i) => {
     const time = t0 + offs[i] * beat;
-    if (c === ' ') rests.push(time);
+    if (c === ' ') { if (!riff) rests.push(time); } // riffs: the gap between chunks is its own rest
     else glyphs.push({ ch: c, lane: KEY2LANE[c], time, status: 'pending', hitAt: 0, wordStart: i > 0 && chars[i - 1] === ' ' });
   });
   const last = glyphs[glyphs.length-1];
@@ -852,9 +922,10 @@ addEventListener('keydown', e => {
   if (k === null) return;
   // when the key went down (event timestamp, not handler time), on the heard clock
   const raw = heardAt(e.timeStamp), t = raw - OPT.inOff / 1000;
-  // route the press to the nearest pending glyph with that character; separately
-  // track the nearest judgeable glyph of any character (for WRONG)
-  let same = null, near = null;
+  // route the press to the earliest pending glyph with that character still in its window (a quick
+  // repeat — jjjj on 16ths — then fills in order), else the nearest one; separately track the nearest
+  // judgeable glyph of any character (for WRONG)
+  let same = null, near = null, first = null;
   for (const s of G.spells) {
     if (s.done) continue;
     for (const r of s.glyphs) {
@@ -862,9 +933,11 @@ addEventListener('keydown', e => {
       const ad = Math.abs(t - r.time);
       const fits = r.ch === k || (r.veil && KEY2LANE[k] === r.lane); // Veil: any key of the right finger
       if (fits && (!same || ad < Math.abs(t - same.r.time))) same = { s, r };
+      if (fits && ad <= GW && (!first || r.time < first.r.time)) first = { s, r };
       if (ad <= GW && (!near || ad < Math.abs(t - near.r.time))) near = { s, r };
     }
   }
+  if (first) same = first;
   const d = same ? t - same.r.time : 0;
   if (same && Math.abs(d) <= GW) grade(same.r, Math.abs(d) <= PW ? 'perfect' : 'good', d, raw - same.r.time);
   else if (same && d > GW) resolveMiss(same.s, same.r, fmtMs(d)); // past due but not yet lapsed: same press, same verdict
@@ -1418,7 +1491,8 @@ function draw(t) {
       cx.fillStyle = PAL.blush; cx.globalAlpha = .55; cx.beginPath();
       cx.moveTo(W/2, y - 6); cx.lineTo(W/2 + 6, y); cx.lineTo(W/2, y + 6); cx.lineTo(W/2 - 6, y); cx.fill(); cx.globalAlpha = 1;
     }
-    for (const r of s.glyphs) {
+    for (let gi = s.glyphs.length - 1; gi >= 0; gi--) { // back to front: in a quick same-lane run the next glyph to hit sits on top
+      const r = s.glyphs[gi];
       const y = noteY(r, t); if (y < -60 || y > HIT_Y + 80) continue;
       const l = LANE[r.lane];
       if (r.status === 'pending') {
