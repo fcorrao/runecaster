@@ -74,7 +74,7 @@
       <li><b>Riffs</b> (Glyphs setting, the default): glyphs come in key patterns played in quick 8th/16th bursts with a breath between. Every spell is a <b>sigil</b>: its strokes share one shape, and the shape is the rune a clean spell earns — <b>pillar</b> (one key repeated) earth, <b>wave</b> (two fingers trading) water, <b>sweep</b> (a roll across neighbouring fingers) air, <b>burst</b> (mirrored pairs hand to hand, opening from the index fingers) fire. The thread through its glyphs glows in the rune's color. From chapter 2 a sigil ends in a word, its inscription. Each encounter repeats a handful of strokes, so learn them as one movement. The chapters open the keyboard row by row, starting with the home row. "words" brings back the runic-tongue spells.</li>
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
-      <li><b>Runes are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no glyph missed) earns a rune of its element (the lane most of its glyphs ride: fire, water, earth, air); defeating an enemy earns a <b>mend</b> rune (bosses 2). Press <b>Space</b> — time slows to a crawl and letters hide — the panel opens into the <b>spellbook</b>; type a name to cast: <i>vorkai</i> fire, <i>gamkai</i> water, <i>brykai</i> earth, <i>wynkai</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar), <i>pyrhal</i> mend (+30 HP), <i>dunfen</i> ward (always ready). A wrong letter fizzles (charge kept) — fizzle twice in a row and it <b>backfires</b> for 12 damage (a successful cast resets it); Space again cancels; the ring closes itself when a glyph reaches the line.</li>
+      <li><b>Runes are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no glyph missed) earns a rune of its element (the lane most of its glyphs ride: fire, water, earth, air); defeating an enemy earns a <b>mend</b> rune (bosses 2). Press <b>Space</b> — time stops (music and timers too) and the letters hide — the panel opens into the <b>spellbook</b>; type a name to cast: <i>vorkai</i> fire, <i>gamkai</i> water, <i>brykai</i> earth, <i>wynkai</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar), <i>pyrhal</i> mend (+30 HP), <i>dunfen</i> ward (always ready). A wrong letter fizzles (charge kept) — fizzle twice in a row and it <b>backfires</b> for 12 damage (a successful cast resets it); Space again cancels; the ring closes itself when a glyph reaches the line.</li>
       <li><b>Charged attacks:</b> every enemy charges a big attack — the ring over its head fills; in the last bar it counts down the beats. Cast <i>dunfen</i> then: the ward holds for 5 seconds and <b>counters</b> the charged attack back at the enemy. Missed glyphs still let the enemy hit you. The countdown is loud on purpose: a rising doom pulse each beat, the hit line turns red, the enemy's screen edge flashes.</li>
       <li><b>Empowered:</b> you charge too — the ring over the caster fills over 20 beats, like the enemy's. Full, it rings a bright chime and opens 5 seconds (cyan aura, cyan screen edge) in which every bolt rune hits ×2.</li>
       <li><b>Flawless spells</b> (every glyph PERFECT) trigger the incantation's school power at once, no cast needed: storm Gale (glyphs and the charge pushed back a bar), stone Bulwark (next strike blocked), shadow Veil (next 6 glyphs take any key of the right finger), tide Stillwater (next 2 spells 20% slower), flame Kindle (next bolt ×2).</li>
@@ -437,7 +437,7 @@ function impactSnd(power) { // bolt landing on the enemy
   beep(t + 0.015, 180, 0.07, 'triangle', 0.10);
 }
 function runeSnd() { if (!AC || sfx('rune_earn')) return; const t = AC.currentTime; [523, 659, 784, 1047].forEach((f, i) => beep(t + i * 0.06, f, 0.18, 'triangle', 0.08)); } // rune earned
-function openSnd() { if (!AC) return; const t = AC.currentTime; beep(t, 330, 0.25, 'sine', 0.08); beep(t + 0.05, 495, 0.25, 'sine', 0.06); } // cast mode: time slows (synthesized: the sampled version didn't read as slowing)
+function openSnd() { if (!AC) return; const t = AC.currentTime; beep(t, 330, 0.25, 'sine', 0.08); beep(t + 0.05, 495, 0.25, 'sine', 0.06); } // cast mode: time stops (synthesized: the sampled version didn't read as slowing)
 function resumeSnd() { if (!AC || sfx('speed_up', .8)) return; const t = AC.currentTime; beep(t, 495, 0.18, 'sine', 0.06); beep(t + 0.05, 660, 0.18, 'sine', 0.05); } // time resumes
 function tickSnd(n) { if (AC) beep(AC.currentTime, 600 + n * 90, 0.05, 'triangle', 0.08); } // a letter of the name lands
 function castRuneSnd() { // a mend/ward rune fires, or a flawless spell's power wakes
@@ -804,9 +804,10 @@ const BOONS = {
 };
 const BOON_OF = Object.fromEntries(Object.entries(BOONS).map(([k, b]) => [b.school, k]));
 const VEIL_GLYPHS = 6, STILL_SPELLS = 2, STILL_RATE = 0.8;
-// cast mode slows the whole rhythm to a fixed crawl — glyphs, clicks and music together, so everything is
-// still on the beat when it closes. The glyphs keep creeping (the cost of casting) with their letters hidden.
-const CAST_PXS = 36, CAST_K = CAST_PXS / PXS; // field speed while casting, px/s — the same at any tempo
+// cast mode STOPS the rhythm — glyphs, clicks, music and every timer together (playtest: at riff pace even a crawl
+// was too much to manage), so everything is still on the beat when it resumes. The glyphs' letters stay hidden
+// (a stop is no free look). On resume the rhythm counts you back in: the next glyph is at least COUNT_IN beats away.
+const CAST_K = 0, COUNT_IN = 2; // rhythm rate while casting (0 = stopped); beats of clicks before the next glyph after a cast
 function grantRune(key, n, why) {
   const S = RUNES[key], had = G.runes[key] || 0, got = Math.min(RUNE_MAX, had + n) - had;
   if (got <= 0) { popup(`${S.label} FULL`, PAL.dim, W/2, HIT_Y - 85); return; }
@@ -829,7 +830,7 @@ function wakeBoon(key) {
 function openCast() {
   const tg = now() - OPT.inOff / 1000;
   if (G.spells.some(s => !s.done && s.glyphs.some(r => r.status === 'pending' && tg >= r.time))) { G.castFx = { kind: 'close', at: now(), text: 'a glyph is on the line — hit it first' }; return; }
-  G.cast = { buf: '', at: now(), t: now() };
+  G.cast = { buf: '', at: now(), t: now() }; G.countIn = null;
   castMusicRate(true);
   openSnd();
 }
@@ -860,7 +861,18 @@ function castMusicRate(slow) { // the soundtrack slows with the rhythm (tape-sty
   if (slow) { pr.cancelScheduledValues(a); pr.setValueAtTime(musicRate(segAt(a).beat) * CAST_K, a); }
   else rescheduleMusicRates();
 }
-function leaveCast() { castTick(); G.cast = null; castMusicRate(false); G.unseen.clear(); resumeSnd(); } // the spellbook was on screen: nothing is NEW any more
+function leaveCast() { castTick(); G.cast = null; countIn(); castMusicRate(false); G.unseen.clear(); resumeSnd(); } // the spellbook was on screen: nothing is NEW any more
+// the rhythm resumes with a count-in: if the next glyph is closer than COUNT_IN beats, the timeline slips by whole
+// beats (the clicks and music keep their phase) so you hear the beat again before you have to play
+function countIn() {
+  const tg = now() - OPT.inOff / 1000, b = segAt(tg).beat, next = () => {
+    let x = G.nextT0; for (const s of G.spells) if (!s.done) for (const r of s.glyphs) if (r.status === 'pending') x = Math.min(x, r.time);
+    return x;
+  };
+  const lack = COUNT_IN * b - (next() - tg);
+  if (lack > 0) dilate(Math.ceil(lack / b - 1e-9) * b);
+  G.countIn = { until: next(), beat: b };
+}
 function closeCast(text) { leaveCast(); G.castFx = { kind: 'close', at: now(), text }; }
 function castLetter(k) {
   const buf = G.cast.buf + k;
@@ -994,7 +1006,7 @@ function frame(ts) {
   if (!started || !G) { drawIdle(); return; }
   const t = now();
   if (!G.over) {
-    if (G.cast) castTick(); // cast mode: the rhythm crawls (glyphs, clicks, music) until the ring closes
+    if (G.cast) castTick(); // cast mode: the rhythm (glyphs, clicks, music, timers) stands still until you resume
     // metronome = enemy heartbeat, on the tempo map; each volley opens on an accented click
     const ahead = AC.currentTime + 0.15 + Math.max(0, -OPT.delay / 1000);
     while (G.nextBeat < ahead) {
@@ -1014,9 +1026,6 @@ function frame(ts) {
       if (r.status === 'pending' && tg > r.time + GW + LAPSE_GRACE) resolveMiss(s, r);
     }
     for (const s of G.spells) if (!s.done && s.glyphs.every(r => r.status !== 'pending')) resolveCast(s);
-    // time is slowed while casting, so the ring may open any time; it closes itself (free) only when a glyph
-    // reaches the line — the late half of that glyph's window is still yours to hit it
-    if (G.cast && G.spells.some(s => !s.done && s.glyphs.some(r => r.status === 'pending' && tg >= r.time))) closeCast('a glyph reaches the line');
     if (G.kindle && Math.random() < 0.35) burst(CAST_X, CAST_AY, BOONS.kindle.color, 1, 50, 'fire'); // Kindle smoulders in the hand
     // the enemy's charged attack: fills over its beats from its first spell, growls each beat of the last bar, then flies
     const E = G.enemy;
@@ -1639,7 +1648,7 @@ function draw(t) {
     for (const s of segs) { const w = cx.measureText(s.c).width; cx.fillStyle = col[s.s]; cx.shadowColor = s.s === 'pending' ? PAL.magenta : col[s.s]; cx.fillText(s.c, x + w/2, 30); x += w + 2; }
     cx.shadowBlur = 0;
     cx.font = 'italic 12px Georgia, "Times New Roman", serif'; cx.fillStyle = PAL.dim; // what you're casting
-    cx.fillText(G.cast ? 'time slows · the glyphs are veiled while you cast' : sp.gloss, W/2, 50);
+    cx.fillText(G.cast ? 'time stands still · the glyphs are veiled while you cast' : sp.gloss, W/2, 50);
   }
 
   // fx rings
@@ -1790,7 +1799,7 @@ function drawWard(t) {
     cx.beginPath(); cx.ellipse(ox + 20 * k, y, 22 + 30 * k, 60 + 30 * k, 0, 0, 7); cx.stroke(); cx.restore();
   }
 }
-// the spellbook: cast mode's view of the rune panel, readable because time is slowed. Every rune: icon, the
+// the spellbook: cast mode's view of the rune panel, readable because time stands still. Every rune: icon, the
 // name to type (typed prefix glowing), what it does, charges — or where to earn it; the bolt the enemy is weak to is marked
 function drawSpellbook(t) {
   const keys = Object.keys(RUNES), buf = G.cast.buf, x0 = W/2 - 230, y0 = TOP_Y - 30, rowH = 40, w = 460, h = 30 + keys.length * rowH + 6;
@@ -1801,7 +1810,7 @@ function drawSpellbook(t) {
   cx.textAlign = 'left'; cx.fillStyle = PAL.blush; cx.font = 'italic 900 13px "Trebuchet MS", "Arial Black", sans-serif';
   cx.fillText('SPELLBOOK', x0 + 16, y0 + 20);
   cx.textAlign = 'right'; cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace';
-  cx.fillText('time is slowed · type a name · Space closes', x0 + w - 14, y0 + 20);
+  cx.fillText('time stands still · type a name · Space resumes', x0 + w - 14, y0 + 20);
   keys.forEach((key, i) => {
     const S = RUNES[key], n = G.runes[key] || 0, owned = owns(key), y = y0 + 30 + i * rowH, weak = S.el && S.el === G.enemy.weak;
     const match = owned && buf && S.name.startsWith(buf);
@@ -1873,7 +1882,7 @@ function drawRunes(t) {
   // cast mode dims the lanes first, so the rune panel and the ring read above them
   if (G.cast) { cx.fillStyle = `rgba(7,3,15,${.55 * Math.min(1, (t - G.cast.at) / 0.2)})`; cx.fillRect(X0 - 12, TOP_Y - 30, LANES_W + 24, HIT_Y + 72 - (TOP_Y - 30)); }
   // the panel: every rune's name is always visible (dim until owned), with its charges. In cast mode — when time
-  // is slowed and you have a moment to read — it opens into the spellbook: what each rune does, where to earn it
+  // stands still and you have a moment to read — it opens into the spellbook: what each rune does, where to earn it
   if (G.cast) drawSpellbook(t);
   else {
   const px = W/2 - 50, py = TOP_Y - 30, RH = 42, ph = 26 + Object.keys(RUNES).length * RH;
@@ -1917,6 +1926,20 @@ function drawRunes(t) {
     cx.textAlign = 'center'; cx.fillStyle = '#fff'; cx.shadowColor = PAL.magenta; cx.shadowBlur = 12;
     cx.font = 'bold 22px Georgia, serif'; cx.fillText(G.cast.buf + ((t * 2) % 1 < 0.5 ? '▏' : ' '), R.x, R.y + 7); cx.shadowBlur = 0;
     cx.fillStyle = PAL.blush; cx.font = '11px ui-monospace, Menlo, monospace'; cx.fillText('type a rune · Space cancels', R.x, R.y + R.r + 30);
+  }
+  // count-in after a cast: the beats left before the next glyph, big over the lanes
+  const CI = G.countIn;
+  if (CI && !G.cast) {
+    const left = CI.until - (t - OPT.inOff / 1000);
+    if (left <= 0) G.countIn = null;
+    else if (left <= COUNT_IN * CI.beat + 0.02) {
+      const n = Math.ceil(left / CI.beat - 1e-6), ph = 1 - (left / CI.beat - (n - 1)); // ph: 0 → 1 across the beat
+      cx.save(); cx.textAlign = 'center'; cx.globalAlpha = 0.9 * (1 - ph * 0.6);
+      cx.fillStyle = PAL.blush; cx.shadowColor = PAL.magenta; cx.shadowBlur = 18;
+      cx.font = `bold ${42 + 12 * (1 - ph)}px Georgia, "Times New Roman", serif`; cx.fillText(String(n), W/2, HIT_Y - 34); // just over the line, between the hands (clear of the cast burst)
+      cx.shadowBlur = 0; cx.font = '11px ui-monospace, Menlo, monospace'; cx.fillStyle = PAL.dim; cx.fillText('ready', W/2, HIT_Y - 14);
+      cx.restore();
+    }
   }
   // after a cast / fizzle / close
   const F = G.castFx;

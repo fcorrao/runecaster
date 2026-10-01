@@ -427,7 +427,7 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   cavalry 20, boss 16; dealing 30 / 30 / 40), starting with its first spell. A
   ring over its head and a thin bar under its health fill; the last bar (4
   beats) turns red, counts down, growls on each beat and prompts `ward:
-  dunfen`. The charge lives on the rhythm timeline, so cast mode slows it with
+  dunfen`. The charge lives on the rhythm timeline, so cast mode stops it with
   everything else. The ward is innate rather than earned so the charged attack
   is always answerable: the skill is reading the telegraph and casting in time
   (**decided, playtest: the ward lasts 5 s** — one bar plus the attack's flight
@@ -448,7 +448,7 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   seconds counting down over his head, "cast a bolt!", and the caster's screen
   edge glowing cyan. Every bolt cast in it hits **×2** (stacks with weakness and
   Kindle). When it closes the next charge starts. Both the charge and the
-  window live on the rhythm timeline (cast mode slows them).
+  window live on the rhythm timeline (cast mode stops them).
 
   **Flawless powers** — the old castable runes, now triggered directly by an
   all-perfect spell of that school:
@@ -471,6 +471,19 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   cast. Because time is slowed, the ring may open at any moment, even with glyphs
   in their windows; it closes itself (free) only when a glyph reaches the line,
   leaving the late half of that glyph's window to hit it.
+
+  **Decided (playtest, riffs): cast mode stops time, and resumes with a
+  count-in.** At riff pace even the crawl was too much to manage. Now the
+  rhythm stands still while the spellbook is open — glyphs, clicks, music
+  (tape-stop), the enemy's charge, your ward and empowered windows. Letters
+  stay hidden, so a stop is no free look. The price of a cast moves from
+  "glyphs creep" to "you lose the groove", so closing **counts you back in**:
+  if the next glyph is closer than **2 beats** it slips back by whole beats
+  (music and clicks keep their phase), and a big beat count ("2 · 1 · ready")
+  sits over the hit line until it arrives. Opening is still refused while a
+  glyph is on the line. **[OPEN]** casting is now free of time pressure —
+  watch whether the charged attack lost its tension (a real-time cast limit is
+  the lever if so); count-in length.
 
   **Teaching the runes (playtest: "you'd have to memorize them; you can't read
   the unlock message mid-fight").** Explanations move to the moments you can
