@@ -547,7 +547,13 @@ survives. Not interactive (the user's call), but **paced by you (playtest:
 "a little fast")**: when a lesson has shown its idea the rhythm stops, as in
 cast mode, and a pulsing **NEXT ▸** waits for Enter / Space / → / a click;
 the next lesson starts with the count-in. The last says FINISH and returns to
-the title. Esc leaves at any time.
+the title. Esc leaves at any time. **Next is always live** (a dim SKIP while
+a lesson plays — it closes any cast the demo is typing). **Target ~5 s per
+lesson** (playtest: lesson 4 ran far too long): measured 4–5 s for most; the
+seal lesson ~7–8 s (it waits for a sigil to finish) and the charged attack
+~7.5 s (the countdown plus the ward cast); ~55 s in all. The flawless lesson
+takes a demo's licence — the spell already under way is regraded perfect —
+so its boon comes with that spell instead of the next.
 Every effect and sound is the game's own, so the demo stays true as the game
 changes.
 
