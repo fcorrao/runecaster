@@ -82,7 +82,7 @@
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
       <li><b>Calibration:</b> if the click doesn't land when the letter crosses the line, slide <i>audio</i>. If your presses sit consistently early/late on the error bar, press "set input from last 20 hits" (or slide <i>input</i>). Both are saved in this browser.</li>
     </ul>
-    Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. The synthwave soundtrack is locked to the beat and runs at the speed of the letters; music and sampled effects need an http server — file:// plays the synthesized fallbacks. Audition every effect on the <a href="sfx.html" style="color:#f3a5e6">sound board</a>.
+    New here? <b>HOW TO PLAY</b> on the title screen plays a narrated demo. Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. The synthwave soundtrack is locked to the beat and runs at the speed of the letters; music and sampled effects need an http server — file:// plays the synthesized fallbacks. Audition every effect on the <a href="sfx.html" style="color:#f3a5e6">sound board</a>.
   </div>
 </aside>
 <script>
@@ -969,6 +969,7 @@ const BOON_EFFECT = {
 // ================= input =================
 addEventListener('keydown', e => {
   if (e.repeat || !started || !G || G.over) return;
+  if (G.demo && e.isTrusted) { e.preventDefault(); demoEnd(); return; } // the demo plays itself: a real key leaves it
   if (e.key === ' ') { e.preventDefault(); if (G.cast) closeCast('cast cancelled'); else openCast(); return; } // the thumb: cast mode
   if (G.cast) { // cast mode: letters spell a rune's name, they never reach the glyphs
     if (e.key.length === 1 && /[a-z]/i.test(e.key)) castLetter(e.key.toLowerCase());
@@ -1006,13 +1007,125 @@ addEventListener('keydown', e => {
   else if (same && d >= -GW - EARLY_SHOW) judge(same.r.lane, 'EARLY', fmtMs(d), PAL.dim); // not judged: glyph stays live
   // anything else touched no live glyph: no reward, no punishment
 });
-cv.addEventListener('click', () => {
+cv.addEventListener('click', e => {
   if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' }); }
   AC.resume();
   loadSfx();
-  if (!started) { started = true; newGame(); syncOpts(); startRun(); musicPlay(); }
+  if (started && G && G.demo) { demoEnd(); return; } // any click leaves the demo
+  if (!started) {
+    const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height, b = HOWTO_BTN;
+    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { demoStart(); return; }
+    started = true; newGame(); syncOpts(); startRun(); musicPlay();
+  }
   else if (G.over) { newGame(); syncOpts(); startRun(); musicPlay(); }
 });
+
+// ================= how to play: a narrated demo =================
+// Not interactive: the real game plays itself (chapter 1, riffs) while a caption explains one idea at a time —
+// lanes and timing → sigils → sealing a rune → a miss → casting → the count-in → the charged attack and the ward →
+// the empowered window → flawless boons → a kill's mend rune. Every effect is the real one. Any click or key leaves.
+const HOWTO_BTN = { x: W/2 - 100, y: H - 70, w: 200, h: 32 }; // on the splash, under CLICK TO BEGIN
+const demoKey = k => window.dispatchEvent(new KeyboardEvent('keydown', { key: k }));
+const demoTg = () => now() - OPT.inOff / 1000;
+const demoSince = (d, f) => G.spells.some(s => s.done && s.t0 > d.at && f(s)); // a spell resolved during this step
+const DEMO = [
+  { title: 'Glyphs fall in 8 lanes, one per finger',
+    text: 'Type each glyph as it crosses the line, on the beat. Lane colors are elements; the labels under the line name the finger and its keys.', min: 8 },
+  { title: 'Every spell is a sigil',
+    text: () => { const sp = activeSpell(), sh = sp && sp.rune && SIGILS[sp.rune].shape;
+      return (sh ? `This one is a ${sh.toUpperCase()}: its glowing thread is the shape. ` : '') + 'pillar (one key repeated) = earth · wave (two fingers trading) = water · sweep (a roll) = air · burst (mirrored pairs) = fire.'; }, min: 9 },
+  { title: 'Hit every glyph and the sigil seals',
+    text: 'A clean sigil (no glyph missed) earns its rune. Runes collect in the panel between your hands.',
+    until: d => demoSince(d, s => !s.fizzled && s.glyphs.every(r => r.status !== 'miss')), min: 4 },
+  { title: 'Miss a glyph and the enemy strikes',
+    text: 'Every missed glyph lets the enemy hit you, and the sigil earns nothing. (The demo misses one on purpose.)',
+    enter: d => { const sp = G.spells.find(s => !s.done && s.glyphs[0].time > demoTg() + 0.4); if (sp) sp.glyphs[Math.min(1, sp.glyphs.length - 1)]._skip = true; },
+    until: d => demoSince(d, s => s.glyphs.some(r => r.status === 'miss')), min: 4 },
+  { title: 'Space: time stops, the spellbook opens',
+    text: () => `Type a rune's name to cast it. The bar around the ring drains: the faster you finish, the harder it hits. A bolt of the enemy's weakness (here ${G.enemy.weak}) hits ×2.`,
+    enter: d => demoCast(d, G.enemy.weak, 1.6), until: d => d.castDone, min: 5 },
+  { title: 'Closing counts you back in',
+    text: 'The next glyph waits at least 2 beats, so you catch the beat again before you play.', min: 3.5 },
+  { title: 'The enemy charges a big attack',
+    text: 'Its ring fills (a low thrum each bar), then 4 doom beats: the hit line and its edge turn red. Cast dunfen, the ward (always ready): it blocks the attack and counters it.',
+    charge: true, enter: d => { const E = G.enemy, tg = demoTg(), b = segAt(tg).beat; E.chargeAt = tg + 10 * b; E.chargeFrom = E.chargeAt - E.chargeBeats * b; E.warned = 0; E.barTick = 0; },
+    act: d => { if (!d.warded && G.enemy.warned && G.enemy.warned <= 3) { d.warded = true; demoCast(d, 'ward', 0.6); } },
+    until: d => G.foeCharge > d.at && now() - G.foeCharge > 1.6, min: 6 },
+  { title: 'You charge too',
+    text: 'When your ring fills (a bell each bar, then 4 sparkles) you are EMPOWERED for 5 seconds: every bolt hits ×2.',
+    focus: true, enter: d => { const tg = demoTg(), b = segAt(tg).beat; G.focusAt = tg + 6 * b; G.focusFrom = G.focusAt - FOCUS_BEATS * b; G.focusWarned = 0; G.focusTick = 0; },
+    act: d => { if (!d.casting && G.empower) { d.casting = true; demoCast(d, G.enemy.weak, 0.6); } },
+    until: d => d.castDone && !G.empower, min: 6 },
+  { title: 'Flawless spells wake a boon',
+    text: () => { const B = BOONS[BOON_OF[G.enemy.school]]; return `Every glyph PERFECT and the enemy school's power fires at once, no cast needed: here ${B.label} (${B.desc}).`; },
+    perfect: true, until: d => demoSince(d, s => s.glyphs.every(r => r.status === 'perfect')), min: 5 },
+  { title: 'Defeat the enemy, earn a mend rune',
+    text: 'Kills earn pyrhal, which heals you (bosses give two). Then the next enemy steps up.',
+    enter: d => { G.enemy.hp = Math.min(G.enemy.hp, 3); demoCast(d, G.enemy.weak, 0.6); }, until: d => G.foeDead > d.at && now() - G.foeDead > 3, min: 5 },
+  { title: "That's how to play",
+    text: 'Accuracy first: clean sigils earn runes, runes win fights. Click to return, then CLICK TO BEGIN.', min: 5, last: true },
+];
+function demoStart() {
+  started = true; syncOpts();
+  Object.assign(OPT, { startCh: 0, glyphs: 'riffs', pen: 'lenient' }); // the demo shows the game as it starts, whatever the settings
+  newGame(); startRun(); musicPlay();
+  G.enemy.hp = G.enemy.max = 80; // sturdy enough to survive the whole lesson
+  G.demo = { i: -1 }; demoNext();
+}
+function demoNext() {
+  const old = G.demo; G.demo = { i: old.i + 1, at: now() };
+  if (G.demo.i >= DEMO.length) { setTimeout(demoEnd, 0); return; }
+  const S = DEMO[G.demo.i]; if (S.enter) S.enter(G.demo);
+}
+function demoEnd() { musicStop(); G = null; started = false; syncOpts(); }
+function demoCast(d, key, wait) { // open the spellbook, let it be read for `wait` s, then type the name at a brisk pace
+  if (key !== 'ward' && !G.runes[key]) { G.runes[key] = 1; G.learned.add(key); }
+  const name = RUNES[key].name;
+  const go = () => {
+    if (G.demo !== d) return;
+    if (!G.cast) demoKey(' ');
+    if (!G.cast) { setTimeout(go, 60); return; } // a glyph is on the line: the demo hits it first
+    let i = 0;
+    const type = () => { if (G.demo !== d || !G.cast) return; demoKey(name[i++]); if (i < name.length) setTimeout(type, 170); else d.castDone = true; };
+    setTimeout(type, wait * 1000);
+  };
+  go();
+}
+function demoTick(t) {
+  const d = G.demo, S = DEMO[d.i], tg = t - OPT.inOff / 1000, E = G.enemy;
+  // the two charges wait for their own lessons
+  if (!S.charge && E.chargeAt !== null) { E.chargeFrom = tg; E.chargeAt = tg + 999; E.warned = 0; }
+  if (!S.focus && !G.empower && G.focusAt !== null) { G.focusFrom = tg; G.focusAt = tg + 999; }
+  // the autoplayer: each glyph a little late (mostly GOOD, some PERFECT), dead on in the flawless lesson; never while casting
+  if (!G.cast) for (const s of G.spells) if (!s.done) for (const r of s.glyphs) {
+    if (r.status !== 'pending' || r._demo || r._skip) continue;
+    if (r._off === undefined) r._off = S.perfect ? 0.004 : 0.03 + Math.random() * 0.06;
+    if (tg >= r.time + r._off) { r._demo = 1; demoKey(r.ch); }
+  }
+  if (S.act) S.act(d);
+  const age = t - d.at;
+  if (!S.last && age >= S.min && (!S.until || S.until(d) || age > 30)) demoNext();
+  else if (S.last && age >= S.min && !d.ending) { d.ending = true; setTimeout(demoEnd, 0); } // after this frame: it still needs G
+}
+function wrapText(text, maxW) { // greedy word wrap at the current font
+  const out = []; let line = '';
+  for (const w of text.split(' ')) { const tryL = line ? line + ' ' + w : w; if (cx.measureText(tryL).width > maxW && line) { out.push(line); line = w; } else line = tryL; }
+  if (line) out.push(line); return out;
+}
+function drawDemo(t) { // the caption, where the error meter sits (the demo's timing is not yours)
+  const d = G.demo, S = DEMO[d.i]; if (!S) return;
+  const x = W/2 - 340, y = HIT_Y + 112, w = 680, h = 86, a = Math.min(1, (t - d.at) / 0.3);
+  cx.save(); cx.globalAlpha = a;
+  cx.fillStyle = 'rgba(10,4,24,.92)'; rr(x, y, w, h, 12); cx.fill();
+  cx.strokeStyle = PAL.pink; cx.lineWidth = 1.5; cx.shadowColor = PAL.magenta; cx.shadowBlur = 12; rr(x, y, w, h, 12); cx.stroke(); cx.shadowBlur = 0;
+  cx.textAlign = 'left'; cx.fillStyle = PAL.gold; cx.font = 'italic 900 17px "Trebuchet MS", "Arial Black", sans-serif';
+  cx.fillText(S.title, x + 18, y + 26);
+  cx.textAlign = 'right'; cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace';
+  cx.fillText(`HOW TO PLAY · ${d.i + 1} / ${DEMO.length} · click or any key to leave`, x + w - 16, y + 22);
+  cx.textAlign = 'left'; cx.fillStyle = PAL.text; cx.font = '13px ui-monospace, Menlo, monospace';
+  wrapText(typeof S.text === 'function' ? S.text() : S.text, w - 36).slice(0, 3).forEach((l, i) => cx.fillText(l, x + 18, y + 47 + i * 17));
+  cx.restore();
+}
 
 // ================= frame =================
 let lastTs = 0, frameDt = 1/60;
@@ -1025,6 +1138,7 @@ function frame(ts) {
   if (!G.over) {
     if (G.cast) castTick(); // cast mode: the rhythm (glyphs, clicks, music, timers) stands still until you resume
     if (G.cast && t - G.cast.at > castLimit()) castFizzle('the cast ran out of time');
+    if (G.demo) demoTick(t);
     // metronome = enemy heartbeat, on the tempo map; each volley opens on an accented click
     const ahead = AC.currentTime + 0.15 + Math.max(0, -OPT.delay / 1000);
     while (G.nextBeat < ahead) {
@@ -1644,7 +1758,7 @@ function draw(t) {
   cx.shadowBlur = 0; cx.strokeStyle = '#ffffff'; cx.globalAlpha = 0.95; cx.lineWidth = 1.5;
   cx.beginPath(); cx.moveTo(LX0, HIT_Y); cx.lineTo(LX1, HIT_Y); cx.stroke();
   cx.globalAlpha = 1; cx.lineWidth = 1;
-  drawErrorBar();
+  if (!G.demo) drawErrorBar();
   drawRunes(t);
 
   // HUD: score / combo / bpm
@@ -1783,6 +1897,7 @@ function draw(t) {
   // red damage flash
   if (t - G.redFlash < 0.25) { cx.globalAlpha = .28 * (1 - (t - G.redFlash)/0.25); cx.fillStyle = PAL.crimson; cx.fillRect(0, 0, W, H); cx.globalAlpha = 1; }
 
+  if (G.demo) drawDemo(t);
   if (G.over) {
     const s = timingStats(200, false);
     overlay('STRUCK DOWN', PAL.crimson, [
@@ -2055,13 +2170,17 @@ function drawIdle() {
   const fade = cx.createLinearGradient(0, H - 190, 0, H); fade.addColorStop(0, 'rgba(7,3,15,0)'); fade.addColorStop(1, 'rgba(7,3,15,.9)');
   cx.fillStyle = fade; cx.fillRect(0, H - 190, W, 190);
   const pulse = 0.5 + 0.5 * Math.sin(p * 3);
-  cx.fillStyle = 'rgba(10,4,24,.85)'; rr(W/2 - 150, H - 96, 300, 44, 22); cx.fill();
+  cx.fillStyle = 'rgba(10,4,24,.85)'; rr(W/2 - 150, H - 124, 300, 44, 22); cx.fill();
   cx.strokeStyle = PAL.pink; cx.lineWidth = 2; cx.shadowColor = PAL.magenta; cx.shadowBlur = 10 + 14 * pulse;
-  rr(W/2 - 150, H - 96, 300, 44, 22); cx.stroke();
+  rr(W/2 - 150, H - 124, 300, 44, 22); cx.stroke();
   cx.fillStyle = '#fff'; cx.textAlign = 'center'; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif';
-  cx.fillText('CLICK TO BEGIN', W/2, H - 67); cx.shadowBlur = 0; cx.lineWidth = 1;
-  cx.fillStyle = PAL.blush; cx.font = '13px ui-monospace, Menlo, monospace';
-  cx.fillText('type glyphs on the beat · lanes are fingers, colors are elements', W/2, H - 24);
+  cx.fillText('CLICK TO BEGIN', W/2, H - 95); cx.shadowBlur = 0; cx.lineWidth = 1;
+  const b = HOWTO_BTN; // the narrated demo
+  cx.fillStyle = 'rgba(10,4,24,.85)'; rr(b.x, b.y, b.w, b.h, 16); cx.fill();
+  cx.strokeStyle = PAL.gold; cx.lineWidth = 1.5; cx.globalAlpha = .8; rr(b.x, b.y, b.w, b.h, 16); cx.stroke(); cx.globalAlpha = 1;
+  cx.fillStyle = PAL.gold; cx.font = 'bold 14px ui-monospace, Menlo, monospace'; cx.fillText('HOW TO PLAY', W/2, b.y + 21); cx.lineWidth = 1;
+  cx.fillStyle = PAL.blush; cx.font = '12px ui-monospace, Menlo, monospace';
+  cx.fillText('type glyphs on the beat · lanes are fingers, colors are elements', W/2, H - 14);
 }
 function overlay(title, color, sub, cta) {
   cx.fillStyle = 'rgba(10,3,22,.86)'; cx.fillRect(0, 0, W, H);

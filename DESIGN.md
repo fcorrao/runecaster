@@ -528,6 +528,25 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
 
 ---
 
+## 9. How to Play
+
+**Decided (playtest): a narrated demo, not a tutorial level.** The splash has
+a **HOW TO PLAY** button under CLICK TO BEGIN. It runs the real game on
+chapter 1 riffs (whatever the settings), played by an autoplayer, while a
+caption where the error meter sits explains one idea at a time (~85 s):
+1. glyphs, lanes, the beat · 2. sigils and their shapes (names the live one) ·
+3. a clean sigil seals a rune · 4. a deliberate miss lets the arrow through ·
+5. Space stops time, the spellbook, speed = power, weakness ×2 (casts the
+weak bolt) · 6. the count-in · 7. the charged attack, answered with the ward
+and its counter · 8. the caster's charge and an empowered ×2 bolt ·
+9. a flawless spell wakes the school's boon · 10. a kill earns mend ·
+11. wrap-up, back to the splash.
+Each lesson waits until its event has actually happened on screen; the two
+charges are held until their lessons. The enemy has 80 HP so the lesson
+survives. Not interactive (the user's call): any real click or key leaves.
+Every effect and sound is the game's own, so the demo stays true as the game
+changes.
+
 ## Notes
 
 - **Stenography tangent (parked):** a chord-based rhythm game would be a
