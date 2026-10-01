@@ -496,6 +496,18 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   itself and adds no step. **[OPEN]** curve and limits — reading the spellbook
   early eats the bar.
 
+  **Decided (playtest): both charges are tracked by ear.** Watching glyphs,
+  you can't watch two gauges, so every stage of both is a sound, on the beat,
+  and **panned to its fighter** (enemy right, caster left), dark vs bright:
+  - **Enemy charge:** a soft low thrum on every bar of the fill, rising with it,
+    up to the countdown's doom pulses (unchanged), then the loose.
+  - **Caster charge:** a bell on every bar of the fill, rising; a sparkle each
+    beat of the last bar (4 → 1, rising — the mirror of the doom countdown);
+    the window's chime; a soft high tick each beat the window stays open; a
+    falling arpeggio when it closes.
+  All synthesized (beat-locked, controllable). **[OPEN]** whether the two
+  sets clash when the charges line up (they start together each encounter).
+
   **Teaching the runes (playtest: "you'd have to memorize them; you can't read
   the unlock message mid-fight").** Explanations move to the moments you can
   read: (1) **the spellbook** — opening cast mode expands the panel into a

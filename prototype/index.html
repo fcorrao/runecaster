@@ -394,13 +394,16 @@ cv.addEventListener('mousedown', () => toggleDrawer(false));
 
 // ================= audio (beat = enemy heartbeat) =================
 let AC = null;
-function beep(t, f, dur, type, vol) {
+// where a sound plays in the stereo field: the enemy's cues come from the right, the caster's from the left
+const FOE_PAN = 0.55, WIZ_PAN = -0.55;
+function out(pan) { if (!pan || !AC.createStereoPanner) return AC.destination; const p = AC.createStereoPanner(); p.pan.value = pan; p.connect(AC.destination); return p; }
+function beep(t, f, dur, type, vol, pan) {
   if (!AC || t < AC.currentTime) t = AC.currentTime;
   const o = AC.createOscillator(), g = AC.createGain();
   o.type = type; o.frequency.value = f;
   g.gain.setValueAtTime(vol, t);
   g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g).connect(AC.destination); o.start(t); o.stop(t + dur + 0.02);
+  o.connect(g).connect(out(pan)); o.start(t); o.stop(t + dur + 0.02);
 }
 // ---- sound effects: foley generated with MiniMax-H3 (video+audio model), trimmed to one-shots in audio/sfx/.
 // Timing-critical sounds (glyph hits, wrong key, name ticks, the metronome) stay synthesized: sample-accurate and
@@ -444,18 +447,26 @@ function castRuneSnd() { // a mend/ward rune fires, or a flawless spell's power 
   if (!AC || sfx('rune_cast')) return; const t = AC.currentTime;
   [1, 1.26, 1.5, 2].forEach((m, i) => beep(t + i * 0.04, 262 * m, 0.6, 'triangle', 0.07));
 }
-function doom(t, f, dur, vol) { // detuned saw stack through a closing low-pass: a heavy, brassy pulse
+function doom(t, f, dur, vol, pan = FOE_PAN) { // detuned saw stack through a closing low-pass: a heavy, brassy pulse (the enemy's voice)
   const g = AC.createGain(), lp = AC.createBiquadFilter(); lp.type = 'lowpass';
   lp.frequency.setValueAtTime(f * 10, t); lp.frequency.exponentialRampToValueAtTime(f * 1.5, t + dur);
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.015); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   for (const d of [1, 1.013, 0.5]) { const o = AC.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f * d; o.connect(lp); o.start(t); o.stop(t + dur + 0.05); }
-  lp.connect(g).connect(AC.destination);
+  lp.connect(g).connect(out(pan));
 }
 // charged-attack countdown: one doom pulse per beat of the last bar, a step higher each beat (4 → 1); the first is doubled
 function warnSnd(n) { if (!AC) return; const t = AC.currentTime, f = 82 * 2 ** ((WARN_BEATS - n) / 5); doom(t, f, 0.34, 0.22); if (n === WARN_BEATS) doom(t + 0.09, f * 1.5, 0.3, 0.12); }
-// the caster's window opens: a bright rising shimmer over a low swell (the mirror of the doom pulse)
-function empowerSnd() { if (!AC) return; const t = AC.currentTime; beep(t, 196, 0.7, 'sine', 0.12); [392, 523, 659, 784, 1047, 1319].forEach((f, i) => beep(t + i * 0.045, f, 0.55, 'triangle', 0.07)); }
-function chargeSnd() { if (!AC) return; whooshSnd(); const t = AC.currentTime; beep(t, 55, 0.35, 'sawtooth', 0.12); } // the charged attack is loosed
+// the charge filling, heard: a soft low thrum on every bar of the fill, rising with it (k = how full), up to the countdown's pitch
+function foeTickSnd(k) { if (!AC) return; const t = AC.currentTime; doom(t, 49 * 2 ** (k * 0.75), 0.26, 0.07); }
+// the caster's mirror, all on the left and bright where the enemy is dark: a bell on every bar of the fill (rising),
+// a sparkle each beat of the last bar (4 → 1, rising), the window's chime, a soft tick each beat it stays open,
+// and a falling arpeggio when it closes
+function focusTickSnd(k) { if (!AC) return; const t = AC.currentTime, f = 523 * 2 ** k; beep(t, f, 0.32, 'sine', 0.05, WIZ_PAN); beep(t, f * 2, 0.16, 'triangle', 0.02, WIZ_PAN); }
+function focusWarnSnd(n) { if (!AC) return; const t = AC.currentTime, f = 988 * 2 ** ((WARN_BEATS - n) / 5); beep(t, f, 0.2, 'triangle', 0.07, WIZ_PAN); beep(t + 0.03, f * 1.5, 0.16, 'sine', 0.04, WIZ_PAN); }
+function empowerSnd() { if (!AC) return; const t = AC.currentTime; beep(t, 196, 0.7, 'sine', 0.12, WIZ_PAN); [392, 523, 659, 784, 1047, 1319].forEach((f, i) => beep(t + i * 0.045, f, 0.55, 'triangle', 0.07, WIZ_PAN)); }
+function empowerTickSnd() { if (!AC) return; beep(AC.currentTime, 1568, 0.09, 'sine', 0.035, WIZ_PAN); }
+function empowerEndSnd() { if (!AC) return; const t = AC.currentTime; [1319, 1047, 784, 523].forEach((f, i) => beep(t + i * 0.06, f, 0.3, 'triangle', 0.06, WIZ_PAN)); }
+function chargeSnd() { if (!AC) return; whooshSnd(); const t = AC.currentTime; beep(t, 55, 0.35, 'sawtooth', 0.12, FOE_PAN); } // the charged attack is loosed
 function whooshSnd() { // enemy strike loosed
   if (!AC || sfx('arrow_loose', .8)) return; const t = AC.currentTime;
   const len = 0.22, buf = AC.createBuffer(1, AC.sampleRate*len, AC.sampleRate), d = buf.getChannelData(0);
@@ -857,7 +868,7 @@ function dilate(sh) {
   G.nextT0 += sh; G.nextBeat += sh;
   const E = G.enemy; if (E.chargeAt > tg) { E.chargeAt += sh; E.chargeFrom += sh; }
   if (G.guard && G.guard.until > tg) G.guard.until += sh;
-  if (G.empower && G.empower.until > tg) G.empower.until += sh;
+  if (G.empower && G.empower.until > tg) { G.empower.until += sh; G.empower.from += sh; } // its beat ticks keep their phase
   if (G.focusAt > tg) { G.focusAt += sh; G.focusFrom += sh; }
 }
 function castTick() { const t = now(); dilate((t - G.cast.t) * (1 - CAST_K)); G.cast.t = t; } // called every frame while casting
@@ -1038,20 +1049,29 @@ function frame(ts) {
     const E = G.enemy;
     if (E.chargeAt === null) { E.chargeFrom = G.nextT0; E.chargeAt = G.nextT0 + E.chargeBeats * segAt(G.nextT0).beat; }
     else if (t >= G.foeEnter) {
-      const left = Math.ceil((E.chargeAt - tg) / segAt(tg).beat - 1e-6);
+      const bt = segAt(tg).beat, left = Math.ceil((E.chargeAt - tg) / bt - 1e-6);
       if (left >= 1 && left <= WARN_BEATS && left !== E.warned) { E.warned = left; warnSnd(left); }
+      const filled = Math.floor((tg - E.chargeFrom) / bt + 1e-6); // a thrum on every bar of the fill before the countdown
+      if (left > WARN_BEATS && filled > 0 && filled % 4 === 0 && filled !== E.barTick) { E.barTick = filled; foeTickSnd(filled / E.chargeBeats); }
       if (tg >= E.chargeAt) {
         G.strikes.push({ t0: now(), at: now() + CHARGE_F, dmg: E.cdmg, why: 'CHARGED ATTACK', charged: true });
         chargeSnd(); G.foeCharge = now(); G.shake = Math.max(G.shake, 4);
-        E.chargeFrom = E.chargeAt; E.chargeAt += E.chargeBeats * segAt(tg).beat; E.warned = 0;
+        E.chargeFrom = E.chargeAt; E.chargeAt += E.chargeBeats * segAt(tg).beat; E.warned = 0; E.barTick = 0;
       }
     }
     if (G.guard && tg > G.guard.until) { G.guard = null; G.guardBreak = now(); } // the ward ran out
     // the caster's charge: a timer from the first spell; full → the empowered window; when it closes, the next charge starts
     if (G.focusAt === null) { G.focusFrom = G.nextT0; G.focusAt = G.nextT0 + FOCUS_BEATS * segAt(G.nextT0).beat; }
-    else if (!G.empower && tg >= G.focusAt) { G.empower = { at: now(), until: tg + EMPOWER_S }; empowerSnd(); }
+    else if (!G.empower && tg >= G.focusAt) { G.empower = { at: now(), from: tg, until: tg + EMPOWER_S, ticked: 0 }; empowerSnd(); }
+    else if (!G.empower) { // the caster's charge filling, heard: a bell each bar, a sparkle each beat of the last bar
+      const bt = segAt(tg).beat, left = Math.ceil((G.focusAt - tg) / bt - 1e-6), filled = Math.floor((tg - G.focusFrom) / bt + 1e-6);
+      if (left >= 1 && left <= WARN_BEATS && left !== G.focusWarned) { G.focusWarned = left; focusWarnSnd(left); }
+      if (left > WARN_BEATS && filled > 0 && filled % 4 === 0 && filled !== G.focusTick) { G.focusTick = filled; focusTickSnd(filled / FOCUS_BEATS); }
+    }
+    if (G.empower) { const n = Math.floor((tg - G.empower.from) / segAt(tg).beat + 1e-6); if (n > G.empower.ticked && tg < G.empower.until) { G.empower.ticked = n; empowerTickSnd(); } }
     if (G.empower && tg > G.empower.until) {
-      G.empower = null; G.empowerEnd = now(); // the caster's window closed
+      G.empower = null; G.empowerEnd = now(); empowerEndSnd(); // the caster's window closed
+      G.focusWarned = 0; G.focusTick = 0;
       G.focusFrom = tg; G.focusAt = tg + FOCUS_BEATS * segAt(tg).beat;
     }
   }
