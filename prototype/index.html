@@ -1133,9 +1133,9 @@ function wrapText(text, maxW) { // greedy word wrap at the current font
   for (const w of text.split(' ')) { const tryL = line ? line + ' ' + w : w; if (cx.measureText(tryL).width > maxW && line) { out.push(line); line = w; } else line = tryL; }
   if (line) out.push(line); return out;
 }
-function drawDemo(t) { // the caption, where the error meter sits (the demo's timing is not yours)
+function drawDemo(t) { // the caption, where the error meter sits (the demo's timing is not yours); the next button beside it
   const d = G.demo, S = DEMO[d.i]; if (!S) return;
-  const x = W/2 - 340, y = HIT_Y + 112, w = 680, h = 86, a = Math.min(1, (t - d.at) / 0.3);
+  const bw = 180, gap = 14, w = 680, x = (W - w - gap - bw) / 2, y = HIT_Y + 112, h = 86, a = Math.min(1, (t - d.at) / 0.3);
   cx.save(); cx.globalAlpha = a;
   cx.fillStyle = 'rgba(10,4,24,.92)'; rr(x, y, w, h, 12); cx.fill();
   cx.strokeStyle = PAL.pink; cx.lineWidth = 1.5; cx.shadowColor = PAL.magenta; cx.shadowBlur = 12; rr(x, y, w, h, 12); cx.stroke(); cx.shadowBlur = 0;
@@ -1143,13 +1143,15 @@ function drawDemo(t) { // the caption, where the error meter sits (the demo's ti
   cx.fillText(S.title, x + 18, y + 26);
   cx.textAlign = 'right'; cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace';
   cx.fillText(`HOW TO PLAY · ${d.i + 1} / ${DEMO.length} · Esc leaves`, x + w - 16, y + 22);
-  { // the prompt in the panel's corner: a dim SKIP while the lesson plays, a pulsing NEXT once it has shown its idea
-    const pl = d.paused ? 0.5 + 0.5 * Math.sin(t * 4) : 0, bw = 168, bx = x + w - bw - 12, by = y + h - 30;
+  { // the button, right of the caption: a dim SKIP while the lesson plays, a pulsing NEXT once it has shown its idea
+    const pl = d.paused ? 0.5 + 0.5 * Math.sin(t * 4) : 0, bx = x + w + gap;
     cx.globalAlpha = a * (d.paused ? 1 : 0.55);
-    cx.fillStyle = 'rgba(10,4,24,.95)'; rr(bx, by, bw, 22, 11); cx.fill();
-    cx.strokeStyle = PAL.gold; cx.shadowColor = PAL.gold; cx.shadowBlur = d.paused ? 6 + 10 * pl : 0; rr(bx, by, bw, 22, 11); cx.stroke(); cx.shadowBlur = 0;
-    cx.textAlign = 'center'; cx.fillStyle = PAL.gold; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
-    cx.fillText((S.last ? 'FINISH' : d.paused ? 'NEXT' : 'SKIP') + ' ▸  Enter · click', bx + bw / 2, by + 15);
+    cx.fillStyle = d.paused ? 'rgba(40,26,8,.95)' : 'rgba(10,4,24,.92)'; rr(bx, y, bw, h, 12); cx.fill();
+    cx.strokeStyle = PAL.gold; cx.lineWidth = d.paused ? 2.5 : 1.5; cx.shadowColor = PAL.gold; cx.shadowBlur = d.paused ? 8 + 14 * pl : 0;
+    rr(bx, y, bw, h, 12); cx.stroke(); cx.shadowBlur = 0; cx.lineWidth = 1.5;
+    cx.textAlign = 'center'; cx.fillStyle = PAL.gold; cx.font = 'italic 900 26px "Trebuchet MS", "Arial Black", sans-serif';
+    cx.fillText((S.last ? 'FINISH' : d.paused ? 'NEXT' : 'SKIP') + ' ▸', bx + bw / 2, y + 45);
+    cx.fillStyle = PAL.dim; cx.font = '11px ui-monospace, Menlo, monospace'; cx.fillText('Enter · click', bx + bw / 2, y + 67);
     cx.globalAlpha = a;
   }
   cx.textAlign = 'left'; cx.fillStyle = PAL.text; cx.font = '13px ui-monospace, Menlo, monospace';
