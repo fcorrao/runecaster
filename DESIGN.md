@@ -543,7 +543,11 @@ and its counter · 8. the caster's charge and an empowered ×2 bolt ·
 11. wrap-up, back to the splash.
 Each lesson waits until its event has actually happened on screen; the two
 charges are held until their lessons. The enemy has 80 HP so the lesson
-survives. Not interactive (the user's call): any real click or key leaves.
+survives. Not interactive (the user's call), but **paced by you (playtest:
+"a little fast")**: when a lesson has shown its idea the rhythm stops, as in
+cast mode, and a pulsing **NEXT ▸** waits for Enter / Space / → / a click;
+the next lesson starts with the count-in. The last says FINISH and returns to
+the title. Esc leaves at any time.
 Every effect and sound is the game's own, so the demo stays true as the game
 changes.
 

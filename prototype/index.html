@@ -82,7 +82,7 @@
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
       <li><b>Calibration:</b> if the click doesn't land when the letter crosses the line, slide <i>audio</i>. If your presses sit consistently early/late on the error bar, press "set input from last 20 hits" (or slide <i>input</i>). Both are saved in this browser.</li>
     </ul>
-    New here? <b>HOW TO PLAY</b> on the title screen plays a narrated demo. Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. The synthwave soundtrack is locked to the beat and runs at the speed of the letters; music and sampled effects need an http server — file:// plays the synthesized fallbacks. Audition every effect on the <a href="sfx.html" style="color:#f3a5e6">sound board</a>.
+    New here? <b>HOW TO PLAY</b> on the title screen plays a narrated demo (Enter or a click for the next lesson, Esc leaves). Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. The synthwave soundtrack is locked to the beat and runs at the speed of the letters; music and sampled effects need an http server — file:// plays the synthesized fallbacks. Audition every effect on the <a href="sfx.html" style="color:#f3a5e6">sound board</a>.
   </div>
 </aside>
 <script>
@@ -389,7 +389,7 @@ const drawer = document.getElementById('drawer');
 function toggleDrawer(open = !drawer.classList.contains('open')) { drawer.classList.toggle('open', open); document.activeElement.blur(); }
 document.getElementById('settingsBtn').addEventListener('click', () => toggleDrawer());
 document.getElementById('closeBtn').addEventListener('click', () => toggleDrawer(false));
-addEventListener('keydown', e => { if (e.key === 'Escape') toggleDrawer(); });
+addEventListener('keydown', e => { if (e.key === 'Escape' && !(G && G.demo)) toggleDrawer(); }); // in the demo, Esc leaves it instead
 cv.addEventListener('mousedown', () => toggleDrawer(false));
 
 // ================= audio (beat = enemy heartbeat) =================
@@ -969,7 +969,11 @@ const BOON_EFFECT = {
 // ================= input =================
 addEventListener('keydown', e => {
   if (e.repeat || !started || !G || G.over) return;
-  if (G.demo && e.isTrusted) { e.preventDefault(); demoEnd(); return; } // the demo plays itself: a real key leaves it
+  if (G.demo && e.isTrusted) { // the demo plays itself: Esc leaves, Enter / Space / → go on between lessons
+    e.preventDefault();
+    if (e.key === 'Escape') demoEnd(); else if (G.demo.paused && ['Enter', ' ', 'ArrowRight'].includes(e.key)) demoResume();
+    return;
+  }
   if (e.key === ' ') { e.preventDefault(); if (G.cast) closeCast('cast cancelled'); else openCast(); return; } // the thumb: cast mode
   if (G.cast) { // cast mode: letters spell a rune's name, they never reach the glyphs
     if (e.key.length === 1 && /[a-z]/i.test(e.key)) castLetter(e.key.toLowerCase());
@@ -1011,7 +1015,7 @@ cv.addEventListener('click', e => {
   if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' }); }
   AC.resume();
   loadSfx();
-  if (started && G && G.demo) { demoEnd(); return; } // any click leaves the demo
+  if (started && G && G.demo) { if (G.demo.paused) demoResume(); return; } // a click is "next" between lessons
   if (!started) {
     const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height, b = HOWTO_BTN;
     if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { demoStart(); return; }
@@ -1023,7 +1027,8 @@ cv.addEventListener('click', e => {
 // ================= how to play: a narrated demo =================
 // Not interactive: the real game plays itself (chapter 1, riffs) while a caption explains one idea at a time —
 // lanes and timing → sigils → sealing a rune → a miss → casting → the count-in → the charged attack and the ward →
-// the empowered window → flawless boons → a kill's mend rune. Every effect is the real one. Any click or key leaves.
+// the empowered window → flawless boons → a kill's mend rune. Every effect is the real one. When a lesson has shown
+// its idea the rhythm stops (as in cast mode) until you press next (Enter / Space / → / click); Esc leaves.
 const HOWTO_BTN = { x: W/2 - 100, y: H - 70, w: 200, h: 32 }; // on the splash, under CLICK TO BEGIN
 const demoKey = k => window.dispatchEvent(new KeyboardEvent('keydown', { key: k }));
 const demoTg = () => now() - OPT.inOff / 1000;
@@ -1063,7 +1068,7 @@ const DEMO = [
     text: 'Kills earn pyrhal, which heals you (bosses give two). Then the next enemy steps up.',
     enter: d => { G.enemy.hp = Math.min(G.enemy.hp, 3); demoCast(d, G.enemy.weak, 0.6); }, until: d => G.foeDead > d.at && now() - G.foeDead > 3, min: 5 },
   { title: "That's how to play",
-    text: 'Accuracy first: clean sigils earn runes, runes win fights. Click to return, then CLICK TO BEGIN.', min: 5, last: true },
+    text: 'Accuracy first: clean sigils earn runes, runes win fights. Finish to return to the title, then CLICK TO BEGIN.', min: 3, last: true },
 ];
 function demoStart() {
   started = true; syncOpts();
@@ -1078,6 +1083,13 @@ function demoNext() {
   const S = DEMO[G.demo.i]; if (S.enter) S.enter(G.demo);
 }
 function demoEnd() { musicStop(); G = null; started = false; syncOpts(); }
+function demoPause(t) { const d = G.demo; d.paused = true; d.pt = t; castMusicRate(true); } // the lesson is done: hold still until next
+function demoResume() { // next: count back in, then the next lesson
+  const d = G.demo; if (!d || !d.paused) return;
+  demoTick(now()); d.paused = false; // the last stopped moment is absorbed before the clock runs again
+  if (DEMO[d.i].last) { demoEnd(); return; }
+  countIn(); castMusicRate(false); demoNext();
+}
 function demoCast(d, key, wait) { // open the spellbook, let it be read for `wait` s, then type the name at a brisk pace
   if (key !== 'ward' && !G.runes[key]) { G.runes[key] = 1; G.learned.add(key); }
   const name = RUNES[key].name;
@@ -1093,6 +1105,7 @@ function demoCast(d, key, wait) { // open the spellbook, let it be read for `wai
 }
 function demoTick(t) {
   const d = G.demo, S = DEMO[d.i], tg = t - OPT.inOff / 1000, E = G.enemy;
+  if (d.paused) { dilate(t - d.pt); d.pt = t; return; } // between lessons the rhythm stands still
   // the two charges wait for their own lessons
   if (!S.charge && E.chargeAt !== null) { E.chargeFrom = tg; E.chargeAt = tg + 999; E.warned = 0; }
   if (!S.focus && !G.empower && G.focusAt !== null) { G.focusFrom = tg; G.focusAt = tg + 999; }
@@ -1104,8 +1117,7 @@ function demoTick(t) {
   }
   if (S.act) S.act(d);
   const age = t - d.at;
-  if (!S.last && age >= S.min && (!S.until || S.until(d) || age > 30)) demoNext();
-  else if (S.last && age >= S.min && !d.ending) { d.ending = true; setTimeout(demoEnd, 0); } // after this frame: it still needs G
+  if (!G.cast && age >= S.min && (!S.until || S.until(d) || age > 30)) demoPause(t);
 }
 function wrapText(text, maxW) { // greedy word wrap at the current font
   const out = []; let line = '';
@@ -1121,7 +1133,14 @@ function drawDemo(t) { // the caption, where the error meter sits (the demo's ti
   cx.textAlign = 'left'; cx.fillStyle = PAL.gold; cx.font = 'italic 900 17px "Trebuchet MS", "Arial Black", sans-serif';
   cx.fillText(S.title, x + 18, y + 26);
   cx.textAlign = 'right'; cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace';
-  cx.fillText(`HOW TO PLAY · ${d.i + 1} / ${DEMO.length} · click or any key to leave`, x + w - 16, y + 22);
+  cx.fillText(`HOW TO PLAY · ${d.i + 1} / ${DEMO.length} · Esc leaves`, x + w - 16, y + 22);
+  if (d.paused) { // the prompt: a pulsing pill in the panel's corner
+    const pl = 0.5 + 0.5 * Math.sin(t * 4), bw = 168, bx = x + w - bw - 12, by = y + h - 30;
+    cx.fillStyle = 'rgba(10,4,24,.95)'; rr(bx, by, bw, 22, 11); cx.fill();
+    cx.strokeStyle = PAL.gold; cx.shadowColor = PAL.gold; cx.shadowBlur = 6 + 10 * pl; rr(bx, by, bw, 22, 11); cx.stroke(); cx.shadowBlur = 0;
+    cx.textAlign = 'center'; cx.fillStyle = PAL.gold; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
+    cx.fillText(S.last ? 'FINISH ▸  Enter · click' : 'NEXT ▸  Enter · click', bx + bw / 2, by + 15);
+  }
   cx.textAlign = 'left'; cx.fillStyle = PAL.text; cx.font = '13px ui-monospace, Menlo, monospace';
   wrapText(typeof S.text === 'function' ? S.text() : S.text, w - 36).slice(0, 3).forEach((l, i) => cx.fillText(l, x + 18, y + 47 + i * 17));
   cx.restore();
