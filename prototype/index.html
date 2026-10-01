@@ -71,7 +71,7 @@
   <div id="help">
     <b>How a run goes:</b> chapters of short encounters — archers (steady volleys), cavalry (the charge speeds up each spell), and a boss (its incantations follow a rhythm pattern, off-beat glyphs included). Clear a chapter and the incantations grow: short two-word spells → longer derived words → three-word invocations → numbers → symbols. Spells are phrases in one invented tongue (the gloss under the word says what you're casting), and each encounter keeps to one school of words, so they repeat and become learnable.
     <ul>
-      <li><b>Riffs</b> (Glyphs setting, the default): glyphs come in key patterns — repeats, trills, finger rolls, real words — played in quick 8th/16th bursts with a breath between. Each encounter repeats a handful of them, so learn them as one movement. The chapters open the keyboard row by row, starting with the home row. "words" brings back the runic-tongue spells.</li>
+      <li><b>Riffs</b> (Glyphs setting, the default): glyphs come in key patterns played in quick 8th/16th bursts with a breath between. Every spell is a <b>sigil</b>: its strokes share one shape, and the shape is the rune a clean spell earns — <b>pillar</b> (one key repeated) earth, <b>wave</b> (two fingers trading) water, <b>sweep</b> (a roll across neighbouring fingers) air, <b>burst</b> (mirrored pairs hand to hand, opening from the index fingers) fire. The thread through its glyphs glows in the rune's color. From chapter 2 a sigil ends in a word, its inscription. Each encounter repeats a handful of strokes, so learn them as one movement. The chapters open the keyboard row by row, starting with the home row. "words" brings back the runic-tongue spells.</li>
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
       <li><b>Runes are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no glyph missed) earns a rune of its element (the lane most of its glyphs ride: fire, water, earth, air); defeating an enemy earns a <b>mend</b> rune (bosses 2). Press <b>Space</b> — time slows to a crawl and letters hide — the panel opens into the <b>spellbook</b>; type a name to cast: <i>vorkai</i> fire, <i>gamkai</i> water, <i>brykai</i> earth, <i>wynkai</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar), <i>pyrhal</i> mend (+30 HP), <i>dunfen</i> ward (always ready). A wrong letter fizzles (charge kept) — fizzle twice in a row and it <b>backfires</b> for 12 damage (a successful cast resets it); Space again cancels; the ring closes itself when a glyph reaches the line.</li>
@@ -226,8 +226,11 @@ function makeIncantation(tier, school) {
 
 // ---- riffs: glyphs come in finger patterns the hands learn as one movement (chunks), played in quick
 // bursts (8th/16th notes) with a breath between them — the tempo stays, the patterns are what get fast.
-// Each tier opens keys and pattern kinds; each encounter draws its spells from a small pool of chunks,
-// so they repeat and become learnable.
+// Every spell is a SIGIL: its strokes all share one shape, and the shape is the rune a clean spell earns —
+// the path the glyphs trace across the lanes is the sigil you draw. Pillar (one key repeated) = earth,
+// wave (two fingers trading) = water, sweep (a roll across neighbouring fingers) = air, burst (mirrored
+// pairs opening out from the index fingers, hand to hand) = fire. From chapter 2 the sigil ends in a word,
+// its inscription. Each encounter keeps two strokes per sigil in rotation, so they repeat and get learned.
 const WORDS = (`as ad add ask all sad dad lad fad fall falls flask lass salad alas alfalfa salsa asks adds
 has had hall half glad flag gash dash flash shall sash gas lash slash glass hags flags halls
 the to of and in it is he for as on at be by we or are if so up her him his she they this that with
@@ -237,53 +240,75 @@ quiet queen quest quote equip your youth tower power true rule rose hope just ju
 hold gold old fold yellow pole slope four our hour rough tough fast first last kite lake silk whisper
 time come name game make take lazy dog fox zero zone maze vex box mix next black cave move mind bind
 blaze crown brave dream magic arcane cinder ember venom rune glyph caster wizard thunder winter`).split(/\s+/);
-const ROLLS = ['asdf', 'jkl;', 'qwer', 'uiop', 'zxcv', 'm,./', '1234', '7890', 'sdf', 'jkl', 'wer', 'uio', 'xcv', 'm,.', '234', '789'];
-// keys: what may fall; kinds: weighted pattern kinds; fast: chance a chunk plays in 16ths (else 8ths)
-const RIFF_TIERS = {
-  1: { keys: 'asdfjkl;',                                         kinds: { rep: 3, trill: 3, roll: 3 }, fast: 0.35, label: 'home row: repeats, trills, rolls' },
-  2: { keys: 'asdfghjkl;',                                       kinds: { rep: 1, trill: 2, roll: 3, word: 4 }, fast: 0.45, label: 'g h join · home-row words' },
-  3: { keys: 'asdfghjkl;qwertyuiop',                             kinds: { trill: 1, roll: 2, word: 6 }, fast: 0.4, label: 'the top row joins' },
-  4: { keys: 'abcdefghijklmnopqrstuvwxyz;,./1234567890',          kinds: { roll: 2, word: 6, num: 1 }, fast: 0.4, label: 'the whole keyboard · numbers' },
-  5: { keys: "abcdefghijklmnopqrstuvwxyz;,./1234567890'",         kinds: { roll: 1, word: 6, num: 1, punct: 1 }, fast: 0.5, label: 'punctuation joins' },
-  6: { keys: "abcdefghijklmnopqrstuvwxyz;,./1234567890'",         kinds: { roll: 1, word: 7, num: 1, punct: 1 }, fast: 0.6, label: 'fast phrases' },
+// a keyboard row as the strokes see it: its keys, its rolls (neighbouring fingers), its mirrored pairs from the centre out
+const ROWS = {
+  home: { keys: 'asdfjkl;',   rolls: ['asdf', 'jkl;', 'sdf', 'jkl'], pairs: ['fj', 'dk', 'sl', 'a;'] },
+  gh:   { keys: 'asdfghjkl;', rolls: ['asdf', 'jkl;', 'sdf', 'jkl', 'dfg', 'hjk'], pairs: ['gh', 'fj', 'dk', 'sl', 'a;'] },
+  top:  { keys: 'qwertyuiop', rolls: ['qwer', 'uiop', 'wer', 'uio', 'ert', 'yui'], pairs: ['ty', 'ru', 'ei', 'wo', 'qp'] },
+  bot:  { keys: 'zxcvbnm,./', rolls: ['zxcv', 'm,./', 'xcv', 'm,.'], pairs: ['bn', 'vm', 'c,', 'x.', 'z/'] },
+  num:  { keys: '1234567890', rolls: ['1234', '7890', '234', '789'], pairs: ['56', '47', '38', '29', '10'] },
 };
-const RIFF_BEATS = 8, RIFF_POOL = 4; // a spell is two bars of chunks; an encounter keeps four chunks in rotation
+const SIGILS = { // element → the stroke shape whose sigil earns that element's bolt rune
+  earth: { shape: 'pillar' }, water: { shape: 'wave' }, air: { shape: 'sweep' }, fire: { shape: 'burst' },
+};
+// rows: what the strokes are drawn on; words: the inscription's letters (null = no inscription yet); fast: chance a chunk plays in 16ths
+const RIFF_TIERS = {
+  1: { rows: ['home'],                     words: null,                           fast: 0.35, pairs: 2, label: 'home row · four sigils: pillar, wave, sweep, burst' },
+  2: { rows: ['gh'],                       words: 'asdfghjkl',                    fast: 0.45, pairs: 2, label: 'g h join · sigils end in a word' },
+  3: { rows: ['gh', 'top'],                words: 'asdfghjklqwertyuiop',          fast: 0.4,  pairs: 2, label: 'the top row joins' },
+  4: { rows: ['gh', 'top', 'bot', 'num'],  words: 'abcdefghijklmnopqrstuvwxyz',   fast: 0.4,  pairs: 2, label: 'the whole keyboard · numbers' },
+  5: { rows: ['gh', 'top', 'bot', 'num'],  words: 'abcdefghijklmnopqrstuvwxyz',   fast: 0.5,  pairs: 3, punct: true, label: 'punctuation joins' },
+  6: { rows: ['gh', 'top', 'bot', 'num'],  words: 'abcdefghijklmnopqrstuvwxyz',   fast: 0.6,  pairs: 3, punct: true, label: 'fast sigils' },
+};
+const RIFF_BEATS = 8, RIFF_POOL = 2; // a spell is two bars; an encounter keeps two strokes per sigil in rotation
 const rnd = a => a[Math.floor(Math.random() * a.length)];
-const wpick = w => { let x = Math.random() * Object.values(w).reduce((a, b) => a + b, 0); for (const k in w) if ((x -= w[k]) < 0) return k; };
 const fits = (txt, keys) => [...txt].every(c => keys.includes(c));
-function riffChunk(tier) {
-  const T = RIFF_TIERS[tier < 2 || Math.random() < 0.65 ? Math.min(6, tier) : 1 + Math.floor(Math.random() * (Math.min(6, tier) - 1))];
-  const kind = wpick(T.kinds), letters = [...T.keys].filter(c => /[a-z;]/.test(c));
+const flip = s => Math.random() < 0.5 ? s : [...s].reverse().join('');
+const riffTier = tier => RIFF_TIERS[tier < 2 || Math.random() < 0.65 ? Math.min(6, tier) : 1 + Math.floor(Math.random() * (Math.min(6, tier) - 1))]; // mostly this tier, sometimes an easier one
+function stroke(el, tier) {
+  const T = riffTier(tier), row = ROWS[rnd(T.rows)], keys = [...row.keys], shape = SIGILS[el].shape;
   let text, fast = Math.random() < T.fast;
-  if (kind === 'rep') text = rnd(letters).repeat(2 + Math.floor(Math.random() * 3));
-  else if (kind === 'trill') { // two keys of different fingers, back and forth
-    const a = rnd(letters), b = rnd(letters.filter(c => KEY2LANE[c] !== KEY2LANE[a]));
+  if (shape === 'pillar') text = rnd(keys).repeat(3 + Math.floor(Math.random() * 2));
+  else if (shape === 'wave') { // two fingers trading, back and forth
+    const a = rnd(keys), b = rnd(keys.filter(c => KEY2LANE[c] !== KEY2LANE[a]));
     text = (a + b).repeat(2); fast = fast && tier >= 2;
-  } else if (kind === 'roll') { // neighbouring fingers in a sweep, either way
-    const r = rnd(ROLLS.filter(x => /[a-z;,./]/.test(x[0]) && fits(x, T.keys)));
-    text = Math.random() < 0.5 ? r : [...r].reverse().join(''); fast = fast && tier >= 2;
-  } else if (kind === 'num') { const r = rnd(ROLLS.filter(x => /\d/.test(x[0]))); text = Math.random() < 0.5 ? r : [...r].reverse().join(''); }
-  else { // a real word made of the open keys; long words stay on 8ths
-    text = rnd(WORDS.filter(w => fits(w, T.keys) && w.length <= (tier >= 5 ? 7 : 5)));
-    if (kind === 'punct') text += rnd([',', '.', ';', "'s"]);
-    fast = fast && text.length <= 4 && tier >= 3;
+  } else if (shape === 'sweep') { text = flip(rnd(row.rolls)); fast = fast && tier >= 2; }
+  else { // burst: mirrored pairs, hand to hand, opening out from the centre (or closing in)
+    const n = Math.min(T.pairs, row.pairs.length), i = Math.floor(Math.random() * (row.pairs.length - n + 1));
+    const ps = row.pairs.slice(i, i + n); text = (Math.random() < 0.5 ? ps : ps.reverse()).join(''); fast = fast && tier >= 2;
   }
-  return { text, kind, step: fast ? 0.25 : 0.5 };
+  return { text, step: fast ? 0.25 : 0.5 };
 }
+function inscription(tier) { // a real word made of the open keys; long words stay on 8ths
+  const T = riffTier(tier); if (!T.words) return null;
+  let text = rnd(WORDS.filter(w => fits(w, T.words) && w.length <= (tier >= 5 ? 7 : 5)));
+  if (T.punct && Math.random() < 0.4) text += rnd([',', '.', ';', "'s"]);
+  return { text, step: Math.random() < T.fast && text.length <= 4 && tier >= 3 ? 0.25 : 0.5, word: true };
+}
+let lastSigil = null;
 function makeRiff(tier, boss) {
-  if (G.riffFor !== G.enemy) { G.riffFor = G.enemy; G.riffPool = Array.from({ length: RIFF_POOL }, () => riffChunk(tier)); }
-  else if (Math.random() < 0.25) G.riffPool[Math.floor(Math.random() * RIFF_POOL)] = riffChunk(tier); // the rotation drifts slowly
-  const text = [], offs = [], kinds = [];
-  for (let at = 0; ;) {
-    const c = rnd(G.riffPool), dur = (c.text.length - 1) * c.step;
-    if (kinds.length && at + dur > RIFF_BEATS - 0.5) break;
-    if (text.length) { text.push(' '); offs.push(null); }
-    [...c.text].forEach((ch, i) => { text.push(ch); offs.push(at + i * c.step); });
-    kinds.push(c.kind);
-    const unit = boss ? 0.5 : 1; // a breath of at least half a beat; the next chunk starts on a beat (a boss: off-beats too)
-    at = Math.ceil((at + dur + c.step + 0.5) / unit - 1e-9) * unit;
+  if (G.riffFor !== G.enemy) { // a new encounter: new strokes in rotation
+    G.riffFor = G.enemy; G.riffPool = Object.fromEntries(Object.keys(SIGILS).map(el => [el, Array.from({ length: RIFF_POOL }, () => stroke(el, tier))]));
   }
-  return { text: text.join(''), offs, gloss: kinds.join(' · ') };
+  const els = Object.keys(SIGILS).filter(e => e !== lastSigil), el = rnd(els); lastSigil = el; // never the same sigil twice running
+  const pool = G.riffPool[el];
+  if (Math.random() < 0.25) pool[Math.floor(Math.random() * RIFF_POOL)] = stroke(el, tier); // the rotation drifts slowly
+  const word = inscription(tier), wdur = word ? (word.text.length - 1) * word.step + 1 : 0;
+  const text = [], offs = [], flags = [];
+  const put = (c, at) => {
+    if (text.length) { text.push(' '); offs.push(null); flags.push(false); }
+    [...c.text].forEach((ch, i) => { text.push(ch); offs.push(at + i * c.step); flags.push(!!c.word); });
+    const unit = boss ? 0.5 : 1; // a breath of at least half a beat; the next chunk starts on a beat (a boss: off-beats too)
+    return Math.ceil((at + (c.text.length - 1) * c.step + c.step + 0.5) / unit - 1e-9) * unit;
+  };
+  let at = 0, strokes = 0;
+  for (;;) { // strokes first, leaving room for the inscription
+    const c = rnd(pool), dur = (c.text.length - 1) * c.step;
+    if (strokes && at + dur > RIFF_BEATS - 0.5 - wdur) break;
+    at = put(c, at); strokes++;
+  }
+  if (word && at + wdur - 1 <= RIFF_BEATS - 0.5) put(word, at);
+  return { text: text.join(''), offs, word: flags, rune: el, gloss: `${SIGILS[el].shape} sigil · clean earns ${el} (${RUNES[el].name})` + (word ? ` · inscribed "${word.text}"` : '') };
 }
 
 // ================= progression (§7): chapters of short encounters =================
@@ -592,10 +617,10 @@ function makeSpell(t0) {
   chars.forEach((c, i) => {
     const time = t0 + offs[i] * beat;
     if (c === ' ') { if (!riff) rests.push(time); } // riffs: the gap between chunks is its own rest
-    else glyphs.push({ ch: c, lane: KEY2LANE[c], time, status: 'pending', hitAt: 0, wordStart: i > 0 && chars[i - 1] === ' ' });
+    else glyphs.push({ ch: c, lane: KEY2LANE[c], time, status: 'pending', hitAt: 0, wordStart: i > 0 && chars[i - 1] === ' ', word: riff && inc.word[i] });
   });
   const last = glyphs[glyphs.length-1];
-  const spell = { word: inc.text, gloss: inc.gloss, school: foe.school, glyphs, rests, t0, end: last.time, done: false, fizzled: false,
+  const spell = { word: inc.text, gloss: inc.gloss, rune: inc.rune, school: foe.school, glyphs, rests, t0, end: last.time, done: false, fizzled: false,
     arrow: { from: t0 - beat, to: last.time + GW + 0.12 }, still };
   G.spells.push(spell);
   markVeil();
@@ -676,12 +701,14 @@ function resolveCast(sp) {
   for (const r of sp.glyphs) { if (r.status === 'perfect') p++; else if (r.status === 'good') g++; }
   const elCount = {};
   for (const r of sp.glyphs) { const e = LANE[r.lane].el; elCount[e] = (elCount[e]||0)+1; }
-  const el = Object.entries(elCount).sort((a,b)=>b[1]-a[1])[0][0]; // the spell's element: the lane most of its glyphs ride
+  // the spell's element: a sigil's shape, else (word spells) the lane most of its glyphs ride
+  const el = sp.rune || Object.entries(elCount).sort((a,b)=>b[1]-a[1])[0][0];
   // Typing no longer attacks (playtest: runes are the fun): a clean spell — no glyph missed — becomes a rune of
   // its element; a flawless one (all perfect) also wakes its school's power at once. Each missed glyph still draws
   // its share of the enemy's strike.
   const missed = sp.glyphs.length - p - g;
   if (!missed) {
+    sp.sealedAt = now(); // the sigil's thread flares as it is sealed
     G.fx.push({ kind:'ring', color: ELC[el], t0: now(), dur: .6, x: W/2, y: HIT_Y, big: 1 });
     grantRune(el, 1);
     if (p === sp.glyphs.length) wakeBoon(BOON_OF[sp.school]);
@@ -756,10 +783,10 @@ const FOCUS_BEATS = 20, EMPOWER_S = 5, EMPOWER_X = 2, EMPOWER_C = '#7cf7ff'; // 
 const BACKFIRE_DMG = 12; // a second fizzle in a row backfires on the caster (a successful cast clears the streak)
 const RUNE_DMG = 6, WEAK_X = 2, MEND_HP = 30, WARD_S = 5, COUNTER_DMG = 12, CHARGE_F = 0.6, WARN_BEATS = 4;
 const RUNES = {
-  fire:  { name: 'vorkai', label: 'FIRE',  el: 'fire',  color: ELC.fire,  icon: '✦', desc: `fire bolt · ${RUNE_DMG} damage`,  earn: 'clean fire spells' },
-  water: { name: 'gamkai', label: 'WATER', el: 'water', color: ELC.water, icon: '≈', desc: `water bolt · ${RUNE_DMG} damage`, earn: 'clean water spells' },
-  earth: { name: 'brykai', label: 'EARTH', el: 'earth', color: ELC.earth, icon: '▲', desc: `earth bolt · ${RUNE_DMG} damage`, earn: 'clean earth spells' },
-  air:   { name: 'wynkai', label: 'AIR',   el: 'air',   color: ELC.air,   icon: '≋', desc: `air bolt · ${RUNE_DMG} damage`,   earn: 'clean air spells' },
+  fire:  { name: 'vorkai', label: 'FIRE',  el: 'fire',  color: ELC.fire,  icon: '✦', desc: `fire bolt · ${RUNE_DMG} damage`,  earn: 'clean fire spells',  sigil: 'clean burst sigils' },
+  water: { name: 'gamkai', label: 'WATER', el: 'water', color: ELC.water, icon: '≈', desc: `water bolt · ${RUNE_DMG} damage`, earn: 'clean water spells', sigil: 'clean wave sigils' },
+  earth: { name: 'brykai', label: 'EARTH', el: 'earth', color: ELC.earth, icon: '▲', desc: `earth bolt · ${RUNE_DMG} damage`, earn: 'clean earth spells', sigil: 'clean pillar sigils' },
+  air:   { name: 'wynkai', label: 'AIR',   el: 'air',   color: ELC.air,   icon: '≋', desc: `air bolt · ${RUNE_DMG} damage`,   earn: 'clean air spells',   sigil: 'clean sweep sigils' },
   mend:  { name: 'pyrhal', label: 'MEND',  color: '#ff9ad5', icon: '✚', desc: `heals ${MEND_HP} HP`, earn: 'defeat enemies' },
   ward:  { name: 'dunfen', label: 'WARD',  color: PAL.gold,  icon: '◎', desc: `blocks for ${WARD_S} s · counters a charged attack`, earn: 'always ready' },
 };
@@ -1478,14 +1505,22 @@ function draw(t) {
 
   // spells: connectors + glyphs
   for (const s of G.spells) {
-    cx.strokeStyle = '#4a2a78'; cx.lineWidth = 2; cx.beginPath();
-    for (let i = 0; i < s.glyphs.length - 1; i++) {
-      const a = s.glyphs[i], b = s.glyphs[i+1];
-      const ya = noteY(a, t), yb = noteY(b, t);
-      if (b.wordStart) continue; // the connector breaks between words
-      if (ya > -60 && ya < HIT_Y + 80 && yb > -60 && yb < HIT_Y + 80) { cx.moveTo(LNX[a.lane], ya); cx.lineTo(LNX[b.lane], yb); }
+    // a sigil's strokes glow in its rune's color (a clean one flares white as it is sealed); its inscription
+    // and word spells keep the plain thread
+    const sealed = s.sealedAt && t - s.sealedAt < 0.5;
+    for (const ink of [false, true]) {
+      if (ink && !s.rune) break;
+      cx.strokeStyle = ink ? (sealed ? '#ffffff' : ELC[s.rune]) : '#4a2a78'; cx.lineWidth = ink ? (sealed ? 5 : 3) : 2;
+      if (ink) { cx.shadowColor = ELC[s.rune]; cx.shadowBlur = sealed ? 18 : 8; cx.globalAlpha = sealed ? 1 : .75; }
+      cx.beginPath();
+      for (let i = 0; i < s.glyphs.length - 1; i++) {
+        const a = s.glyphs[i], b = s.glyphs[i+1];
+        if (b.wordStart || (!!s.rune && !b.word) !== ink) continue; // the connector breaks between chunks
+        const ya = noteY(a, t), yb = noteY(b, t);
+        if (ya > -60 && ya < HIT_Y + 80 && yb > -60 && yb < HIT_Y + 80) { cx.moveTo(LNX[a.lane], ya); cx.lineTo(LNX[b.lane], yb); }
+      }
+      cx.stroke(); cx.shadowBlur = 0; cx.globalAlpha = 1;
     }
-    cx.stroke();
     for (const rt of s.rests) { // the rest between words: a small diamond falls through the gap between the hands
       const y = noteY({ time: rt }, t); if (y < -20 || y > HIT_Y + 20) continue;
       cx.fillStyle = PAL.blush; cx.globalAlpha = .55; cx.beginPath();
@@ -1789,7 +1824,7 @@ function drawSpellbook(t) {
     cx.textAlign = 'right';
     if (key === 'ward') { cx.fillStyle = S.color; cx.font = 'bold 14px ui-monospace, Menlo, monospace'; cx.fillText('∞', x0 + w - 16, y + 19); }
     else if (owned) for (let j = 0; j < RUNE_MAX; j++) { cx.fillStyle = j < n ? S.color : '#2a1a44'; cx.beginPath(); cx.arc(x0 + w - 20 - j * 11, y + 14, 3.5, 0, 7); cx.fill(); }
-    else { cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillText(S.earn, x0 + w - 14, y + 17); }
+    else { cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillText(OPT.glyphs === 'riffs' && S.sigil || S.earn, x0 + w - 14, y + 17); }
   });
   cx.restore(); cx.textAlign = 'center';
 }

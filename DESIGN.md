@@ -159,8 +159,25 @@ and get chunked. Bosses may start chunks on off-beats. The runic-tongue words
 stay as a "words" setting for comparison; the tongue itself is no longer a
 goal. Not adopted: keys playing the melody / song-battle framing (overdone).
 A press goes to the **earliest** in-window glyph of its key, so a late press in
-a fast repeat fills the run in order. **[OPEN]** how the patterns connect to
-runes beyond the majority-lane element; chunk pool size, 16th rate per tier.
+a fast repeat fills the run in order.
+
+**Sigils — decided (playtest): the path is the sigil.** Every riff spell is a
+sigil of one rune: its strokes share one shape, and the shape decides the bolt
+rune a clean spell earns (replacing majority-lane element in riffs).
+- **Pillar → earth** — one key repeated (`jjjj`): a column in one lane.
+- **Wave → water** — two fingers trading (`fkfk`): a zigzag.
+- **Sweep → air** — a roll across neighbouring fingers (`asdf`, `;lkj`): a slash.
+- **Burst → fire** — mirrored pairs hand to hand, opening out from the index
+  fingers or closing in (`fjdk`, `sldk`; 3 pairs from chapter 5): a flame.
+The thread through a sigil's glyphs glows in its rune's color (flares white
+when sealed), so the shape — and the rune — reads before the spell lands; the
+header names it. Sigils never repeat back to back. From chapter 2 a sigil ends
+in a real word, its **inscription** (plain thread, no effect on the rune) — the
+transferable typing practice. Strokes are drawn on the rows the tier has open,
+numbers included from chapter 4. Each encounter keeps 2 strokes per sigil in
+rotation. The icons already matched (✦ ≈ ▲ ≋). **[OPEN]** whether sigil choice
+should favour the enemy's weakness; whether the inscription should matter
+(e.g. its letters' lanes power the bolt); chunk pool size, 16th rate per tier.
 
 **Enemy structures:**
 - **Wave (archers)** — the standard encounter. A line of archers fires volleys
