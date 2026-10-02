@@ -558,6 +558,24 @@ so its boon comes with that spell instead of the next.
 Every effect and sound is the game's own, so the demo stays true as the game
 changes.
 
+## 10. High Scores & Memory
+
+**Decided (user): a very simple local SQLite.** `prototype/server.py` (stdlib
+only) replaces the plain static server: it serves the prototype and a tiny API
+over `prototype/runecaster.db` (one `runs` table: name, score, chapter,
+enemies cleared, max combo, perfect/good/miss, time; not in git).
+- **Board:** top 10 by score — rank, name, score, chapter, accuracy
+  ((perfect+good)/judged). On the title screen (HIGH SCORES) and on the game
+  over screen, with the run just recorded lit.
+- **Recording:** at game over you type your name (it's a typing game); Enter
+  records the run and shows its rank. Clicking to retry records it too.
+- **Memory:** the last name used prefills the entry, and the title screen
+  says "welcome back, NAME · best N · R runs recorded".
+- Served any other way (file://, a plain static server) the board says it
+  needs the server and nothing is recorded.
+**[OPEN]** per-player stats beyond best score (accuracy trend, weakest keys —
+the data for adaptive patterns); whether the demo or abandoned runs count.
+
 ## Notes
 
 - **Stenography tangent (parked):** a chord-based rhythm game would be a

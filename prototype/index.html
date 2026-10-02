@@ -82,7 +82,7 @@
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
       <li><b>Calibration:</b> if the click doesn't land when the letter crosses the line, slide <i>audio</i>. If your presses sit consistently early/late on the error bar, press "set input from last 20 hits" (or slide <i>input</i>). Both are saved in this browser.</li>
     </ul>
-    New here? <b>HOW TO PLAY</b> on the title screen plays a narrated demo (Enter or a click for the next lesson, Esc leaves). Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. The synthwave soundtrack is locked to the beat and runs at the speed of the letters; music and sampled effects need an http server — file:// plays the synthesized fallbacks. Audition every effect on the <a href="sfx.html" style="color:#f3a5e6">sound board</a>.
+    New here? <b>HOW TO PLAY</b> on the title screen plays a narrated demo (Enter or a click for the next lesson, Esc leaves). Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. The synthwave soundtrack is locked to the beat and runs at the speed of the letters; music and sampled effects need an http server — file:// plays the synthesized fallbacks. Run <code>python3 prototype/server.py</code> (http://127.0.0.1:8777/): it also keeps the <b>high scores</b> and remembers you (SQLite, prototype/runecaster.db). At game over, type your name and press Enter (or just click to retry: the remembered name records it). Audition every effect on the <a href="sfx.html" style="color:#f3a5e6">sound board</a>.
   </div>
 </aside>
 <script>
@@ -781,7 +781,7 @@ function hurt(dmg, why) { // the caster takes damage: an enemy strike, or his ow
   thudSnd();
   burst(WIZ_X + 26, WIZ_AY - 56, PAL.bad, 8 + Math.round(10 * dmg/DMG), 140 + 120*dmg/DMG);
   popup('-' + dmg + (why ? ' · ' + why : ''), PAL.bad, WIZ_X + 30, WIZ_AY - 120);
-  if (G.hp <= 0) { G.hp = 0; G.over = true; gameOverSnd(); }
+  if (G.hp <= 0) { G.hp = 0; G.over = true; gameOverSnd(); scoreEntryStart(); }
 }
 
 // ================= runes (§8): the way you fight — earned by typing, cast by typing their names =================
@@ -968,6 +968,7 @@ const BOON_EFFECT = {
 
 // ================= input =================
 addEventListener('keydown', e => {
+  if (started && G && G.over && G.entry) { if (scoreKey(e)) e.preventDefault(); return; } // the name for the board
   if (e.repeat || !started || !G || G.over) return;
   if (G.demo && e.isTrusted) { // the demo plays itself: Esc leaves, Enter / Space / → go on between lessons
     e.preventDefault();
@@ -1017,12 +1018,69 @@ cv.addEventListener('click', e => {
   loadSfx();
   if (started && G && G.demo) { demoAdvance(); return; } // a click is "next" (or skips the lesson)
   if (!started) {
-    const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height, b = HOWTO_BTN;
-    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { demoStart(); return; }
+    const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
+    const hit = b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+    if (showBoard) { showBoard = false; return; } // any click closes the board
+    if (hit(HOWTO_BTN)) { demoStart(); return; }
+    if (hit(BOARD_BTN)) { showBoard = true; scoresLoad(); return; }
     started = true; newGame(); syncOpts(); startRun(); musicPlay();
   }
-  else if (G.over) { newGame(); syncOpts(); startRun(); musicPlay(); }
+  else if (G.over) { if (G.entry && G.entry.state === 'typing') scoreSave(); newGame(); syncOpts(); startRun(); musicPlay(); } // retrying records the run first
 });
+
+// ================= high scores & memory: prototype/server.py keeps runs in SQLite =================
+// The board (top 10) and the player's memory (last name used, its best, runs played) come from the local server's
+// /api; served any other way (file://, a plain static server) the board just says so and nothing is recorded.
+const BOARD_N = 10, NAME_MAX = 12;
+const SCORES = { ok: null, top: [], me: { name: null, best: 0, runs: 0 } }; // ok: null = not asked yet, false = no server
+async function scoresLoad() {
+  try {
+    const [top, me] = await Promise.all([fetch(`api/scores?limit=${BOARD_N}`), fetch('api/me')].map(p => p.then(r => { if (!r.ok) throw r.status; return r.json(); })));
+    SCORES.top = top.scores; SCORES.me = me; SCORES.ok = true;
+  } catch (e) { SCORES.ok = false; }
+}
+scoresLoad();
+// game over: type a name (prefilled with the last one used), Enter records the run; clicking to retry records it too
+function scoreEntryStart() { G.entry = { name: SCORES.me.name || '', state: SCORES.ok ? 'typing' : 'off' }; }
+function scoreKey(e) {
+  const E = G.entry; if (E.state !== 'typing') return false;
+  if (e.key === 'Enter') { scoreSave(); return true; }
+  if (e.key === 'Backspace') { E.name = E.name.slice(0, -1); return true; }
+  if (e.key.length === 1 && /[\w .'-]/.test(e.key) && E.name.length < NAME_MAX) { E.name += e.key; return true; }
+  return false;
+}
+async function scoreSave() {
+  const E = G.entry, name = E.name.trim(); if (E.state !== 'typing' || !name) return;
+  E.state = 'saving';
+  const run = { name, score: G.score, chapter: G.ci + 1, cleared: G.cleared, max_combo: G.maxCombo, perfect: G.hits.perfect, good: G.hits.good, miss: G.hits.miss };
+  try {
+    const r = await fetch('api/scores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(run) });
+    if (!r.ok) throw r.status;
+    const res = await r.json(); E.state = 'saved'; E.id = res.id; E.rank = res.rank;
+    await scoresLoad();
+  } catch (err) { E.state = 'failed'; }
+}
+// the board: rank, name, score, chapter, accuracy; `mine` = the run just recorded (highlighted)
+function drawBoard(x, y, w, mine) {
+  cx.save(); cx.textAlign = 'left';
+  cx.fillStyle = 'rgba(10,4,24,.9)'; rr(x, y, w, 46 + BOARD_N * 24, 12); cx.fill();
+  cx.strokeStyle = PAL.gold; cx.lineWidth = 1.5; cx.globalAlpha = .7; rr(x, y, w, 46 + BOARD_N * 24, 12); cx.stroke(); cx.globalAlpha = 1;
+  cx.fillStyle = PAL.gold; cx.font = 'italic 900 17px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText('HIGH SCORES', x + 18, y + 26);
+  const cols = [[x + 18, '#'], [x + 52, 'name'], [x + w - 250, 'score'], [x + w - 150, 'chapter'], [x + w - 70, 'acc']];
+  cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillStyle = PAL.dim; cols.forEach(([cx0, h]) => cx.fillText(h, cx0, y + 42));
+  if (!SCORES.ok) {
+    cx.fillStyle = PAL.dim; cx.font = '13px ui-monospace, Menlo, monospace';
+    cx.fillText(SCORES.ok === null ? 'loading…' : 'scores need the local server: python3 prototype/server.py', x + 18, y + 80);
+  } else if (!SCORES.top.length) { cx.fillStyle = PAL.dim; cx.font = '13px ui-monospace, Menlo, monospace'; cx.fillText('no runs yet — be the first', x + 18, y + 80); }
+  SCORES.top.forEach((r, i) => {
+    const ry = y + 64 + i * 24, me = mine && r.id === mine, n = r.perfect + r.good + r.miss;
+    if (me) { cx.fillStyle = 'rgba(255,207,107,.16)'; rr(x + 8, ry - 16, w - 16, 22, 6); cx.fill(); }
+    cx.fillStyle = me ? PAL.gold : i < 3 ? PAL.blush : PAL.text; cx.font = (me ? 'bold ' : '') + '13px ui-monospace, Menlo, monospace';
+    [String(i + 1), r.name, r.score.toLocaleString(), String(r.chapter), n ? Math.round(100 * (r.perfect + r.good) / n) + '%' : '—']
+      .forEach((v, j) => cx.fillText(v, cols[j][0], ry));
+  });
+  cx.restore();
+}
 
 // ================= how to play: a narrated demo =================
 // Not interactive: the real game plays itself (chapter 1, riffs) while a caption explains one idea at a time —
@@ -1030,7 +1088,8 @@ cv.addEventListener('click', e => {
 // the empowered window → flawless boons → a kill's mend rune. Every effect is the real one. When a lesson has shown
 // its idea (~5 s each) the rhythm stops (as in cast mode) until you press next (Enter / Space / → / click); next
 // also skips a lesson still playing. Esc leaves.
-const HOWTO_BTN = { x: W/2 - 100, y: H - 70, w: 200, h: 32 }; // on the splash, under CLICK TO BEGIN
+const HOWTO_BTN = { x: W/2 - 210, y: H - 70, w: 200, h: 32 }, BOARD_BTN = { x: W/2 + 10, y: H - 70, w: 200, h: 32 }; // on the splash, under CLICK TO BEGIN
+let showBoard = false; // the splash's high-score board is open
 const demoKey = k => window.dispatchEvent(new KeyboardEvent('keydown', { key: k }));
 const demoTg = () => now() - OPT.inOff / 1000;
 const demoSealed = (d, f = () => true) => G.spells.some(s => s.sealedAt > d.at && f(s)); // a sigil sealed during this lesson
@@ -1930,14 +1989,7 @@ function draw(t) {
   if (t - G.redFlash < 0.25) { cx.globalAlpha = .28 * (1 - (t - G.redFlash)/0.25); cx.fillStyle = PAL.crimson; cx.fillRect(0, 0, W, H); cx.globalAlpha = 1; }
 
   if (G.demo) drawDemo(t);
-  if (G.over) {
-    const s = timingStats(200, false);
-    overlay('STRUCK DOWN', PAL.crimson, [
-      `score ${G.score.toLocaleString()}   chapter ${G.ci + 1} (${chapterAt(G.ci).name}) · ${G.cleared} enemies felled   max combo x${G.maxCombo}   P ${G.hits.perfect} / G ${G.hits.good} / M ${G.hits.miss}`,
-      s ? `timing over ${s.n} hits: avg ${Math.round(Math.abs(s.mean))}ms ${s.mean < 0 ? 'early' : 'late'} · spread ±${Math.round(s.sd)}ms` +
-          (Math.abs(s.mean) > 25 && s.sd < 45 ? '  — consistent offset: calibrate input' : '') : 'no judged hits',
-    ], 'click to retry');
-  }
+  if (G.over) drawGameOver(t);
 }
 // Bulwark (flawless stone): a hex shield before the caster that shatters on the next strike. Ward (rune): a gold
 // glyph oval held for its bar, flickering as it runs out, bursting when it turns a charged attack (stage-local coordinates)
@@ -2207,22 +2259,46 @@ function drawIdle() {
   rr(W/2 - 150, H - 124, 300, 44, 22); cx.stroke();
   cx.fillStyle = '#fff'; cx.textAlign = 'center'; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif';
   cx.fillText('CLICK TO BEGIN', W/2, H - 95); cx.shadowBlur = 0; cx.lineWidth = 1;
-  const b = HOWTO_BTN; // the narrated demo
-  cx.fillStyle = 'rgba(10,4,24,.85)'; rr(b.x, b.y, b.w, b.h, 16); cx.fill();
-  cx.strokeStyle = PAL.gold; cx.lineWidth = 1.5; cx.globalAlpha = .8; rr(b.x, b.y, b.w, b.h, 16); cx.stroke(); cx.globalAlpha = 1;
-  cx.fillStyle = PAL.gold; cx.font = 'bold 14px ui-monospace, Menlo, monospace'; cx.fillText('HOW TO PLAY', W/2, b.y + 21); cx.lineWidth = 1;
+  for (const [b, label] of [[HOWTO_BTN, 'HOW TO PLAY'], [BOARD_BTN, 'HIGH SCORES']]) { // the narrated demo · the board
+    cx.fillStyle = 'rgba(10,4,24,.85)'; rr(b.x, b.y, b.w, b.h, 16); cx.fill();
+    cx.strokeStyle = PAL.gold; cx.lineWidth = 1.5; cx.globalAlpha = .8; rr(b.x, b.y, b.w, b.h, 16); cx.stroke(); cx.globalAlpha = 1;
+    cx.fillStyle = PAL.gold; cx.font = 'bold 14px ui-monospace, Menlo, monospace'; cx.fillText(label, b.x + b.w / 2, b.y + 21); cx.lineWidth = 1;
+  }
+  if (SCORES.ok && SCORES.me.name) { // memory: who played last, and their best
+    cx.fillStyle = 'rgba(10,4,24,.75)'; rr(W/2 - 230, H - 158, 460, 26, 13); cx.fill();
+    cx.fillStyle = PAL.text; cx.font = '13px ui-monospace, Menlo, monospace';
+    cx.fillText(`welcome back, ${SCORES.me.name} · best ${SCORES.me.best.toLocaleString()} · ${SCORES.me.runs} run${SCORES.me.runs === 1 ? '' : 's'} recorded`, W/2, H - 140);
+  }
+  if (showBoard) { cx.fillStyle = 'rgba(7,3,15,.7)'; cx.fillRect(0, 0, W, H); drawBoard(W/2 - 260, 150, 520, null);
+    cx.textAlign = 'center'; cx.fillStyle = PAL.dim; cx.font = '12px ui-monospace, Menlo, monospace'; cx.fillText('click to close', W/2, 150 + 46 + BOARD_N * 24 + 24); }
   cx.fillStyle = PAL.blush; cx.font = '12px ui-monospace, Menlo, monospace';
   cx.fillText('type glyphs on the beat · lanes are fingers, colors are elements', W/2, H - 14);
 }
-function overlay(title, color, sub, cta) {
-  cx.fillStyle = 'rgba(10,3,22,.86)'; cx.fillRect(0, 0, W, H);
-  cx.textAlign = 'center'; cx.fillStyle = color; cx.shadowColor = color; cx.shadowBlur = 24;
-  cx.font = 'italic 900 52px "Trebuchet MS", "Arial Black", sans-serif';
-  cx.fillText(title, W/2, H/2 - 40); cx.shadowBlur = 0;
-  cx.fillStyle = PAL.dim; cx.font = '15px ui-monospace, Menlo, monospace';
-  for (const [i, line] of (Array.isArray(sub) ? sub : [sub]).entries()) cx.fillText(line, W/2, H/2 + 4 + i * 22);
-  cx.fillStyle = PAL.blush; cx.font = 'bold 16px ui-monospace, Menlo, monospace'; cx.shadowColor = PAL.magenta; cx.shadowBlur = 10;
-  cx.fillText(cta, W/2, H/2 + 44 + (Array.isArray(sub) ? (sub.length - 1) * 22 : 0)); cx.shadowBlur = 0;
+// game over: the run's numbers, the name for the board (typed here — it's a typing game), the board with this run lit
+function drawGameOver(t) {
+  const s = timingStats(200, false), E = G.entry;
+  cx.fillStyle = 'rgba(10,3,22,.88)'; cx.fillRect(0, 0, W, H);
+  cx.textAlign = 'center'; cx.fillStyle = PAL.crimson; cx.shadowColor = PAL.crimson; cx.shadowBlur = 24;
+  cx.font = 'italic 900 48px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText('STRUCK DOWN', W/2, 92); cx.shadowBlur = 0;
+  cx.fillStyle = PAL.dim; cx.font = '14px ui-monospace, Menlo, monospace';
+  cx.fillText(`score ${G.score.toLocaleString()}   chapter ${G.ci + 1} (${chapterAt(G.ci).name}) · ${G.cleared} enemies felled   max combo x${G.maxCombo}   P ${G.hits.perfect} / G ${G.hits.good} / M ${G.hits.miss}`, W/2, 128);
+  cx.fillText(s ? `timing over ${s.n} hits: avg ${Math.round(Math.abs(s.mean))}ms ${s.mean < 0 ? 'early' : 'late'} · spread ±${Math.round(s.sd)}ms` +
+    (Math.abs(s.mean) > 25 && s.sd < 45 ? '  — consistent offset: calibrate input' : '') : 'no judged hits', W/2, 150);
+  // the name line
+  const ny = 192;
+  cx.fillStyle = 'rgba(10,4,24,.9)'; rr(W/2 - 260, ny - 22, 520, 34, 10); cx.fill();
+  cx.strokeStyle = E && E.state === 'typing' ? PAL.pink : '#3a1a5e'; cx.lineWidth = 1.5; rr(W/2 - 260, ny - 22, 520, 34, 10); cx.stroke();
+  cx.font = 'bold 15px ui-monospace, Menlo, monospace';
+  if (!E || E.state === 'off') { cx.fillStyle = PAL.dim; cx.fillText('not recorded: the board needs python3 prototype/server.py', W/2, ny); }
+  else if (E.state === 'typing') {
+    cx.fillStyle = PAL.text; cx.fillText(`your name: ${E.name}${(t * 2) % 1 < 0.5 ? '▏' : ' '}`, W/2, ny);
+    cx.fillStyle = PAL.dim; cx.font = '11px ui-monospace, Menlo, monospace'; cx.fillText('type it · Enter records the run', W/2, ny + 30);
+  } else if (E.state === 'saving') { cx.fillStyle = PAL.dim; cx.fillText('recording…', W/2, ny); }
+  else if (E.state === 'saved') { cx.fillStyle = PAL.gold; cx.fillText(`recorded · ${E.name.trim()} is #${E.rank}`, W/2, ny); }
+  else { cx.fillStyle = PAL.bad; cx.fillText('could not record the run (is server.py running?)', W/2, ny); }
+  drawBoard(W/2 - 260, 236, 520, E && E.id);
+  cx.textAlign = 'center'; cx.fillStyle = PAL.blush; cx.font = 'bold 16px ui-monospace, Menlo, monospace'; cx.shadowColor = PAL.magenta; cx.shadowBlur = 10;
+  cx.fillText('click to retry', W/2, 236 + 46 + BOARD_N * 24 + 34); cx.shadowBlur = 0;
 }
 </script>
 </body>
