@@ -267,6 +267,11 @@ encounter, so the model must support intra-encounter tempo curves.
    consumes that glyph as a miss, and the word continues.
 3. **Enemy attack** (the consequence). A fizzle or missed note lets the enemy
    hit you. You have a health bar; attacks drain it.
+   **Decided (playtest): health sits under each fighter's feet**, in the side
+   margins level with the hit line and keycaps, not at the top corners: the
+   eyes live at the hit line, so the top of the screen was never looked at.
+   Each panel: name, the gauge with HP in it; the enemy's adds the charge bar
+   and a second line, "weak to X" in the element's color.
 4. **Level fail.** Health reaches zero. Retry.
 
 **Educational side:** when you miss, the game should **teach you the right

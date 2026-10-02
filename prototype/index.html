@@ -1725,23 +1725,31 @@ function draw(t) {
     cx.fillText((chapterAt(G.ci).tier >= 4 ? l.sym : l.keys).replace(/ /g, ''), LNX[l.id], HIT_Y + 64);
   }
 
-  // health bars at the top corners, each on its fighter's side
-  const BAR_Y = 8, BAR_H = 14, HALF = 300;
-  const bar = (x, frac, c1, c2, label) => { // neon gauge
-    cx.fillStyle = '#14082c'; rr(x, BAR_Y, HALF, BAR_H, 6); cx.fill();
-    const g = cx.createLinearGradient(x, 0, x + HALF, 0); g.addColorStop(0, c1); g.addColorStop(1, c2);
-    cx.fillStyle = g; cx.shadowColor = c2; cx.shadowBlur = 10; rr(x, BAR_Y, HALF * Math.max(0, frac), BAR_H, 6); cx.fill(); cx.shadowBlur = 0;
-    cx.strokeStyle = '#3a1a5e'; rr(x, BAR_Y, HALF, BAR_H, 6); cx.stroke();
-    cx.fillStyle = '#fff'; cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.textAlign = 'left';
-    cx.shadowColor = '#000'; cx.shadowBlur = 4; cx.fillText(label, x + 8, BAR_Y + 12); cx.shadowBlur = 0;
+  // health under each fighter's feet, in the side margins beside the hit line — where the eyes already are
+  const PNL_W = 150, PNL_Y = HIT_Y + 30, BAR_H = 14, BAR_Y = PNL_Y + 8;
+  const panel = (x, frac, c1, c2, name, hp, sub, subC) => { // name / neon gauge with the HP in it / detail line
+    cx.textAlign = 'left'; cx.shadowColor = '#000'; cx.shadowBlur = 4;
+    cx.fillStyle = PAL.text; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
+    let n = name; while (n.length > 4 && cx.measureText(n).width > PNL_W) n = n.slice(0, -1);
+    cx.fillText(n === name ? n : n.slice(0, -1) + '…', x, PNL_Y); cx.shadowBlur = 0;
+    cx.fillStyle = '#14082c'; rr(x, BAR_Y, PNL_W, BAR_H, 6); cx.fill();
+    const g = cx.createLinearGradient(x, 0, x + PNL_W, 0); g.addColorStop(0, c1); g.addColorStop(1, c2);
+    cx.fillStyle = g; cx.shadowColor = c2; cx.shadowBlur = 10; rr(x, BAR_Y, PNL_W * Math.max(0, frac), BAR_H, 6); cx.fill(); cx.shadowBlur = 0;
+    cx.strokeStyle = '#3a1a5e'; rr(x, BAR_Y, PNL_W, BAR_H, 6); cx.stroke();
+    cx.fillStyle = '#fff'; cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.shadowColor = '#000'; cx.shadowBlur = 4;
+    cx.fillText(hp, x + 7, BAR_Y + 11);
+    if (sub) { cx.fillStyle = subC; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.fillText(sub, x, BAR_Y + BAR_H + 30); }
+    cx.shadowBlur = 0;
   };
-  bar(16, G.hp / 100, G.hp > 40 ? PAL.cyan : PAL.crimson, G.hp > 40 ? '#3cf0a0' : PAL.pink, 'CASTER ' + G.hp);
-  bar(W - 16 - HALF, G.enemy.hp / G.enemy.max, PAL.wine, G.enemy.color, G.enemy.name.toUpperCase() + '  ' + Math.max(0, G.enemy.hp) + '  · weak to ' + G.enemy.weak.toUpperCase());
+  const LPX = 12, RPX = W - 12 - PNL_W;
+  panel(LPX, G.hp / 100, G.hp > 40 ? PAL.cyan : PAL.crimson, G.hp > 40 ? '#3cf0a0' : PAL.pink, 'CASTER', G.hp + ' / 100');
+  panel(RPX, G.enemy.hp / G.enemy.max, PAL.wine, G.enemy.color, G.enemy.name.toUpperCase(), Math.max(0, G.enemy.hp) + ' / ' + G.enemy.max,
+    'weak to ' + G.enemy.weak.toUpperCase(), ELC[G.enemy.weak]);
   const ck = chargeState(t); // the charged attack filling, under the enemy's health
   if (ck) {
-    cx.fillStyle = '#14082c'; rr(W - 16 - HALF, BAR_Y + BAR_H + 4, HALF, 5, 2.5); cx.fill();
+    cx.fillStyle = '#14082c'; rr(RPX, BAR_Y + BAR_H + 4, PNL_W, 5, 2.5); cx.fill();
     cx.fillStyle = ck.warn ? PAL.bad : G.enemy.color; cx.globalAlpha = ck.warn ? .7 + .3 * Math.sin(t * 20) : .8;
-    rr(W - 16 - HALF, BAR_Y + BAR_H + 4, HALF * ck.k, 5, 2.5); cx.fill(); cx.globalAlpha = 1;
+    rr(RPX, BAR_Y + BAR_H + 4, PNL_W * ck.k, 5, 2.5); cx.fill(); cx.globalAlpha = 1;
   }
 
   // spells: connectors + glyphs
