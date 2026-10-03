@@ -384,19 +384,37 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > generated and tried, but after playtesting the original synthwave stayed the
   > best, so it was the only track (on/off in settings).
   >
-  > **Decided (user): a track per enemy, round-robin for now** (mapping songs
-  > to specific enemies may come later). `TRACKS` lists them; encounter n plays
-  > track n mod len. Only the first is fetched at start; while a track plays,
-  > the next is fetched and decoded in the background. A new enemy's track
-  > crossfades in on a click about a beat later; if it isn't ready the old one
-  > keeps playing until it is; if the spellbook is open (time stopped) it
-  > starts on the grid when it closes. Second track: `nightdrive.m4a`, the
-  > same bright outrun style (ACE-Step, 100 BPM, D minor vs synthwave's G
-  > minor), loudness-matched, kick from the first beat, 3 ms seam fades baked
-  > in. Beat metadata is now a least-squares fit through kick onsets on the
-  > encoded file; re-fitting synthwave this way corrected it from 102.08 /
-  > 0.286 s (kicks drifted 15–60 ms early) to 101.964 / 0.194 s (±20 ms).
-  > Size: ~0.7 MB per 60 s loop at 96 kbps.
+  > **Decided (user): a theme per enemy — and a distinct one per named boss.**
+  > Supersedes the round-robin over two generic tracks and the single generic
+  > boss track (`nightdrive.m4a` and the one `boss.m4a` are both removed). A track
+  > key is an enemy **kind** for the rank-and-file (every archer one theme, every
+  > cavalry another) or a boss's **name** (`encKey` = `ch.encs[ei] === 'boss' ?
+  > ch.boss : enc`), so each of the six bosses has his own theme; `trackFor` falls
+  > back to the archer theme for unknown keys. While one plays, the *next
+  > encounter's* theme is prefetched; a new enemy's track crossfades in on a click
+  > about a beat later, the old one holds if the new isn't decoded yet, and if the
+  > spellbook is open (time stopped) it starts on the grid when it closes.
+  > Per-boss *mechanics* (not just music) is deferred to a later discussion.
+  >
+  > All eight are ACE-Step 1.5 synthwave in the splash's house style,
+  > character-tuned, loudness-matched to **−14 LUFS** (the sparse Counting Wraith
+  > peaks-limits to −16 to keep its transients clean), 96 kbps AAC, 3 ms seam
+  > fades baked in. bpm/off/bars is a least-squares fit through kick onsets on the
+  > *encoded* file (browser-verified within ~1 ms); a generated song is 60 s with
+  > an intro pickup and an outro, so the bake trims to [first kick, last whole
+  > bar] so the loop jumps groove→groove (an untrimmed song-end→song-start reads
+  > 60–90 dB = dead air; a good loop ~1–3 dB). `loopEnd` is clamped to the decoded
+  > buffer length (AAC framing can land the computed seam 1 ms past the end). Each
+  > was chosen from 3–12 seeds by the steadiest beat and cleanest seam.
+  > **Archer** = the playtested `synthwave.m4a` (101.964 / 0.194 / 25). **Cavalry**:
+  > galloping chase (108 BPM) → 107.997 / 0.0793 / 24. **Bosses** — *Stone Warden*:
+  > slow grinding tectonic stomp (96) → 96.028 / 0.3539 / 22; *Storm Hierophant*:
+  > fast electric crackle, racing arps (112) → 109.996 / 0.0467 / 24; *Tide Lich*:
+  > cold liquid ebb/flow swells (94) → 94.078 / 0.5759 / 21; *Counting Wraith*:
+  > glassy clockwork tick, hollow (105) → 105.001 / 0.0967 / 24; *Glyph Tyrant*:
+  > burning fierce lead, war drums (110) → 110.002 / 0.051 / 24; *Shadow Archon*
+  > (finale): epic choral apocalyptic dread (92) → 92.044 / 0.4642 / 21.
+  > ~0.64–0.68 MB per theme.
 
   > **Prototype answer (sound effects):** ACE-Step can't make one-shots (every
   > request returns 60 s of music, whatever the duration asked), so foley comes
