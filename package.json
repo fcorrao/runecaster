@@ -2,6 +2,7 @@
   "name": "runecaster",
   "private": true,
   "scripts": {
+    "check": "node scripts/check.mjs",
     "dev": "wrangler d1 migrations apply runecaster --local && wrangler dev --port 8777",
     "deploy": "wrangler d1 migrations apply runecaster --remote && wrangler deploy"
   },

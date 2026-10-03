@@ -2,6 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "runecaster",
   "main": "worker/index.js",
+  "account_id": "c54acccac3bf2f1e3724dfb912e242e3", // not a secret; CI needs only CLOUDFLARE_API_TOKEN
   "compatibility_date": "2026-10-03",
   "routes": [{ "pattern": "runecaster.net", "custom_domain": true }],
   "workers_dev": false, // runecaster.net is the only address

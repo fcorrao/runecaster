@@ -1,0 +1,19 @@
+name: deploy
+on:
+  push:
+    branches: [master] # i.e. a merged PR: master is protected
+  workflow_dispatch:
+concurrency: { group: deploy, cancel-in-progress: false }
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: { name: production, url: https://runecaster.net }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npm run check
+      - run: npm run deploy # remote D1 migrations, then the Worker and assets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

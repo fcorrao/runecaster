@@ -616,6 +616,22 @@ URLs are off). Free tier is ample: static files and their bandwidth are free
 **[OPEN]** per-player stats beyond best score (accuracy trend, weakest keys —
 the data for adaptive patterns); whether the demo or abandoned runs count.
 
+## 11. Workflow & Deploys
+
+**Decided (user): a light pipeline.** `master` is protected: changes land
+through pull requests from feature branches (`feat/…`, `fix/…`, `ci/…`), no
+direct or force pushes. GitHub Actions:
+- **ci** (`.github/workflows/ci.yml`, every PR to master; required to merge):
+  `npm run check` (syntax of the game's inline script and the Worker) and
+  `wrangler deploy --dry-run` (bundles the Worker, validates the config).
+- **deploy** (`.github/workflows/deploy.yml`, every push to master = every
+  merge; also runnable by hand): the check again, then `npm run deploy`
+  (remote D1 migrations, then the Worker and assets) to runecaster.net.
+  Needs the repo secret `CLOUDFLARE_API_TOKEN` (Cloudflare token from the
+  "Edit Cloudflare Workers" template plus Account → D1 → Edit); the account id
+  is in `wrangler.jsonc`.
+Manual `npm run deploy` still works for emergencies.
+
 ## Notes
 
 - **Stenography tangent (parked):** a chord-based rhythm game would be a
