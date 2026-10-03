@@ -1,20 +1,22 @@
 // Runecaster API on Cloudflare Workers + D1. Static files (prototype/) are served by Workers assets; only /api/*
 // reaches this code (wrangler.jsonc run_worker_first).
 //
-// GET  /api/scores?limit=10   -> {scores: [{id, name, score, chapter, cleared, max_combo, perfect, good, miss, at}]}
+// GET  /api/scores?limit=10   -> {scores: [{id, name, score, chapter, cleared, max_combo, perfect, good, miss, swift, at}]}
 // GET  /api/me?player=ID      -> {name: this browser's last name or null, best, runs}
-// POST /api/scores {player, name, score, chapter, cleared, max_combo, perfect, good, miss} -> {id, rank}
+// POST /api/scores {player, name, score, chapter, cleared, max_combo, perfect, good, miss, swift} -> {id, rank}
 //
 // `player` is a random id the browser keeps in localStorage: it is the player's memory key and never leaves the
 // API (the board doesn't return it). Scores are client-reported, so posts are sanity-checked against the scoring
 // rule and rate-limited (per IP by the RATE binding, per player by the gap since their last run).
 
-const FIELDS = ['score', 'chapter', 'cleared', 'max_combo', 'perfect', 'good', 'miss'];
+const FIELDS = ['score', 'chapter', 'cleared', 'max_combo', 'perfect', 'good', 'miss', 'swift'];
 const NAME_MAX = 12, NAME_RE = /^[\w .'-]+$/, PLAYER_RE = /^[A-Za-z0-9-]{8,64}$/;
 const PLAYER_GAP_S = 10; // a run can't end sooner than this after the last one
 const COUNT_MAX = 1e6, CHAPTER_MAX = 99;
-// the game's scoring: each judged hit scores 100 (perfect) or 50 (good) × the combo multiplier, 1 to 4
-const scoreOk = r => r.score >= 100 * r.perfect + 50 * r.good && r.score <= 4 * (100 * r.perfect + 50 * r.good);
+// the game's scoring: each judged hit scores 100 (perfect) or 50 (good) × the combo multiplier, 1 to 4; a swift kill
+// pays SWIFT_PTS × the multiplier for each spell it was under par (`swift` = spells saved over the run)
+const SWIFT_PTS = 1200, SWIFT_PER_KILL = 10;
+const scoreOk = r => r.score >= 100 * r.perfect + 50 * r.good && r.score <= 4 * (100 * r.perfect + 50 * r.good) + 4 * SWIFT_PTS * r.swift;
 
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), {
   status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
@@ -34,6 +36,7 @@ function parseRun(data) {
   }
   if (run.chapter < 1 || run.chapter > CHAPTER_MAX) return 'bad chapter';
   if (run.max_combo > run.perfect + run.good) return 'impossible combo';
+  if (run.swift > SWIFT_PER_KILL * (run.cleared + 1)) return 'impossible swift';
   if (!scoreOk(run)) return 'impossible score';
   return run;
 }
