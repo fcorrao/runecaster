@@ -896,6 +896,7 @@ function openCast() {
   const tg = now() - OPT.inOff / 1000;
   if (G.spells.some(s => !s.done && s.glyphs.some(r => r.status === 'pending' && tg >= r.time))) { G.castFx = { kind: 'close', at: now(), text: 'a glyph is on the line — hit it first' }; return; }
   G.cast = { buf: '', at: now(), t: now() }; G.countIn = null;
+  G.toast = null; G.pops = G.pops.filter(p => p.judge); // the earned-rune toast said "press Space": done; it and stray popups would sit over the spellbook
   castMusicRate(true);
   openSnd();
 }
@@ -2104,43 +2105,58 @@ function runePip(x, y, r, color, j, n, cr) {
   else if (j < n) { cx.strokeStyle = color; cx.lineWidth = 1.2; cx.stroke(); cx.lineWidth = 1; }
   else { cx.fillStyle = '#2a1a44'; cx.fill(); }
 }
+// rune card art (art/runes/<key>.jpg: Qwen-Image emblems in the splash's style); until loaded, the card shows the icon
+const RUNE_ART = Object.fromEntries(Object.keys(RUNES).map(k => { const im = new Image(); im.src = `art/runes/${k}.jpg`; return [k, im]; }));
+const SB = { x: X0 - 12, y: TOP_Y - 30, w: LANES_W + 24, h: HIT_Y + 72 - (TOP_Y - 30) }; // the spellbook covers the lane field
+const CARD = { w: 262, h: 186, gap: 10 };
 function drawSpellbook(t) {
-  const keys = Object.keys(RUNES), buf = G.cast.buf, x0 = W/2 - 230, y0 = TOP_Y - 30, rowH = 40, w = 460, h = 30 + keys.length * rowH + 6;
-  const open = Math.min(1, (t - G.cast.at) / 0.2);
+  const keys = Object.keys(RUNES), buf = G.cast.buf, open = Math.min(1, (t - G.cast.at) / 0.2);
   cx.save(); cx.globalAlpha = open;
-  cx.fillStyle = 'rgba(10,4,24,.94)'; rr(x0, y0, w, h, 12); cx.fill();
-  cx.strokeStyle = PAL.pink; cx.shadowColor = PAL.magenta; cx.shadowBlur = 12; rr(x0, y0, w, h, 12); cx.stroke(); cx.shadowBlur = 0;
-  cx.textAlign = 'left'; cx.fillStyle = PAL.blush; cx.font = 'italic 900 13px "Trebuchet MS", "Arial Black", sans-serif';
-  cx.fillText('SPELLBOOK', x0 + 16, y0 + 20);
-  cx.textAlign = 'right'; cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace';
-  cx.fillText('time stands still · type a name fast · Space resumes', x0 + w - 14, y0 + 20);
+  cx.fillStyle = 'rgba(10,4,24,.97)'; rr(SB.x, SB.y, SB.w, SB.h, 14); cx.fill();
+  cx.strokeStyle = PAL.pink; cx.shadowColor = PAL.magenta; cx.shadowBlur = 12; rr(SB.x, SB.y, SB.w, SB.h, 14); cx.stroke(); cx.shadowBlur = 0;
+  cx.textAlign = 'center'; cx.fillStyle = PAL.blush; cx.font = 'italic 900 18px "Trebuchet MS", "Arial Black", sans-serif';
+  cx.fillText('SPELLBOOK', W/2, SB.y + 34);
+  cx.fillStyle = PAL.dim; cx.font = '10.5px ui-monospace, Menlo, monospace';
+  cx.fillText('time stands still', W/2, SB.y + 54); cx.fillText('type a name fast · Space resumes', W/2, SB.y + 68);
+  // three cards down each side; the typing ring sits between the columns
+  const top = SB.y + (SB.h - 3 * CARD.h - 2 * CARD.gap) / 2;
   keys.forEach((key, i) => {
-    const S = RUNES[key], n = G.runes[key] || 0, owned = owns(key), y = y0 + 30 + i * rowH, weak = S.el && S.el === G.enemy.weak;
+    const S = RUNES[key], n = G.runes[key] || 0, owned = owns(key), weak = S.el && S.el === G.enemy.weak;
+    const x = i < 3 ? SB.x + 12 : SB.x + SB.w - 12 - CARD.w, y = top + (i % 3) * (CARD.h + CARD.gap);
     const match = owned && buf && S.name.startsWith(buf);
     cx.globalAlpha = open * (owned ? (buf && !match ? .4 : 1) : .45);
-    if (match) { cx.strokeStyle = S.color; cx.shadowColor = S.color; cx.shadowBlur = 10; rr(x0 + 8, y + 1, w - 16, rowH - 2, 8); cx.stroke(); cx.shadowBlur = 0; }
-    cx.fillStyle = PAL.ink; cx.beginPath(); cx.arc(x0 + 30, y + rowH / 2, 14, 0, 7); cx.fill();
-    cx.strokeStyle = S.color; cx.lineWidth = 2; cx.beginPath(); cx.arc(x0 + 30, y + rowH / 2, 14, 0, 7); cx.stroke(); cx.lineWidth = 1;
-    cx.textAlign = 'center'; cx.fillStyle = S.color; cx.font = 'bold 15px Georgia, serif'; cx.fillText(S.icon, x0 + 30, y + rowH / 2 + 5);
-    cx.textAlign = 'left'; cx.font = 'bold 14px ui-monospace, Menlo, monospace';
-    cx.fillStyle = S.color; cx.fillText(S.name, x0 + 56, y + 17);
-    if (match) { cx.fillStyle = '#fff'; cx.shadowColor = S.color; cx.shadowBlur = 10; cx.fillText(buf, x0 + 56, y + 17); cx.shadowBlur = 0; }
-    const nw = cx.measureText(S.name).width;
-    cx.font = 'italic 900 11px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(S.label, x0 + 64 + nw, y + 17);
-    let tx = x0 + 78 + nw + cx.measureText(S.label).width;
-    if (G.unseen.has(key)) { cx.fillStyle = PAL.gold; cx.font = 'bold 9px ui-monospace, Menlo, monospace'; cx.fillText('NEW', tx, y + 16); tx += 30; }
-    if (weak) { cx.fillStyle = PAL.bad; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(`×2 vs ${G.enemy.name}`, tx, y + 16); }
-    cx.fillStyle = S.color; cx.font = 'italic 12px Georgia, serif'; cx.fillText(S.gloss, x0 + 56, y + 33);
-    const gw = cx.measureText(S.gloss).width;
-    cx.fillStyle = PAL.text; cx.font = '11.5px ui-monospace, Menlo, monospace'; cx.fillText('· ' + S.desc, x0 + 62 + gw, y + 33);
-    cx.textAlign = 'right';
-    if (key === 'ward') { cx.fillStyle = S.color; cx.font = 'bold 14px ui-monospace, Menlo, monospace'; cx.fillText('∞', x0 + w - 16, y + 19); }
+    cx.fillStyle = 'rgba(20,8,44,.92)'; rr(x, y, CARD.w, CARD.h, 12); cx.fill();
+    cx.strokeStyle = S.color; cx.lineWidth = match ? 2.5 : 1; cx.globalAlpha *= match ? 1 : .7;
+    if (match) { cx.shadowColor = S.color; cx.shadowBlur = 16; }
+    rr(x, y, CARD.w, CARD.h, 12); cx.stroke(); cx.shadowBlur = 0; cx.lineWidth = 1;
+    cx.globalAlpha = open * (owned ? (buf && !match ? .4 : 1) : .45);
+    // the art: the rune's spirit, framed in its colour
+    const ax = x + 10, ay = y + 10, as = 128, im = RUNE_ART[key];
+    cx.save(); rr(ax, ay, as, as, 10); cx.clip();
+    if (im.complete && im.naturalWidth) cx.drawImage(im, ax, ay, as, as);
+    else { cx.fillStyle = PAL.ink; cx.fillRect(ax, ay, as, as); cx.fillStyle = S.color; cx.textAlign = 'center'; cx.font = 'bold 48px Georgia, serif'; cx.fillText(S.icon, ax + as / 2, ay + as / 2 + 16); }
+    cx.restore();
+    cx.strokeStyle = S.color; cx.lineWidth = 1.5; cx.shadowColor = S.color; cx.shadowBlur = owned ? 10 : 0; rr(ax, ay, as, as, 10); cx.stroke(); cx.shadowBlur = 0; cx.lineWidth = 1;
+    // name (the typed prefix glows white), label, gloss, charges, badges
+    const tx = ax + as + 12, tw = x + CARD.w - 10 - tx;
+    cx.textAlign = 'left'; cx.font = 'bold 20px ui-monospace, Menlo, monospace'; cx.fillStyle = S.color; cx.fillText(S.name, tx, y + 34);
+    if (match) { cx.fillStyle = '#fff'; cx.shadowColor = S.color; cx.shadowBlur = 12; cx.fillText(buf, tx, y + 34); cx.shadowBlur = 0; }
+    cx.font = 'italic 900 12px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillStyle = S.color; cx.fillText(S.label, tx, y + 54);
+    cx.font = 'italic 12px Georgia, serif'; cx.fillStyle = PAL.blush; cx.fillText(S.gloss, tx, y + 72, tw);
+    if (key === 'ward') { cx.fillStyle = S.color; cx.font = 'bold 18px ui-monospace, Menlo, monospace'; cx.fillText('∞', tx, y + 98); }
     else if (owned) {
       const cr = G.cracked[key] || 0;
-      for (let j = 0; j < RUNE_MAX; j++) runePip(x0 + w - 20 - j * 11, y + 14, 3.5, S.color, j, n, cr);
-      if (cr) { cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillText(`${n} (${cr} cracked)`, x0 + w - 24 - RUNE_MAX * 11, y + 17); }
+      for (let j = 0; j < RUNE_MAX; j++) runePip(tx + 6 + j * 15, y + 93, 5, S.color, j, n, cr);
+      if (cr) { cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillText(`${n} (${cr} cracked)`, tx, y + 112); }
     }
-    else { cx.fillStyle = PAL.dim; cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillText(OPT.glyphs === 'riffs' && S.sigil || S.earn, x0 + w - 14, y + 17); }
+    let bx = tx;
+    if (G.unseen.has(key)) { cx.fillStyle = PAL.gold; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText('NEW', bx, y + 112 + (G.cracked[key] ? 14 : 0)); bx += 34; }
+    if (weak) { cx.fillStyle = PAL.bad; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.fillText('×2 WEAK', bx, y + 112 + (G.cracked[key] ? 14 : 0)); }
+    // what it does; where to earn it while not owned
+    cx.fillStyle = PAL.text; cx.font = '12px ui-monospace, Menlo, monospace';
+    const lines = wrapText(S.desc, CARD.w - 20);
+    lines.slice(0, 2).forEach((ln, j) => cx.fillText(ln, x + 10, y + 157 + j * 15));
+    if (!owned) { cx.fillStyle = PAL.dim; cx.font = '11px ui-monospace, Menlo, monospace'; cx.fillText('earn: ' + (OPT.glyphs === 'riffs' && S.sigil || S.earn), x + 10, y + 175, CARD.w - 20); }
   });
   cx.restore(); cx.textAlign = 'center';
 }
@@ -2164,7 +2180,7 @@ function drawRuneStatus(t) {
   cx.textAlign = 'center';
 }
 // rune layer: the panel between the hands, power animations, cast mode, toasts
-const CAST_RING = { x: W/2, y: 440, r: 40 }; // just under the six-row spellbook
+const CAST_RING = { x: W/2, y: 420, r: 40 }; // between the spellbook's two card columns
 function drawRunes(t) {
   // Gale: wind streaks tear up the lanes
   if (t - G.galeFx < 0.7) {
