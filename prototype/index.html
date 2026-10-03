@@ -2121,8 +2121,8 @@ function drawRunePanel(t) {
     const S = RUNES[key], n = G.runes[key] || 0, y = RP.y + 24 + i * RH, owned = owns(key), weak = S.el && S.el === G.enemy.weak;
     const flash = G.runeFlash && G.runeFlash.key === key && t - G.runeFlash.at < 0.9 ? 1 - (t - G.runeFlash.at) / 0.9 : 0;
     if (flash) { cx.fillStyle = S.color; cx.globalAlpha = .3 * flash; rr(px + 3, y, RP.w - 6, RH - 4, 8); cx.fill(); cx.globalAlpha = 1; }
-    // the art, with the charges down its right side
-    const as = Math.min(56, RH - 26), ax = px + 6, ay = y + 2, im = RUNE_ART[key];
+    // one centred column: the art, the charges under it, the name
+    const as = Math.min(52, RH - 32), ax = W/2 - as / 2, ay = y + 2, im = RUNE_ART[key];
     cx.globalAlpha = owned ? 1 : .35;
     cx.save(); rr(ax, ay, as, as, 7); cx.clip();
     if (im.complete && im.naturalWidth) cx.drawImage(im, ax, ay, as, as);
@@ -2130,12 +2130,11 @@ function drawRunePanel(t) {
     cx.restore();
     cx.strokeStyle = S.color; cx.lineWidth = 1.5; if (owned) { cx.shadowColor = S.color; cx.shadowBlur = 8; }
     rr(ax, ay, as, as, 7); cx.stroke(); cx.shadowBlur = 0; cx.lineWidth = 1;
-    const cxp = px + RP.w - 14;
-    if (key === 'ward') { cx.textAlign = 'center'; cx.fillStyle = S.color; cx.font = 'bold 16px ui-monospace, Menlo, monospace'; cx.fillText('∞', cxp, ay + as / 2 + 5); }
-    else for (let j = 0; j < RUNE_MAX; j++) runePip(cxp, ay + as - 8 - j * 15, 5, S.color, j, n, G.cracked[key] || 0);
-    // the name, big, under the art
+    const pipY = ay + as + 8;
+    if (key === 'ward') { cx.textAlign = 'center'; cx.fillStyle = S.color; cx.font = 'bold 13px ui-monospace, Menlo, monospace'; cx.fillText('∞', W/2, pipY + 4); }
+    else for (let j = 0; j < RUNE_MAX; j++) runePip(W/2 + (j - (RUNE_MAX - 1) / 2) * 13, pipY, 4, S.color, j, n, G.cracked[key] || 0);
     cx.textAlign = 'center'; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.fillStyle = owned ? S.color : PAL.dim;
-    cx.shadowColor = '#000'; cx.shadowBlur = 4; cx.fillText(S.name, W/2, ay + as + 17); cx.shadowBlur = 0;
+    cx.shadowColor = '#000'; cx.shadowBlur = 4; cx.fillText(S.name, W/2, pipY + 21); cx.shadowBlur = 0;
     cx.globalAlpha = 1;
     // NEW pulls you to open the spellbook; ×2 marks the enemy's weakness (on the art's corner)
     const badge = G.unseen.has(key) ? ['NEW', PAL.gold] : weak ? ['×2', PAL.bad] : null;
