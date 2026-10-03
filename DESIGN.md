@@ -444,6 +444,16 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   moments (empowered, Kindle, a lethal burst). Cracked charges count toward
   the cap of 3. Strict mode is unchanged (any miss fizzles the spell).
 
+  **Decided (playtest): a fizzle ends the sigil at once.** Strict mode used to
+  leave the spell's un-played glyphs falling as unhittable ghosts (the lapse
+  loop skips a done spell), so after a fizzle you just watched them scroll past
+  with nothing to do. Now `fizzle()` clears the spell on the spot: its sigil
+  thread and rest diamonds are dropped from the draw and every still-pending
+  glyph shatters through the existing crimson judgment ring, so the field is
+  empty at once. The counter-arrow, the combo reset and the FIZZLE chip are
+  unchanged; the *next* spell still lands on its scheduled beat, so the beat-
+  locked tempo map and the charge timers never desync.
+
   **Decided (mechanics review R2): kill speed scores — the swift kill.** Score
   was glyphs only, so a fight without bolts (ward + counters) lasted ~1.6–2.2×
   longer and paid 1.8–2.5× more: the board paid you not to cast. Now each kill
