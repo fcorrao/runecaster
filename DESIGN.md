@@ -605,6 +605,13 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   gloss, charges (cracked pips hollow), NEW / ×2 WEAK, effect, how to earn it.
   A matching card lights in its colour; the others dim. Opening it also clears
   the earned-rune toast and stray popups, which used to sit over it;
+  **The rune panel (outside cast mode; decided, user)** fills the gap between
+  the hands from the top of the field to just above the hit line: per rune its
+  spirit art (charges as pips down its right side, ∞ for the ward), the name
+  in 15 px under it, NEW / ×2 as a chip on the art's corner; unowned runes
+  dimmed. It is drawn under the spells, so sigil threads and rest diamonds
+  crossing the gap stay on top. Floating popups got a dark pill so they read
+  over it;
   (2) **NEW tags** on freshly earned runes (and the ward, from the start)
   until the spellbook has been opened; only the first of each rune gets a
   toast; (3) **live status chips** in the left margin while an effect runs
