@@ -82,7 +82,7 @@
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
       <li><b>Calibration:</b> if the click doesn't land when the letter crosses the line, slide <i>audio</i>. If your presses sit consistently early/late on the error bar, press "set input from last 20 hits" (or slide <i>input</i>). Both are saved in this browser.</li>
     </ul>
-    New here? <b>HOW TO PLAY</b> on the title screen plays a narrated demo (Enter or a click for the next lesson, Esc leaves). Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. The synthwave soundtrack is locked to the beat and runs at the speed of the letters; music and sampled effects need an http server — file:// plays the synthesized fallbacks. The <b>high scores</b> live on the server (Cloudflare D1; locally <code>npm run dev</code>, http://127.0.0.1:8777/), and this browser is remembered: your name, your best, your runs. At game over, type your name and press Enter (or just click to retry: the remembered name records it). Audition every effect on the <a href="sfx.html" style="color:#f3a5e6">sound board</a>.
+    New here? <b>HOW TO PLAY</b> on the title screen plays a narrated demo (Enter or a click for the next lesson, Esc leaves). Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. The synthwave soundtrack (one theme per enemy) is locked to the beat and runs at the speed of the letters; music and sampled effects need an http server — file:// plays the synthesized fallbacks. The <b>high scores</b> live on the server (Cloudflare D1; locally <code>npm run dev</code>, http://127.0.0.1:8777/), and this browser is remembered: your name, your best, your runs. At game over, type your name and press Enter (or just click to retry: the remembered name records it). Audition every effect on the <a href="sfx.html" style="color:#f3a5e6">sound board</a>.
   </div>
 </aside>
 <script>
@@ -512,12 +512,11 @@ function newGame() {
     bulwark: null, bulwarkBreak: -9, veil: null, still: null, stillFx: -9, kindle: null, galeFx: -9,
     cracked: {}, // of each rune's charges, how many are cracked (a one-miss seal in lenient mode: ×0.5)
     swift: 0,    // spells saved by swift kills over the run (scored, and reported with it)
-    encN: -1, musicRestart: false, // encounters started (the first is 0); a track to start when the spellbook closes
+    musicRestart: false, // a track that comes due during a cast: start it when the spellbook closes
   };
   startEncounter();
 }
 function startEncounter() {
-  G.encN++; // encounters this run: picks the soundtrack
   const ch = chapterAt(G.ci), kind = ch.encs[G.ei], E = ENEMIES[kind];
   // each encounter speaks one school of words; bosses have their own, others rotate
   const schools = Object.keys(SCHOOLS).filter(s => s !== G.lastSchool);
@@ -560,21 +559,23 @@ function gridAtOrAfter(t) { // first click time >= t
 }
 function beatPhase(t) { const s = segAt(t), p = ((t - s.t0) / s.beat) % 1; return p < 0 ? p + 1 : p; }
 
-// ================= soundtrack (§8): a loop per enemy, round-robin, locked to the click grid =================
+// ================= soundtrack (§8): one theme per enemy type, locked to the click grid =================
 // Started on a click at its measured first beat and time-scaled so one track beat = one game beat; rate changes
 // land on segment starts (whole beats), and the loop spans whole bars, so the lock survives tempo changes and
 // loop seams. Resampling shifts pitch with tempo. bpm/off: a least-squares line through the kick onsets of the
-// encoded file (off = the first loop beat's kick onset); per-kick residuals noted per track.
-// Each encounter takes the next track (G.encN round-robin); while one plays, the next is fetched in the
-// background. A new enemy's track crossfades in on a beat; if it isn't decoded yet the old one keeps playing
-// until it is.
-const TRACKS = [
-  { src: 'audio/synthwave.m4a', bpm: 101.964, off: 0.194, bars: 25 }, // ±20 ms; kickless for its first 4¾ bars
-  { src: 'audio/nightdrive.m4a', bpm: 99.999, off: 0.089, bars: 24 },  // ±6 ms; kick from the first beat
-];
+// encoded file (off = the first loop beat's kick onset); per-kick residuals noted per track. Each enemy type
+// keeps its own theme; while one plays, the next enemy's theme is fetched in the background. A new enemy's track
+// crossfades in on a beat; if it isn't decoded yet the old one keeps playing until it is. All are ACE-Step
+// synthwave in the splash's house style, character-tuned and loudness-matched to -14 LUFS.
+const TRACKS = {
+  archer:  { src: 'audio/synthwave.m4a', bpm: 101.964, off: 0.194, bars: 25 }, // bright outrun, the playtested theme; ±20 ms, kickless for its first 4¾ bars
+  cavalry: { src: 'audio/cavalry.m4a',   bpm: 107.997, off: 0.0793, bars: 24 }, // galloping, urgent (ACE-Step 108 BPM); ±1 ms
+  boss:    { src: 'audio/boss.m4a',      bpm: 95.991, off: 0.3263, bars: 22 },  // dark arcane dread (ACE-Step 96 BPM); ±9 ms
+};
+const trackFor = kind => TRACKS[kind] || TRACKS.archer; // the enemy type's own theme (archer is the fallback)
+const nextEncKind = () => { const ch = chapterAt(G.ci), ni = G.ei + 1; return ni < ch.encs.length ? ch.encs[ni] : chapterAt(G.ci + 1).encs[0]; }; // the next enemy: prefetch target
 const musicBufs = {}; // src -> Promise<AudioBuffer|null>
 let musicSrc = null, musicGain = null, musicTok = 0;
-const trackFor = n => TRACKS[n % TRACKS.length];
 function musicBuf(tr) {
   return musicBufs[tr.src] ??= fetch(tr.src)
     .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.arrayBuffer(); })
@@ -587,7 +588,7 @@ function musicRate(beat, src = musicSrc) { return (60 / src.track.bpm) / beat; }
 // track) or fades out under the new one; otherwise (new run, re-lock after a settings change) it restarts.
 function musicPlay(switching = false) {
   if (!AC || !OPT.music || !G) { musicStop(); return; }
-  const tr = trackFor(G.encN);
+  const tr = trackFor(G.enemy.kind); // the enemy type's theme (archer / cavalry / boss)
   if (switching && musicSrc && musicSrc.track === tr) return;
   if (!switching) musicStop();
   const tok = ++musicTok;
@@ -609,7 +610,7 @@ function musicPlay(switching = false) {
     src.playbackRate.setValueAtTime(musicRate(segAt(T).beat, src), 0);
     for (const s of G.segs) if (s.t0 > T) src.playbackRate.setValueAtTime(musicRate(s.beat, src), s.t0 + d);
     src.start(T + d, tr.off);
-    musicBuf(trackFor(G.encN + 1)); // the next enemy's track loads in the background
+    musicBuf(trackFor(nextEncKind())); // the next enemy's theme loads in the background
   });
 }
 // ---- the heard clock: AudioContext time of the sound reaching the speakers now.
@@ -629,6 +630,7 @@ function heardAt(perfMs) {
 function now() { return heardAt(performance.now()); }
 function activeSpell() { if (!G) return null; for (const s of G.spells) if (!s.done) return s; return null; }
 window.G = () => G; // debug hook
+window.music = () => musicSrc; // live track/buffer/loop points — debug hook
 
 // ================= scheduling =================
 function makeSpell(t0) {
