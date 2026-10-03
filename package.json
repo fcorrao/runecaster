@@ -1,0 +1,11 @@
+{
+  "name": "runecaster",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler d1 migrations apply runecaster --local && wrangler dev --port 8777",
+    "deploy": "wrangler d1 migrations apply runecaster --remote && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.147.0"
+  }
+}

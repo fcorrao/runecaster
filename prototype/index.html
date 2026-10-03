@@ -65,7 +65,7 @@
       <label><input type="checkbox" id="guide" checked> highlight next lane</label>
     </fieldset>
     <fieldset><legend>Soundtrack</legend>
-      <label><input type="checkbox" id="music" checked> synthwave (locked to the beat)</label>
+      <label><input type="checkbox" id="music" checked> synthwave, a track per enemy (locked to the beat)</label>
     </fieldset>
   </div>
   <div id="help">
@@ -82,7 +82,7 @@
       <li><b>When to press:</b> the letter crossing the white line — the tile filling its outlined slot. The two thin lines around the hit line are the PERFECT window (±55 ms); the tile touching the line at all is the GOOD window (±140 ms). Every judgment shows its error in ms, and the bar at the top of the battle stage plots your last 20 presses.</li>
       <li><b>Calibration:</b> if the click doesn't land when the letter crosses the line, slide <i>audio</i>. If your presses sit consistently early/late on the error bar, press "set input from last 20 hits" (or slide <i>input</i>). Both are saved in this browser.</li>
     </ul>
-    New here? <b>HOW TO PLAY</b> on the title screen plays a narrated demo (Enter or a click for the next lesson, Esc leaves). Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. The synthwave soundtrack is locked to the beat and runs at the speed of the letters; music and sampled effects need an http server — file:// plays the synthesized fallbacks. Run <code>python3 prototype/server.py</code> (http://127.0.0.1:8777/): it also keeps the <b>high scores</b> and remembers you (SQLite, prototype/runecaster.db). At game over, type your name and press Enter (or just click to retry: the remembered name records it). Audition every effect on the <a href="sfx.html" style="color:#f3a5e6">sound board</a>.
+    New here? <b>HOW TO PLAY</b> on the title screen plays a narrated demo (Enter or a click for the next lesson, Esc leaves). Click the canvas to start. Wrong/missed keys flash the correct key and finger — that's the tutor. The synthwave soundtrack is locked to the beat and runs at the speed of the letters; music and sampled effects need an http server — file:// plays the synthesized fallbacks. The <b>high scores</b> live on the server (Cloudflare D1; locally <code>npm run dev</code>, http://127.0.0.1:8777/), and this browser is remembered: your name, your best, your runs. At game over, type your name and press Enter (or just click to retry: the remembered name records it). Audition every effect on the <a href="sfx.html" style="color:#f3a5e6">sound board</a>.
   </div>
 </aside>
 <script>
@@ -507,10 +507,12 @@ function newGame() {
     guard: null, guardBreak: -9, foeCharge: -9, // the ward rune's counter-shield; when the enemy last loosed its charged attack
     // flawless-spell powers (boons) running now
     bulwark: null, bulwarkBreak: -9, veilLeft: 0, stillLeft: 0, stillFx: -9, kindle: null, galeFx: -9,
+    encN: -1, musicRestart: false, // encounters started (the first is 0); a track to start when the spellbook closes
   };
   startEncounter();
 }
 function startEncounter() {
+  G.encN++; // encounters this run: picks the soundtrack
   const ch = chapterAt(G.ci), kind = ch.encs[G.ei], E = ENEMIES[kind];
   // each encounter speaks one school of words; bosses have their own, others rotate
   const schools = Object.keys(SCHOOLS).filter(s => s !== G.lastSchool);
@@ -533,6 +535,7 @@ function nextEncounter() { // the enemy fell: advance the run
   G.ei++;
   if (G.ei >= chapterAt(G.ci).encs.length) { G.ci++; G.ei = 0; }
   startEncounter();
+  musicPlay(true); // the next enemy brings the next track
   G.nextT0 += 4 * segAt(G.nextT0).beat; // one bar of breath before the next enemy's first spell (stays on the grid)
 }
 function startRun() {
@@ -552,36 +555,56 @@ function gridAtOrAfter(t) { // first click time >= t
 }
 function beatPhase(t) { const s = segAt(t), p = ((t - s.t0) / s.beat) % 1; return p < 0 ? p + 1 : p; }
 
-// ================= soundtrack (§8): one synthwave loop, locked to the click grid =================
+// ================= soundtrack (§8): a loop per enemy, round-robin, locked to the click grid =================
 // Started on a click at its measured first beat and time-scaled so one track beat = one game beat; rate changes
 // land on segment starts (whole beats), and the loop spans whole bars, so the lock survives tempo changes and
-// loop seams. Resampling shifts pitch with tempo. bpm/off measured from the file (onset phase fit, ±25 ms).
-const MUSIC = { src: 'audio/synthwave.m4a', bpm: 102.08, off: 0.286, bars: 25 };
-let musicBuffer = null, musicSrc = null, musicGain = null;
-function musicBuf() {
-  if (!musicBuffer) musicBuffer = fetch(MUSIC.src)
+// loop seams. Resampling shifts pitch with tempo. bpm/off: a least-squares line through the kick onsets of the
+// encoded file (off = the first loop beat's kick onset); per-kick residuals noted per track.
+// Each encounter takes the next track (G.encN round-robin); while one plays, the next is fetched in the
+// background. A new enemy's track crossfades in on a beat; if it isn't decoded yet the old one keeps playing
+// until it is.
+const TRACKS = [
+  { src: 'audio/synthwave.m4a', bpm: 101.964, off: 0.194, bars: 25 }, // ±20 ms; kickless for its first 4¾ bars
+  { src: 'audio/nightdrive.m4a', bpm: 99.999, off: 0.089, bars: 24 },  // ±6 ms; kick from the first beat
+];
+const musicBufs = {}; // src -> Promise<AudioBuffer|null>
+let musicSrc = null, musicGain = null, musicTok = 0;
+const trackFor = n => TRACKS[n % TRACKS.length];
+function musicBuf(tr) {
+  return musicBufs[tr.src] ??= fetch(tr.src)
     .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.arrayBuffer(); })
     .then(b => AC.decodeAudioData(b))
-    .catch(() => null); // file:// or missing asset: stay silent, game unaffected
-  return musicBuffer;
+    .catch(() => null); // file:// or missing asset: stay silent (or on the old track), game unaffected
 }
-function musicStop() { if (musicSrc) { const s = musicSrc; musicSrc = null; try { s.stop(); } catch (e) {} } }
-function musicRate(beat) { return (60 / MUSIC.bpm) / beat; }
-function musicPlay() {
-  musicStop();
-  if (!AC || !OPT.music) return;
-  musicBuf().then(buf => {
-    if (!buf || !started || !G || G.over || !OPT.music || musicSrc) return; // stale or dead run
-    const d = OPT.delay / 1000, tb = 60 / MUSIC.bpm;
-    const src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
+function musicStop() { musicTok++; if (musicSrc) { const s = musicSrc; musicSrc = null; try { s.stop(); } catch (e) {} } }
+function musicRate(beat, src = musicSrc) { return (60 / src.track.bpm) / beat; }
+// (re)start the encounter's track on the next click. switching = a new enemy: a track already playing stays (one
+// track) or fades out under the new one; otherwise (new run, re-lock after a settings change) it restarts.
+function musicPlay(switching = false) {
+  if (!AC || !OPT.music || !G) { musicStop(); return; }
+  const tr = trackFor(G.encN);
+  if (switching && musicSrc && musicSrc.track === tr) return;
+  if (!switching) musicStop();
+  const tok = ++musicTok;
+  musicBuf(tr).then(buf => {
+    if (!buf || tok !== musicTok || !started || !G || G.over || !OPT.music) return; // stale or dead run
+    if (G.cast || G.demo?.paused) { G.musicRestart = true; return; } // time stands still: start it when it moves again
+    const d = OPT.delay / 1000, a = AC.currentTime;
     if (!musicGain) { musicGain = AC.createGain(); musicGain.gain.value = 0.42; musicGain.connect(AC.destination); }
-    src.connect(musicGain);
-    musicSrc = src;
-    src.loopStart = MUSIC.off; src.loopEnd = MUSIC.off + MUSIC.bars * 4 * tb;
-    const T = gridAtOrAfter(AC.currentTime + 0.1 - d); // the track's first beat plays on this click
-    src.playbackRate.setValueAtTime(musicRate(segAt(T).beat), 0);
-    for (const s of G.segs) if (s.t0 > T) src.playbackRate.setValueAtTime(musicRate(s.beat), s.t0 + d);
-    src.start(T + d, MUSIC.off);
+    const src = AC.createBufferSource(); src.buffer = buf; src.loop = true; src.track = tr;
+    src.out = AC.createGain(); src.connect(src.out); src.out.connect(musicGain);
+    src.loopStart = tr.off; src.loopEnd = tr.off + tr.bars * 4 * 60 / tr.bpm;
+    const old = musicSrc;
+    const T = gridAtOrAfter(a + 0.1 - d + (old ? 0.5 : 0)); // the track's first beat plays on this click
+    if (old) { // crossfade: the old track fades out by the click the new one starts on
+      old.out.gain.setValueAtTime(1, a); old.out.gain.linearRampToValueAtTime(0, T + d);
+      try { old.stop(T + d + 0.05); } catch (e) {}
+    }
+    musicSrc = src; src.at = T + d;
+    src.playbackRate.setValueAtTime(musicRate(segAt(T).beat, src), 0);
+    for (const s of G.segs) if (s.t0 > T) src.playbackRate.setValueAtTime(musicRate(s.beat, src), s.t0 + d);
+    src.start(T + d, tr.off);
+    musicBuf(trackFor(G.encN + 1)); // the next enemy's track loads in the background
   });
 }
 // ---- the heard clock: AudioContext time of the sound reaching the speakers now.
@@ -873,8 +896,10 @@ function dilate(sh) {
 }
 function castTick() { const t = now(); dilate((t - G.cast.t) * (1 - CAST_K)); G.cast.t = t; } // called every frame while casting
 function castMusicRate(slow) { // the soundtrack slows with the rhythm (tape-style pitch drop), then re-locks
+  if (!slow && G.musicRestart) { G.musicRestart = false; musicPlay(); return; } // a track due during the cast
   if (!musicSrc) return;
   const pr = musicSrc.playbackRate, a = AC.currentTime;
+  if (slow && musicSrc.at > a) { musicStop(); G.musicRestart = true; return; } // not started yet: it would start frozen, off the grid
   if (slow) { pr.cancelScheduledValues(a); pr.setValueAtTime(musicRate(segAt(a).beat) * CAST_K, a); }
   else rescheduleMusicRates();
 }
@@ -1028,14 +1053,16 @@ cv.addEventListener('click', e => {
   else if (G.over) { if (G.entry && G.entry.state === 'typing') scoreSave(); newGame(); syncOpts(); startRun(); musicPlay(); } // retrying records the run first
 });
 
-// ================= high scores & memory: prototype/server.py keeps runs in SQLite =================
+// ================= high scores & memory: worker/index.js keeps runs in D1 (SQLite) =================
+// this browser's player id: the memory key (last name used, best, runs), kept with the calibration
+const PLAYER = localStorage.getItem('runecaster.player') || (() => { const id = crypto.randomUUID(); localStorage.setItem('runecaster.player', id); return id; })();
 // The board (top 10) and the player's memory (last name used, its best, runs played) come from the local server's
 // /api; served any other way (file://, a plain static server) the board just says so and nothing is recorded.
 const BOARD_N = 10, NAME_MAX = 12;
 const SCORES = { ok: null, top: [], me: { name: null, best: 0, runs: 0 } }; // ok: null = not asked yet, false = no server
 async function scoresLoad() {
   try {
-    const [top, me] = await Promise.all([fetch(`api/scores?limit=${BOARD_N}`), fetch('api/me')].map(p => p.then(r => { if (!r.ok) throw r.status; return r.json(); })));
+    const [top, me] = await Promise.all([fetch(`api/scores?limit=${BOARD_N}`), fetch(`api/me?player=${PLAYER}`)].map(p => p.then(r => { if (!r.ok) throw r.status; return r.json(); })));
     SCORES.top = top.scores; SCORES.me = me; SCORES.ok = true;
   } catch (e) { SCORES.ok = false; }
 }
@@ -1052,13 +1079,14 @@ function scoreKey(e) {
 async function scoreSave() {
   const E = G.entry, name = E.name.trim(); if (E.state !== 'typing' || !name) return;
   E.state = 'saving';
-  const run = { name, score: G.score, chapter: G.ci + 1, cleared: G.cleared, max_combo: G.maxCombo, perfect: G.hits.perfect, good: G.hits.good, miss: G.hits.miss };
+  const run = { player: PLAYER, name, score: G.score, chapter: G.ci + 1, cleared: G.cleared, max_combo: G.maxCombo, perfect: G.hits.perfect, good: G.hits.good, miss: G.hits.miss };
   try {
     const r = await fetch('api/scores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(run) });
-    if (!r.ok) throw r.status;
-    const res = await r.json(); E.state = 'saved'; E.id = res.id; E.rank = res.rank;
+    const res = await r.json().catch(() => ({}));
+    if (!r.ok) throw res.error || 'http ' + r.status;
+    E.state = 'saved'; E.id = res.id; E.rank = res.rank;
     await scoresLoad();
-  } catch (err) { E.state = 'failed'; }
+  } catch (err) { E.state = 'failed'; E.err = typeof err === 'string' ? err : 'high scores are offline'; }
 }
 // the board: rank, name, score, chapter, accuracy; `mine` = the run just recorded (highlighted)
 function drawBoard(x, y, w, mine) {
@@ -1070,7 +1098,7 @@ function drawBoard(x, y, w, mine) {
   cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillStyle = PAL.dim; cols.forEach(([cx0, h]) => cx.fillText(h, cx0, y + 42));
   if (!SCORES.ok) {
     cx.fillStyle = PAL.dim; cx.font = '13px ui-monospace, Menlo, monospace';
-    cx.fillText(SCORES.ok === null ? 'loading…' : 'scores need the local server: python3 prototype/server.py', x + 18, y + 80);
+    cx.fillText(SCORES.ok === null ? 'loading…' : 'high scores are offline right now', x + 18, y + 80);
   } else if (!SCORES.top.length) { cx.fillStyle = PAL.dim; cx.font = '13px ui-monospace, Menlo, monospace'; cx.fillText('no runs yet — be the first', x + 18, y + 80); }
   SCORES.top.forEach((r, i) => {
     const ry = y + 64 + i * 24, me = mine && r.id === mine, n = r.perfect + r.good + r.miss;
@@ -2297,13 +2325,13 @@ function drawGameOver(t) {
   cx.fillStyle = 'rgba(10,4,24,.9)'; rr(W/2 - 260, ny - 22, 520, 34, 10); cx.fill();
   cx.strokeStyle = E && E.state === 'typing' ? PAL.pink : '#3a1a5e'; cx.lineWidth = 1.5; rr(W/2 - 260, ny - 22, 520, 34, 10); cx.stroke();
   cx.font = 'bold 15px ui-monospace, Menlo, monospace';
-  if (!E || E.state === 'off') { cx.fillStyle = PAL.dim; cx.fillText('not recorded: the board needs python3 prototype/server.py', W/2, ny); }
+  if (!E || E.state === 'off') { cx.fillStyle = PAL.dim; cx.fillText('not recorded: high scores are offline right now', W/2, ny); }
   else if (E.state === 'typing') {
     cx.fillStyle = PAL.text; cx.fillText(`your name: ${E.name}${(t * 2) % 1 < 0.5 ? '▏' : ' '}`, W/2, ny);
     cx.fillStyle = PAL.dim; cx.font = '11px ui-monospace, Menlo, monospace'; cx.fillText('type it · Enter records the run', W/2, ny + 30);
   } else if (E.state === 'saving') { cx.fillStyle = PAL.dim; cx.fillText('recording…', W/2, ny); }
   else if (E.state === 'saved') { cx.fillStyle = PAL.gold; cx.fillText(`recorded · ${E.name.trim()} is #${E.rank}`, W/2, ny); }
-  else { cx.fillStyle = PAL.bad; cx.fillText('could not record the run (is server.py running?)', W/2, ny); }
+  else { cx.fillStyle = PAL.bad; cx.fillText(`could not record the run: ${E.err}`, W/2, ny); }
   drawBoard(W/2 - 260, 236, 520, E && E.id);
   cx.textAlign = 'center'; cx.fillStyle = PAL.blush; cx.font = 'bold 16px ui-monospace, Menlo, monospace'; cx.shadowColor = PAL.magenta; cx.shadowBlur = 10;
   cx.fillText('click to retry', W/2, 236 + 46 + BOARD_N * 24 + 34); cx.shadowBlur = 0;

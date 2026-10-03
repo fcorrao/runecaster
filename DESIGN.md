@@ -370,7 +370,21 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > **Prototype answer (soundtrack):** one ACE-Step-generated synthwave loop.
   > Tribal drums were cut (didn't fit); darker arcane synthwave variants were
   > generated and tried, but after playtesting the original synthwave stayed the
-  > best, so it is the only track (on/off in settings).
+  > best, so it was the only track (on/off in settings).
+  >
+  > **Decided (user): a track per enemy, round-robin for now** (mapping songs
+  > to specific enemies may come later). `TRACKS` lists them; encounter n plays
+  > track n mod len. Only the first is fetched at start; while a track plays,
+  > the next is fetched and decoded in the background. A new enemy's track
+  > crossfades in on a click about a beat later; if it isn't ready the old one
+  > keeps playing until it is; if the spellbook is open (time stopped) it
+  > starts on the grid when it closes. Second track: `nightdrive.m4a`, the
+  > same bright outrun style (ACE-Step, 100 BPM, D minor vs synthwave's G
+  > minor), loudness-matched, kick from the first beat, 3 ms seam fades baked
+  > in. Beat metadata is now a least-squares fit through kick onsets on the
+  > encoded file; re-fitting synthwave this way corrected it from 102.08 /
+  > 0.286 s (kicks drifted 15–60 ms early) to 101.964 / 0.194 s (±20 ms).
+  > Size: ~0.7 MB per 60 s loop at 96 kbps.
 
   > **Prototype answer (sound effects):** ACE-Step can't make one-shots (every
   > request returns 60 s of music, whatever the duration asked), so foley comes
@@ -563,21 +577,44 @@ so its boon comes with that spell instead of the next.
 Every effect and sound is the game's own, so the demo stays true as the game
 changes.
 
-## 10. High Scores & Memory
+## 10. High Scores, Memory & Hosting
 
-**Decided (user): a very simple local SQLite.** `prototype/server.py` (stdlib
-only) replaces the plain static server: it serves the prototype and a tiny API
-over `prototype/runecaster.db` (one `runs` table: name, score, chapter,
-enemies cleared, max combo, perfect/good/miss, time; not in git).
+**Decided (user): Cloudflare Workers + D1** (D1 is SQLite), after a local
+SQLite prototype (`server.py`, removed). The game stays static; one Worker
+serves the score API. Domain: `runecaster.world` or `runecaster.net` (either
+works; register at Cloudflare so its DNS lives there and the apex can point at
+the Worker). Free tier is ample: static files and their bandwidth are free
+(20,000 files, 25 MiB each); D1 500 MB, 100k writes and 5M rows read a day.
+- **Layout:** `wrangler.jsonc` (assets = `prototype/`, only `/api/*` runs the
+  Worker), `worker/index.js` (the API), `migrations/` (D1 schema: `runs`, with
+  indexes on score and on player so the board and rank never scan the table).
+- **Local:** `npm install`, then `npm run dev` (applies migrations to a local
+  D1 in `.wrangler/`, serves http://127.0.0.1:8777/).
+- **Deploy:** once: `npx wrangler login`, `npx wrangler d1 create runecaster`
+  (put its `database_id` in `wrangler.jsonc`). Then `npm run deploy` (remote
+  migrations, then the Worker and assets). Custom
+  domain: add `"routes": [{ "pattern": "runecaster.net", "custom_domain":
+  true }]` once the domain is on the account.
+- **API:** `GET /api/scores?limit=10` (board; never returns player ids),
+  `GET /api/me?player=ID` (memory), `POST /api/scores` → `{id, rank}`.
 - **Board:** top 10 by score — rank, name, score, chapter, accuracy
   ((perfect+good)/judged). On the title screen (HIGH SCORES) and on the game
   over screen, with the run just recorded lit.
 - **Recording:** at game over you type your name (it's a typing game); Enter
   records the run and shows its rank. Clicking to retry records it too.
-- **Memory:** the last name used prefills the entry, and the title screen
-  says "welcome back, NAME · best N · R runs recorded".
-- Served any other way (file://, a plain static server) the board says it
-  needs the server and nothing is recorded.
+- **Memory is per browser:** a random player id in localStorage
+  (`runecaster.player`, beside the calibration) keys it. The last name used
+  prefills the entry; the title screen says "welcome back, NAME · best N · R
+  runs recorded". Clearing site data starts a new player.
+- **Anti-cheat (basic; scores are client-reported):** a run must fit the
+  scoring rule (100·perfect + 50·good ≤ score ≤ 4× that; max combo ≤
+  perfect + good; sane ranges and name characters); 5 posts a minute per IP
+  (Workers rate-limit binding, no IPs stored); one run per player per 10 s.
+  Rejections show their reason on the game over screen. Forging a plausible
+  run is still possible: the next step would be replaying a submitted key log
+  server-side (needs a seeded RNG).
+- When the API is unreachable (file://, a plain static server, D1's daily cap)
+  the board says "high scores are offline" and nothing is recorded.
 **[OPEN]** per-player stats beyond best score (accuracy trend, weakest keys —
 the data for adaptive patterns); whether the demo or abandoned runs count.
 

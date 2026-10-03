@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "runecaster",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-10-03",
+  // the game is static; only the score API runs code
+  "assets": {
+    "directory": "./prototype",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "runecaster",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // score posts per IP: 5 a minute per Cloudflare location
+  "ratelimits": [
+    { "name": "RATE", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } }
+  ]
+}
