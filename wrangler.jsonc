@@ -12,6 +12,7 @@
     {
       "binding": "DB",
       "database_name": "runecaster",
+      "database_id": "a31da316-67c4-4ece-8d7a-45b3f3b81cc9",
       "migrations_dir": "migrations"
     }
   ],
