@@ -414,9 +414,34 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   | source | what you get |
   |---|---|
   | clean spell (no glyph missed) | +1 rune of the spell's element — the lane most of its glyphs ride |
+  | one missed glyph, **lenient mode only** | +1 **cracked** rune of that element (see below); strict mode: nothing |
   | flawless spell (every glyph perfect) | its school's power fires at once, no cast (below) |
   | enemy defeated | +1 mend rune (boss +2) — still has to be cast |
-  | a missed glyph | its share of the enemy's strike, no rune (unchanged) |
+  | a missed glyph | its share of the enemy's strike — the ward doesn't stop it |
+  | enemy defeated under par | **SWIFT** score (§10 bound): see below |
+
+  **Decided (mechanics review R4): cracked runes in lenient mode.** All-or-
+  nothing sealing gave an 88% typist a rune on ~22% of spells, so learners
+  rarely met bolts and lived on the ward. In lenient mode a spell with exactly
+  one missed glyph (of two or more) still seals its rune, **cracked**: its bolt
+  casts at power ×0.5 (after the speed power; weakness etc. still stack) and
+  the spell never wakes a boon (it isn't flawless). The miss still draws its
+  strike. The seal ring flares dim; the panel draws a cracked charge as a
+  hollow pip, the spellbook says "2 (1 cracked)". A rune holding both spends
+  its **cracked charges first**, so the clean ones keep full value for the big
+  moments (empowered, Kindle, a lethal burst). Cracked charges count toward
+  the cap of 3. Strict mode is unchanged (any miss fizzles the spell).
+
+  **Decided (mechanics review R2): kill speed scores — the swift kill.** Score
+  was glyphs only, so a fight without bolts (ward + counters) lasted ~1.6–2.2×
+  longer and paid 1.8–2.5× more: the board paid you not to cast. Now each kill
+  has a **par** = the spells a ward-only fight takes,
+  `ceil(ceil(maxHP / 12) × chargeBeats / 10)` (ch1 archer 3, ch1 boss 5, ch6
+  boss 8); a kill in fewer resolved spells (fizzled ones count) pays
+  `(par − spells) × 1200 × the current combo multiplier` — each spell you
+  didn't need pays like a perfect 12-glyph spell, cancelling the stall premium.
+  Popup "SWIFT ×2 · +4,800". The run reports `swift` (spells saved in all).
+  Speed still runs through accuracy: bolts come only from sealed spells.
 
   Cast: **Space opens cast mode, you type the rune's name** — a noun of the
   tongue + a verb (`kai` strike, `hal` mend, `fen` ward), prefix-free so it
@@ -434,7 +459,14 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   |---|---|---|
   | Fire / Water / Earth / Air | `vorkai` `gamkai` `brykai` `wynkai` | bolt, 6 damage; ×2 against the enemy's weakness |
   | Mend | `pyrhal` | +30 HP |
-  | Ward | `dunfen` | innate (∞): blocks every strike for 5 s; a **charged attack** that hits it is **countered** (12 damage back) |
+  | Ward | `dunfen` | innate (∞): holds 5 s and answers the **charged attack only** — it is **countered** (12 damage back) and the counter opens your empowered window (riposte) |
+
+  **Decided (mechanics review R1): the ward answers the charge only.** It used
+  to block every strike while it held, so a ward erased typing mistakes
+  ("-0 · WARDED") and chaining it made a learner immune (sim: 0.7 HP per
+  encounter). Now ordinary strikes — your missed glyphs — land, ward or not:
+  accuracy keeps its cost. `WARD_S` stays 5 s; it only has to cover the
+  countdown.
 
   **Elemental weakness (§4) is live:** each school is weak to one element
   (flame→water, storm→earth, stone→air, tide→fire, shadow→fire), shown on the
@@ -466,7 +498,15 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   Full, a bright rising chime plays and a **5 s window** opens: cyan aura, the
   seconds counting down over his head, "cast a bolt!", and the caster's screen
   edge glowing cyan. Every bolt cast in it hits **×2** (stacks with weakness and
-  Kindle). When it closes the next charge starts. Both the charge and the
+  Kindle); its "cast a bolt!" prompt goes dim when you hold no bolt. When it
+  closes the next charge starts.
+
+  **Decided (mechanics review R3): the riposte.** A countered charge opens the
+  empowered window at once (if it isn't open already); the counter stays 12
+  (the sim showed halving it crushes learners). This is a **counter trigger,
+  not a glyph trigger**: the ring still fills on its 20-beat timer otherwise,
+  as decided above. It joins the two verbs — ward the charge, then burst the
+  bolts you held back. Gale (below) also adds a bar to the ring. Both the charge and the
   window live on the rhythm timeline (cast mode stops them).
 
   **Flawless powers** — the old castable runes, now triggered directly by an
@@ -474,11 +514,28 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
 
   | power | school | effect |
   |---|---|---|
-  | Gale | storm | glyphs not yet in their window, and the enemy's charge, move one bar later |
-  | Bulwark | stone | the next strike deals 0 |
-  | Veil | shadow | next 6 glyphs accept any key of the right finger |
-  | Stillwater | tide | next 2 spells play at 80% tempo |
+  | Gale | storm | glyphs not yet in their window, and the enemy's charge, move one bar later; your ring gains one bar (4 beats) — none while the window is already open |
+  | Bulwark | stone | the next counter deals ×2 (24) |
+  | Veil | shadow | the next bolt counts as the enemy's weakness (×2); spent by the next bolt, weak or not |
+  | Stillwater | tide | the next mend heals ×2 |
   | Kindle | flame | next bolt ×2 (stacks with weakness) |
+
+  **Decided (mechanics review R6): boons pay the player who earns them.**
+  Boons need a flawless spell (~0.3% of a competent player's spells, ~18% of an
+  expert's), but Bulwark blocked a miss experts rarely make, Stillwater slowed
+  a player who didn't need it, Gale delayed the counter, and Veil let wrong keys
+  through — relaxing the very skill being trained. Now each pays in the fight's
+  own currency (counter, weakness, mend, ring); names and school flavour kept.
+  Veil's motor-coaching idea is dropped (give it to learners another way if it
+  is missed, not as a perfection reward).
+
+  **Decided (mechanics review R5): lethal preview.** "Can I finish it before
+  the charge?" is a real decision but was invisible. The enemy's health bar
+  shows a pale **ghost** for what your held bolts would deal now at power 1.0
+  (weakness ×2, Veil on the best non-weak bolt, Kindle on the best bolt,
+  empowered ×2, cracked ×0.5), and during the charge countdown a **gold notch**
+  for the counter (×2 with Bulwark); **LETHAL** lights on the bar when the two
+  reach its HP. Draw-only; it assumes the best cast order.
 
   **Decided (playtest): cast mode slows time.** Typing a name in the gap between
   spells was too tight, worse as the pace rose. Now opening cast mode slows the
@@ -535,10 +592,15 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   (2) **NEW tags** on freshly earned runes (and the ward, from the start)
   until the spellbook has been opened; only the first of each rune gets a
   toast; (3) **live status chips** in the left margin while an effect runs
-  ("WARD · 3 beats · counters a charge", "VEIL · 5 glyphs · any finger key").
+  ("WARD · 3 s · counters a charge", "VEIL · next bolt hits the weakness").
   **[OPEN]** after playtest: whether flawless powers fire too often at high
-  skill (every all-perfect spell), whether a spell with one miss should still
-  earn a rune for beginners, timed casting, bolt damage vs enemy HP.
+  skill (every all-perfect spell), timed casting, bolt damage vs enemy HP; the
+  mechanics review's playtest questions — do players read a miss inside a ward
+  as their mistake (or need a "ward: charge only" chip), cast bolts in an
+  encounter's first spell (swift), hold bolts back for the riposte, burst on
+  LETHAL instead of warding, read "cracked" as "type it clean", and notice
+  the retuned boons. Nerfing the counter only after cracked runes land, and
+  only in strict mode if at all.
 - **Meta-progression** — spellbook, unlockable elements/areas, score/rank,
   replay.
 - **Controls & input** — key event handling, input buffering, key-rollover for
@@ -554,11 +616,14 @@ a **HOW TO PLAY** button under CLICK TO BEGIN. It runs the real game on
 chapter 1 riffs (whatever the settings), played by an autoplayer, while a
 caption where the error meter sits explains one idea at a time (~85 s):
 1. glyphs, lanes, the beat · 2. sigils and their shapes (names the live one) ·
-3. a clean sigil seals a rune · 4. a deliberate miss lets the arrow through ·
+3. a clean sigil seals a rune · 4. a deliberate miss lets the arrow through
+and seals a cracked rune (the lesson waits for its sigil to resolve) ·
 5. Space stops time, the spellbook, speed = power, weakness ×2 (casts the
 weak bolt) · 6. the count-in · 7. the charged attack, answered with the ward
-and its counter · 8. the caster's charge and an empowered ×2 bolt ·
-9. a flawless spell wakes the school's boon · 10. a kill earns mend ·
+and its counter, whose riposte opens the empowered window · 8. that window
+(or, if it isn't open, the ring filling) and an empowered ×2 bolt ·
+9. a flawless spell wakes the school's boon · 10. a kill earns mend (and,
+under par, SWIFT — large in the demo, whose enemy has 80 HP) ·
 11. wrap-up, back to the splash.
 Each lesson waits until its event has actually happened on screen; the two
 charges are held until their lessons. The enemy has 80 HP so the lesson
@@ -605,7 +670,8 @@ URLs are off). Free tier is ample: static files and their bandwidth are free
   prefills the entry; the title screen says "welcome back, NAME · best N · R
   runs recorded". Clearing site data starts a new player.
 - **Anti-cheat (basic; scores are client-reported):** a run must fit the
-  scoring rule (100·perfect + 50·good ≤ score ≤ 4× that; max combo ≤
+  scoring rule (100·perfect + 50·good ≤ score ≤ 4× that + 4 × 1200 ×
+  swift; swift ≤ 10 × (cleared + 1); max combo ≤
   perfect + good; sane ranges and name characters); 5 posts a minute per IP
   (Workers rate-limit binding, no IPs stored); one run per player per 10 s.
   Rejections show their reason on the game over screen. Forging a plausible
