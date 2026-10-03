@@ -3,6 +3,9 @@
   "name": "runecaster",
   "main": "worker/index.js",
   "compatibility_date": "2026-10-03",
+  "routes": [{ "pattern": "runecaster.net", "custom_domain": true }],
+  "workers_dev": false, // runecaster.net is the only address
+  "preview_urls": false,
   // the game is static; only the score API runs code
   "assets": {
     "directory": "./prototype",

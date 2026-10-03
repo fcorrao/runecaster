@@ -581,9 +581,9 @@ changes.
 
 **Decided (user): Cloudflare Workers + D1** (D1 is SQLite), after a local
 SQLite prototype (`server.py`, removed). The game stays static; one Worker
-serves the score API. Domain: `runecaster.world` or `runecaster.net` (either
-works; register at Cloudflare so its DNS lives there and the apex can point at
-the Worker). Free tier is ample: static files and their bandwidth are free
+serves the score API. **Live at https://runecaster.net** (registered at
+Cloudflare; the Worker is the apex's custom domain; workers.dev and preview
+URLs are off). Free tier is ample: static files and their bandwidth are free
 (20,000 files, 25 MiB each); D1 500 MB, 100k writes and 5M rows read a day.
 - **Layout:** `wrangler.jsonc` (assets = `prototype/`, only `/api/*` runs the
   Worker), `worker/index.js` (the API), `migrations/` (D1 schema: `runs`, with
@@ -592,9 +592,7 @@ the Worker). Free tier is ample: static files and their bandwidth are free
   D1 in `.wrangler/`, serves http://127.0.0.1:8777/).
 - **Deploy:** once: `npx wrangler login`, `npx wrangler d1 create runecaster`
   (put its `database_id` in `wrangler.jsonc`). Then `npm run deploy` (remote
-  migrations, then the Worker and assets). Custom
-  domain: add `"routes": [{ "pattern": "runecaster.net", "custom_domain":
-  true }]` once the domain is on the account.
+  migrations, then the Worker and assets). D1 `runecaster` lives in ENAM.
 - **API:** `GET /api/scores?limit=10` (board; never returns player ids),
   `GET /api/me?player=ID` (memory), `POST /api/scores` → `{id, rank}`.
 - **Board:** top 10 by score — rank, name, score, chapter, accuracy
