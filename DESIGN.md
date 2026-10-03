@@ -353,6 +353,15 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
 - **Visual design** — lane rendering, hit line, enemy animation, spell effects,
   element color language.
 
+  > **Rune spirit art (decided, user):** one emblem per rune in the splash's
+  > style, a spirit inside a magenta neon ring inscribed with gold runes:
+  > fire phoenix, water sea-dragon, earth crystal stag, air storm wolf (the
+  > splash's four), mend an ember salamander, ward a gold-runed stone tortoise.
+  > Generated locally with Qwen-Image 2.1 (mlx-serve, 1024², seed 23, one
+  > shared prompt template, phoenix chosen from two seeds), resized to 256²
+  > JPEG in `prototype/art/runes/<key>.jpg` (~30 KB each). Until an image
+  > loads, the card shows the rune's icon.
+  >
   > **Prototype answer (art direction): retro-wizard synthwave**, set by the
   > key art (`prototype/art/splash.jpg`, also the splash screen). Palette
   > sampled from it: night navy/indigo sky, violet and magenta haze, hot-pink
@@ -587,11 +596,18 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   **Teaching the runes (playtest: "you'd have to memorize them; you can't read
   the unlock message mid-fight").** Explanations move to the moments you can
   read: (1) **the spellbook** — opening cast mode expands the panel into a
-  list of every rune with its name, effect, charges, or where to earn it, and
-  which bolt the enemy is weak to; time is slowed there, so reading is free;
+  card for every rune with its name, effect, charges, or where to earn it, and
+  which bolt the enemy is weak to; time stands still there, so reading is free.
+  **Decided (user): the spellbook takes the whole lane field** (the glyphs are
+  veiled while casting anyway): six cards, bolts down the left (fire, water,
+  earth), air, mend and ward down the right, the typing ring between them.
+  Each card: the rune's spirit art, name (the typed prefix glows), label,
+  gloss, charges (cracked pips hollow), NEW / ×2 WEAK, effect, how to earn it.
+  A matching card lights in its colour; the others dim. Opening it also clears
+  the earned-rune toast and stray popups, which used to sit over it;
   (2) **NEW tags** on freshly earned runes (and the ward, from the start)
   until the spellbook has been opened; only the first of each rune gets a
-  toast, which closes when the spellbook opens (it sat over it); (3) **live status chips** in the left margin while an effect runs
+  toast; (3) **live status chips** in the left margin while an effect runs
   ("WARD · 3 s · counters a charge", "VEIL · next bolt hits the weakness").
   **[OPEN]** after playtest: whether flawless powers fire too often at high
   skill (every all-perfect spell), timed casting, bolt damage vs enemy HP; the
