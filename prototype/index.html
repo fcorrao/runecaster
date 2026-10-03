@@ -219,7 +219,7 @@ function makeIncantation(tier, school) {
   const ts = TEMPLATES[Math.min(6, t)];
   const words = ts[Math.floor(Math.random() * ts.length)](school);
   const text = words.map(w => w.text).join(' ');
-  if (text === lastPhrase) return makeIncantation(tier, school);
+  if (text === lastPhrase || BANNED_RUN.test(text)) return makeIncantation(tier, school);
   lastPhrase = text;
   return { text, gloss: words.map(w => w.gloss).join(' · ') };
 }
@@ -262,13 +262,15 @@ const RIFF_TIERS = {
 };
 const RIFF_BEATS = 8, RIFF_POOL = 2; // a spell is two bars; an encounter keeps two strokes per sigil in rotation
 const rnd = a => a[Math.floor(Math.random() * a.length)];
+// never a run of exactly three k's (the Klan's initials); four or more is fine. Checked on every generated spell text
+const BANNED_RUN = /(?<!k)kkk(?!k)/i;
 const fits = (txt, keys) => [...txt].every(c => keys.includes(c));
 const flip = s => Math.random() < 0.5 ? s : [...s].reverse().join('');
 const riffTier = tier => RIFF_TIERS[tier < 2 || Math.random() < 0.65 ? Math.min(6, tier) : 1 + Math.floor(Math.random() * (Math.min(6, tier) - 1))]; // mostly this tier, sometimes an easier one
 function stroke(el, tier) {
   const T = riffTier(tier), row = ROWS[rnd(T.rows)], keys = [...row.keys], shape = SIGILS[el].shape;
   let text, fast = Math.random() < T.fast;
-  if (shape === 'pillar') text = rnd(keys).repeat(3 + Math.floor(Math.random() * 2));
+  if (shape === 'pillar') { const k = rnd(keys); text = k.repeat(k === 'k' ? 4 : 3 + Math.floor(Math.random() * 2)); } // k: always four (BANNED_RUN)
   else if (shape === 'wave') { // two fingers trading, back and forth
     const a = rnd(keys), b = rnd(keys.filter(c => KEY2LANE[c] !== KEY2LANE[a]));
     text = (a + b).repeat(2); fast = fast && tier >= 2;
@@ -308,6 +310,7 @@ function makeRiff(tier, boss) {
     at = put(c, at); strokes++;
   }
   if (word && at + wdur - 1 <= RIFF_BEATS - 0.5) put(word, at);
+  if (BANNED_RUN.test(text.join(''))) return makeRiff(tier, boss); // belt and braces: strokes never make one
   return { text: text.join(''), offs, word: flags, rune: el, gloss: `${SIGILS[el].shape} sigil · clean earns ${el} (${RUNES[el].name})` + (word ? ` · inscribed "${word.text}"` : '') };
 }
 

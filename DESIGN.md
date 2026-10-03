@@ -165,6 +165,9 @@ a fast repeat fills the run in order.
 sigil of one rune: its strokes share one shape, and the shape decides the bolt
 rune a clean spell earns (replacing majority-lane element in riffs).
 - **Pillar → earth** — one key repeated (`jjjj`): a column in one lane.
+  **Decided (user): never a run of exactly three k's** (the Klan's initials);
+  a `k` pillar is always four long, and every generated spell (riff or
+  incantation) is checked and regenerated if one slips through. `kkkk` is fine.
 - **Wave → water** — two fingers trading (`fkfk`): a zigzag.
 - **Sweep → air** — a roll across neighbouring fingers (`asdf`, `;lkj`): a slash.
 - **Burst → fire** — mirrored pairs hand to hand, opening out from the index
