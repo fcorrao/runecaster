@@ -704,9 +704,12 @@ function burst(x, y, color, n, spd, kind) {
 function fizzle(sp) {
   sp.done = true; sp.fizzled = true; G.enemy.spells++;
   G.combo = 0;
+  // playtest: strict mode left the un-played glyphs falling as unhittable ghosts, so you just watched them
+  // pass; the sigil now breaks at once - its thread clears and every glyph still in the field shatters
   popup('FIZZLE', PAL.bad, W/2, HIT_Y - 60);
   G.fx.push({ kind:'ring', color:PAL.bad, t0: now(), dur: .5, x: W/2, y: HIT_Y });
   fizzleSnd();
+  for (const r of sp.glyphs) if (r.status === 'pending') { r.status = 'miss'; r.hitAt = now(); } // the sigil shatters (judgment ring below)
   // the archer counters: an arrow flies down; the hit lands when it arrives
   G.strikes.push({ t0: now(), at: now() + ARROW_F, dmg: G.enemy.dmg, why: sp.fizzledWrong ? 'WRONG KEY' : 'MISSED GLYPH' });
   whooshSnd();
@@ -1836,7 +1839,7 @@ function draw(t) {
     // a sigil's strokes glow in its rune's color (a clean one flares white as it is sealed); its inscription
     // and word spells keep the plain thread
     const sealed = s.sealedAt && t - s.sealedAt < 0.5;
-    for (const ink of [false, true]) {
+    for (const ink of (s.fizzled ? [] : [false, true])) { // a fizzled sigil's thread is gone at once
       if (ink && !s.rune) break;
       cx.strokeStyle = ink ? (sealed ? '#ffffff' : ELC[s.rune]) : '#4a2a78'; cx.lineWidth = ink ? (sealed ? 5 : 3) : 2;
       if (ink) { cx.shadowColor = ELC[s.rune]; cx.shadowBlur = sealed ? 18 : 8; cx.globalAlpha = sealed ? 1 : .75; }
@@ -1849,7 +1852,7 @@ function draw(t) {
       }
       cx.stroke(); cx.shadowBlur = 0; cx.globalAlpha = 1;
     }
-    for (const rt of s.rests) { // the rest between words: a small diamond falls through the gap between the hands
+    for (const rt of (s.fizzled ? [] : s.rests)) { // the rest between words: a small diamond falls through the gap between the hands
       const y = noteY({ time: rt }, t); if (y < -20 || y > HIT_Y + 20) continue;
       cx.fillStyle = PAL.blush; cx.globalAlpha = .55; cx.beginPath();
       cx.moveTo(W/2, y - 6); cx.lineTo(W/2 + 6, y); cx.lineTo(W/2, y + 6); cx.lineTo(W/2 - 6, y); cx.fill(); cx.globalAlpha = 1;
