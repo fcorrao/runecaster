@@ -896,6 +896,7 @@ function openCast() {
   const tg = now() - OPT.inOff / 1000;
   if (G.spells.some(s => !s.done && s.glyphs.some(r => r.status === 'pending' && tg >= r.time))) { G.castFx = { kind: 'close', at: now(), text: 'a glyph is on the line — hit it first' }; return; }
   G.cast = { buf: '', at: now(), t: now() }; G.countIn = null;
+  G.toast = null; // the earned-rune toast said "press Space": done, and it would sit over the spellbook
   castMusicRate(true);
   openSnd();
 }

@@ -591,7 +591,7 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   which bolt the enemy is weak to; time is slowed there, so reading is free;
   (2) **NEW tags** on freshly earned runes (and the ward, from the start)
   until the spellbook has been opened; only the first of each rune gets a
-  toast; (3) **live status chips** in the left margin while an effect runs
+  toast, which closes when the spellbook opens (it sat over it); (3) **live status chips** in the left margin while an effect runs
   ("WARD · 3 s · counters a charge", "VEIL · next bolt hits the weakness").
   **[OPEN]** after playtest: whether flawless powers fire too often at high
   skill (every all-perfect spell), timed casting, bolt damage vs enemy HP; the
