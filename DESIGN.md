@@ -332,10 +332,22 @@ cavalry (learn speed), as encounter types that coexist rather than eras.
 > | 3 | Magus | + ancient suffixes, three words | 6 | +8 | archer, cavalry, archer, boss |
 > | 4 | Numerist | + digits ("kai 3 voren") | 6 | +10 | archer, cavalry, boss |
 > | 5 | Glyphwright | + symbols ("tor! dunen", "sel dun-bry") | 7 | +12 | archer, cavalry, archer, boss |
-> | 6+ | Archmage | four-word invocations | 7 | +16, +4/loop | archer, cavalry, boss, cavalry, boss |
+> | 6 | Archmage | four-word invocations | 7 | +16 | archer, cavalry, boss, cavalry, boss |
 >
 > 65% of spells use the chapter's newest templates, the rest earlier ones, so
 > difficulty rises without every spell being the hardest.
+>
+> **Decided (user): after the last boss, an endless Revived boss rush.** Once
+> the Shadow Archon falls, the final chapter no longer repeats — the game cycles
+> the six bosses forever, each a solo `boss` encounter, each lap a harder
+> **Revived** re-fight: `Revived`, then `Re-Revived`, `ReRe-Revived`, … one
+> "Re" per full cycle. HP scales with the ever-rising chapter index, tempo climbs
+> +3 per cycle, and every revamp uses chapter-6 (hardest) incantations. Each
+> revived boss still plays **its own theme** — the display name is the Revived
+> string, but the track stays keyed by the boss's real name — and wears a
+> **swirling rainbow aura** (a deeper re-live adds a counter-spinning second
+> ring), so a revived boss reads at a glance; the escalating name auto-shrinks to
+> fit the banner. There is no win condition — the rush only ends when you fall.
 
 ---
 
