@@ -325,9 +325,16 @@ const CHAPTERS = [
   { name: 'Glyphwright', tier: 5, dens: 7, bpm: 12, encs: ['archer', 'cavalry', 'archer', 'boss'],          boss: 'Glyph Tyrant',     bossSchool: 'flame' },
   { name: 'Archmage',    tier: 6, dens: 7, bpm: 16, encs: ['archer', 'cavalry', 'boss', 'cavalry', 'boss'], boss: 'Shadow Archon',    bossSchool: 'shadow' },
 ];
-function chapterAt(ci) { // past the last chapter the Archmage loop repeats, 4 bpm faster each time
-  const last = CHAPTERS.length - 1, c = CHAPTERS[Math.min(ci, last)];
-  return ci <= last ? c : { ...c, name: c.name + ' ' + (ci - last + 1), bpm: c.bpm + 4 * (ci - last) };
+function chapterAt(ci) {
+  const last = CHAPTERS.length - 1;
+  if (ci <= last) return CHAPTERS[ci];
+  // The final boss has fallen: an endless boss rush. Cycle the six bosses forever, each lap a harder
+  // "Revived" re-fight (Re-Revived, ReRe-Revived, …), faster each time. ch.boss stays the boss's real
+  // name so its music theme is still chosen; reviveName is the display name, and revived>0 draws the aura.
+  const cycle = ci - last - 1, lap = cycle + 1, b = CHAPTERS[cycle % (last + 1)];
+  const revive = (lap === 1 ? 'Revived ' : 'Re'.repeat(lap - 1) + '-Revived ') + b.boss;
+  return { name: revive, tier: 6, dens: 7, bpm: Math.min(88, 16 + 3 * cycle), encs: ['boss'],
+    boss: b.boss, bossSchool: b.bossSchool, reviveName: revive, revived: lap };
 }
 // archers: steady volleys (learn accuracy) · cavalry: the charge accelerates every spell (speed)
 // · boss: incantations follow rhythm patterns, off-beats included (rhythm) — §5 enemy structures
@@ -522,7 +529,7 @@ function startEncounter() {
   const schools = Object.keys(SCHOOLS).filter(s => s !== G.lastSchool);
   const school = kind === 'boss' ? ch.bossSchool : schools[Math.floor(Math.random() * schools.length)];
   G.lastSchool = school;
-  G.enemy = { kind, name: kind === 'boss' ? ch.boss : E.label, hp: E.hp(G.ci), max: E.hp(G.ci), dmg: E.dmg, color: E.color, school,
+  G.enemy = { kind, name: kind === 'boss' ? (ch.reviveName || ch.boss) : E.label, hp: E.hp(G.ci), max: E.hp(G.ci), dmg: E.dmg, color: E.color, school, revived: ch.revived || 0,
     weak: SCHOOL_WEAK[school], chargeBeats: E.charge, cdmg: E.cdmg, chargeFrom: null, chargeAt: null, warned: 0, spells: 0 }; // charge starts with its first spell (frame)
   G.bpm = Math.min(200, G.baseBpm + ch.bpm); // cavalry ramps reset with every new encounter
   const newCh = G.ei === 0;
@@ -1613,6 +1620,17 @@ function drawBoss(t, pull) { // boss: a crowned lich, its school's roots orbitin
   cx.save(); cx.translate(0, hover);
   const aura = cx.createRadialGradient(0, -80, 10, 0, -80, 110); aura.addColorStop(0, eye + '44'); aura.addColorStop(1, eye + '00');
   cx.fillStyle = aura; cx.fillRect(-110, -190, 220, 200);
+  if (G.enemy.revived) { // a revived boss burns with a swirling rainbow aura; a deeper re-live adds a second, counter-spinning ring
+    const lap = G.enemy.revived, R = 92, hue = (t * 90) % 360;
+    cx.save(); cx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 12; i++) { const h = (hue + i * 30) % 360, a = i * (Math.PI / 6) + t * 1.1;
+      cx.strokeStyle = `hsla(${h},100%,${58 + 4 * Math.sin(t * 3 + i)}%,0.20)`; cx.shadowColor = `hsla(${h},100%,60%,1)`; cx.shadowBlur = 16; cx.lineWidth = 22;
+      cx.beginPath(); cx.arc(0, -84, R + Math.sin(t * 3 + i) * 5, a, a + 1.1); cx.stroke(); }
+    if (lap > 1) for (let i = 0; i < 12; i++) { const h = (hue + i * 30 + 180) % 360, a = -i * (Math.PI / 6) - t * 0.9;
+      cx.strokeStyle = `hsla(${h},100%,64%,0.15)`; cx.shadowColor = `hsla(${h},100%,66%,1)`; cx.shadowBlur = 12; cx.lineWidth = 14;
+      cx.beginPath(); cx.arc(0, -84, R + 22 + Math.sin(t * 2 + i) * 5, a, a + 0.8); cx.stroke(); }
+    cx.restore();
+  }
   cx.fillStyle = '#1a0b33'; // robe, tattered hem
   cx.beginPath(); cx.moveTo(-6, -120); cx.bezierCurveTo(-26, -90, -46, -30, -50, 0);
   for (let i = 0; i <= 8; i++) cx.lineTo(-50 + i * 12, i % 2 ? -8 + Math.sin(t * 4 + i) * 2 : 0);
@@ -2063,8 +2081,9 @@ function draw(t) {
     cx.strokeStyle = G.enemy.color; cx.globalAlpha = Math.max(0, a) * .6; rr(W/2 - 330, 250, 660, 84, 12); cx.stroke();
     cx.globalAlpha = Math.max(0, a); cx.textAlign = 'center';
     cx.fillStyle = G.enemy.color; cx.shadowColor = G.enemy.color; cx.shadowBlur = 16;
-    cx.font = 'italic 900 30px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(G.banner.title, W/2, 291);
-    cx.shadowBlur = 0; cx.fillStyle = PAL.text; cx.font = '14px ui-monospace, Menlo, monospace'; cx.fillText(G.banner.sub, W/2, 317);
+    const fit = (txt, base, min, tmpl) => { let fs = base; cx.font = tmpl(fs); if (cx.measureText(txt).width > 610) cx.font = tmpl(Math.max(min, fs * 610 / cx.measureText(txt).width)); }; // a deep-lap "ReRe…-Revived" name shrinks to fit the banner box
+    fit(G.banner.title, 30, 13, s => `italic 900 ${s}px "Trebuchet MS", "Arial Black", sans-serif`); cx.fillText(G.banner.title, W/2, 291);
+    cx.shadowBlur = 0; cx.fillStyle = PAL.text; fit(G.banner.sub, 14, 9, s => `${s}px ui-monospace, Menlo, monospace`); cx.fillText(G.banner.sub, W/2, 317);
     cx.globalAlpha = 1;
   }
   // peripheral cues — you watch the glyphs, so the edges speak: the enemy's side pulses red on each countdown beat,
