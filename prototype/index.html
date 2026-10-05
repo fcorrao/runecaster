@@ -328,13 +328,14 @@ const CHAPTERS = [
 function chapterAt(ci) {
   const last = CHAPTERS.length - 1;
   if (ci <= last) return CHAPTERS[ci];
-  // The final boss has fallen: an endless boss rush. Cycle the six bosses forever, each lap a harder
-  // "Revived" re-fight (Re-Revived, ReRe-Revived, …), faster each time. ch.boss stays the boss's real
-  // name so its music theme is still chosen; reviveName is the display name, and revived>0 draws the aura.
-  const cycle = ci - last - 1, lap = cycle + 1, b = CHAPTERS[cycle % (last + 1)];
-  const revive = (lap === 1 ? 'Revived ' : 'Re'.repeat(lap - 1) + '-Revived ') + b.boss;
+  // The final boss has fallen: an endless boss rush. Cycle the six bosses forever; a boss earns another
+  // "Re-" only when it comes back around after a full pass (Revived → Re-Revived → ReRe-Revived, …), faster
+  // each boss. ch.boss stays the boss's real name so its music theme is still chosen; reviveName is the display
+  // name, and revived (1-based pass) draws the aura — a second ring once a boss is re-revived.
+  const cycle = ci - last - 1, passes = Math.floor(cycle / (last + 1)), b = CHAPTERS[cycle % (last + 1)];
+  const revive = (passes === 0 ? 'Revived ' : 'Re'.repeat(passes) + '-Revived ') + b.boss;
   return { name: revive, tier: 6, dens: 7, bpm: Math.min(88, 16 + 3 * cycle), encs: ['boss'],
-    boss: b.boss, bossSchool: b.bossSchool, reviveName: revive, revived: lap };
+    boss: b.boss, bossSchool: b.bossSchool, reviveName: revive, revived: passes + 1 };
 }
 // archers: steady volleys (learn accuracy) · cavalry: the charge accelerates every spell (speed)
 // · boss: incantations follow rhythm patterns, off-beats included (rhythm) — §5 enemy structures
