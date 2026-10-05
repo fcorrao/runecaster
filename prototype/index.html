@@ -100,6 +100,10 @@ const LANES = [
 ];
 const LANE = Object.fromEntries(LANES.map(l => [l.id, l]));
 const ELC = {fire:'#ff6a3d', water:'#38c8ff', earth:'#3cf0a0', air:'#b36bff'};
+// The start cinematic runs entirely in real time before the beat grid takes the beat: the caster steps in,
+// the four sigils forge in one-by-one (an anvil each), then chapter 1 begins on the grid. Times are seconds
+// from the click; dur is when the grid (clicks + glyphs) takes over.
+const IN = { dur: 4.0, casterAt: 0.4, casterFade: 0.7, runeAt: 0.85, runeStep: 0.42, runeFall: 0.5 }; // caster arrives, then each rune drops into its panel slot top-to-bottom
 // retro-wizard synthwave palette, sampled from art/splash.jpg
 const PAL = { void:'#07030f', night:'#0c0a3a', indigo:'#1b1280', violet:'#5c15bd', magenta:'#d225d1', pink:'#f96999',
   blush:'#f3a5e6', wine:'#650a44', crimson:'#d5263f', cyan:'#32b3cd', gold:'#ffcf6b', good:'#3cf0a0', bad:'#ff4d7d', ink:'#0b0618', text:'#e9dcff', dim:'#a993c9' };
@@ -494,6 +498,10 @@ function wardSnd() { if (!sfx('ward_block')) thudSnd(); }       // the ward turn
 function defeatSnd() { sfx('defeat'); }                          // enemy falls (the victory burst carries it visually if missing)
 function gameOverSnd() { sfx('game_over'); }
 function chapterSnd() { sfx('chapter', .8); }
+function summonSnd() { if (!AC) return; const t = AC.currentTime; beep(t, 98, 0.6, 'sine', 0.10); beep(t + 0.02, 147, 0.6, 'sine', 0.055); beep(t + 0.04, 196, 0.5, 'triangle', 0.04); } // the caster arrives: a low fifth swelling up
+function anvilSnd(pan = 0) { if (!AC) return; const t = AC.currentTime; // a metal strike: inharmonic partials over a short body thump
+  for (const [f, v] of [[1250, 0.05], [1790, 0.04], [2630, 0.028], [880, 0.045]]) beep(t, f, 0.14, 'square', v, pan);
+  for (const [f, v] of [[560, 0.05], [430, 0.035]]) beep(t + 0.006, f, 0.09, 'triangle', v, pan); }
 
 // ================= state =================
 let G = null, started = false;
@@ -522,7 +530,6 @@ function newGame() {
     swift: 0,    // spells saved by swift kills over the run (scored, and reported with it)
     musicRestart: false, // a track that comes due during a cast: start it when the spellbook closes
   };
-  startEncounter();
 }
 function startEncounter() {
   const ch = chapterAt(G.ci), kind = ch.encs[G.ei], E = ENEMIES[kind];
@@ -534,13 +541,14 @@ function startEncounter() {
     weak: SCHOOL_WEAK[school], chargeBeats: E.charge, cdmg: E.cdmg, chargeFrom: null, chargeAt: null, warned: 0, spells: 0 }; // charge starts with its first spell (frame)
   G.bpm = Math.min(200, G.baseBpm + ch.bpm); // cavalry ramps reset with every new encounter
   const newCh = G.ei === 0;
-  if (newCh) chapterSnd();
+  if (newCh && !G.intro) chapterSnd(); // the intro re-issues the chapter horn at handoff
   G.banner = {
     title: newCh ? `CHAPTER ${G.ci + 1} — ${ch.name.toUpperCase()}` : G.enemy.name.toUpperCase(),
     sub: newCh ? `${G.enemy.name} · ${OPT.glyphs === 'riffs' ? RIFF_TIERS[Math.min(6, ch.tier)].label : ['', 'two-word spells', 'longer words', 'three-word invocations', 'numbers join the glyphs', 'symbols join the glyphs', 'the full tongue'][Math.min(6, ch.tier)]}`
                : `${{ archer: 'steady volleys', cavalry: 'the charge speeds up every spell', boss: 'follow its rhythm' }[kind]} · school of ${school} · weak to ${SCHOOL_WEAK[school]}`,
     until: now() + 2.2,
   };
+  if (newCh && G.intro) G.banner = null; // the start cinematic shows the chapter banner at handoff, not now
 }
 function nextEncounter() { // the enemy fell: advance the run
   G.cleared++;
@@ -550,11 +558,33 @@ function nextEncounter() { // the enemy fell: advance the run
   musicPlay(true); // the next enemy brings the next track
   G.nextT0 += 4 * segAt(G.nextT0).beat; // one bar of breath before the next enemy's first spell (stays on the grid)
 }
-function startRun() {
-  G.nextBeat = AC.currentTime + 0.1;
+function startRun(at) { // at = AudioContext time the grid (clicks/glyphs) begins; the intro passes a time a few seconds out
+  G.nextBeat = at || (AC.currentTime + 0.1);
   const b = 60/G.bpm;
   G.segs = [{ t0: G.nextBeat, beat: b }];
   G.nextT0 = G.nextBeat + Math.ceil(Math.max(LOOK + 0.3, 3 * b) / b) * b; // spell grid ON the click grid
+}
+// ---- the start cinematic (real-time, before the grid takes the beat) ----
+function showStartBanner() { // chapter horn + banner, timed to the grid taking over (mirrors startEncounter's new-chapter banner)
+  const ch = chapterAt(G.ci);
+  G.banner = {
+    title: `CHAPTER ${G.ci + 1} — ${ch.name.toUpperCase()}`,
+    sub: `${G.enemy.name} · ${OPT.glyphs === 'riffs' ? RIFF_TIERS[Math.min(6, ch.tier)].label : ['', 'two-word spells', 'longer words', 'three-word invocations', 'numbers join the glyphs', 'symbols join the glyphs', 'the full tongue'][Math.min(6, ch.tier)]}`,
+    until: now() + 2.2,
+  };
+  chapterSnd();
+}
+function introStart() { // first click: run the cinematic, then hand off to the grid (startRun/musicPlay happen at handoff)
+  G.intro = { at: now(), dur: IN.dur, fired: 0 }; // set first: startEncounter then defers the chapter banner + horn to the handoff
+  startRun(AC.currentTime + IN.dur + 0.1); // grid built but begins at handoff — no clicks or glyphs during the intro
+  startEncounter(); // chapter 1 builds silently (no banner, no horn)
+  G.foeDead = G.intro.at; G.foeEnter = G.intro.at + IN.dur; // first enemy off-stage, then walks in as chapter 1 opens
+}
+function introTick(t) { // drive the intro's cues on the real-time clock
+  const e = t - G.intro.at, keys = Object.keys(RUNES), RH = (RP.h - 24) / keys.length;
+  if (G.intro.fired === 0 && e >= IN.casterAt) { G.intro.fired = 1; summonSnd(); burst(WIZ_X + 52, GROUND_Y + STAGE_TOP - 96, PAL.cyan, 30, 300); G.shake = Math.max(G.shake, 3); }
+  while (G.intro && G.intro.fired >= 1 && G.intro.fired - 1 < keys.length && e >= IN.runeAt + IN.runeFall + (G.intro.fired - 1) * IN.runeStep) { const i = G.intro.fired - 1, S = RUNES[keys[i]]; anvilSnd((i - (keys.length - 1) / 2) * 0.06); burst(W / 2, RP.y + 26 + i * RH, S.color, 16, 240); G.intro.fired++; } // the rune lands in its slot: anvil + spark
+  if (G.intro && e >= G.intro.dur) { G.intro = null; startRun(); G.foeEnter = -9; musicPlay(); showStartBanner(); } // handoff: the grid starts now, exactly as a normal run begins (foeDead holds the enemy hidden through its enter slide)
 }
 // ---- tempo map: a tempo change takes effect on the first glyph of the spell that
 // introduced it, so the clicks never disagree with glyphs already on screen (§5)
@@ -1100,9 +1130,9 @@ cv.addEventListener('click', e => {
     if (showBoard) { showBoard = false; return; } // any click closes the board
     if (hit(HOWTO_BTN)) { demoStart(); return; }
     if (hit(BOARD_BTN)) { showBoard = true; scoresLoad(); return; }
-    started = true; newGame(); syncOpts(); startRun(); musicPlay();
+    started = true; newGame(); syncOpts(); introStart();
   }
-  else if (G.over) { if (G.entry && G.entry.state === 'typing') scoreSave(); newGame(); syncOpts(); startRun(); musicPlay(); } // retrying records the run first
+  else if (G.over) { if (G.entry && G.entry.state === 'typing') scoreSave(); newGame(); syncOpts(); startEncounter(); startRun(); musicPlay(); } // retry records the run first, then begins at once
 });
 
 // ================= high scores & memory: worker/index.js keeps runs in D1 (SQLite) =================
@@ -1309,7 +1339,8 @@ function frame(ts) {
   if (lastTs && ts > lastTs) frameDt += 0.1 * (Math.min(0.05, (ts - lastTs) / 1000) - frameDt); lastTs = ts;
   if (!started || !G) { drawIdle(); return; }
   const t = now();
-  if (!G.over) {
+  if (G.intro) introTick(t); // the start cinematic (real time) until it hands off to the grid
+  if (!G.over && !G.intro) {
     if (G.cast) castTick(); // cast mode: the rhythm (glyphs, clicks, music, timers) stands still until you resume
     if (G.cast && t - G.cast.at > castLimit()) castFizzle('the cast ran out of time');
     if (G.demo) demoTick(t);
@@ -1415,7 +1446,7 @@ function drawWizard(t, phase) { // long-haired caster, glyph-trimmed cloak strea
   const cp = casting ? 1 - (G.wizCast.until - t) / 0.5 : -1; // 0..1 cast thrust progress
   const P = WIZ_PAL;
   cx.save();
-  cx.translate(WIZ_X + (hurt < 0.3 ? -7 * (1 - hurt/0.3) : 0), WIZ_Y + Math.sin(t * 2.2) * 2);
+  cx.translate(WIZ_X + (hurt < 0.3 ? -7 * (1 - hurt/0.3) : 0), WIZ_Y + (G.intro ? 0 : Math.sin(t * 2.2) * 2));
   if (G.over) { cx.translate(-10, 26); cx.rotate(-0.5); } // struck down
   const ch = nextCharge(t), castEl = casting ? G.wizCast.el : null;
   const orbC = ELC[castEl] || ELC[ch && ch.el] || PAL.pink;
@@ -1765,7 +1796,8 @@ function drawStage(t, beat, phase) {
   cx.strokeStyle = live ? G.enemy.color : '#3a1a5e'; cx.globalAlpha = live ? .3 : .5; cx.lineWidth = 2; cx.setLineDash([4, 10]);
   cx.beginPath(); cx.moveTo(WIZ_X + 60, fy); cx.lineTo(ARC_X - 60, fy); cx.stroke();
   cx.setLineDash([]); cx.globalAlpha = 1; cx.lineWidth = 1;
-  drawWizard(t, phase);
+  if (G.intro) { const ia = Math.min(1, Math.max(0, (t - G.intro.at - IN.casterAt) / IN.casterFade)); if (ia > 0) { cx.save(); cx.translate(0, 16 * (1 - ia)); cx.globalAlpha = ia; drawWizard(t, phase); cx.restore(); cx.globalAlpha = 1; } } // arrives in the left margin: fades up and settles, never crossing into the lanes
+  else drawWizard(t, phase);
   drawWard(t);
   drawFocus(t);
   drawEnemy(t);
@@ -2157,9 +2189,12 @@ function drawRunePanel(t) {
   keys.forEach((key, i) => {
     const S = RUNES[key], n = G.runes[key] || 0, y = RP.y + 24 + i * RH, owned = owns(key), weak = S.el && S.el === G.enemy.weak;
     const flash = G.runeFlash && G.runeFlash.key === key && t - G.runeFlash.at < 0.9 ? 1 - (t - G.runeFlash.at) / 0.9 : 0;
+    let dy = 0; // the start cinematic: the card drops from just above the panel into its slot
+    if (G.intro) { const lt = (t - G.intro.at) - (IN.runeAt + i * IN.runeStep); if (lt < 0) return; dy = (90 - (y + 2)) * Math.pow(1 - Math.min(1, lt / IN.runeFall), 2.4); }
+    cx.save(); cx.translate(0, dy);
     if (flash) { cx.fillStyle = S.color; cx.globalAlpha = .3 * flash; rr(px + 3, y, RP.w - 6, RH - 4, 8); cx.fill(); cx.globalAlpha = 1; }
-    // one centred column: the art, the charges under it, the name
-    const as = Math.min(52, RH - 32), ax = W/2 - as / 2, ay = y + 2, im = RUNE_ART[key];
+    // one centred column: the name on top, the art, the charges under it
+    const as = Math.min(52, RH - 36), ax = W/2 - as / 2, ay = y + 18, im = RUNE_ART[key];
     cx.globalAlpha = owned ? 1 : .35;
     cx.save(); rr(ax, ay, as, as, 7); cx.clip();
     if (im.complete && im.naturalWidth) cx.drawImage(im, ax, ay, as, as);
@@ -2167,11 +2202,11 @@ function drawRunePanel(t) {
     cx.restore();
     cx.strokeStyle = S.color; cx.lineWidth = 1.5; if (owned) { cx.shadowColor = S.color; cx.shadowBlur = 8; }
     rr(ax, ay, as, as, 7); cx.stroke(); cx.shadowBlur = 0; cx.lineWidth = 1;
-    const pipY = ay + as + 8;
+    const pipY = ay + as + 6;
     if (key === 'ward') { cx.textAlign = 'center'; cx.fillStyle = S.color; cx.font = 'bold 13px ui-monospace, Menlo, monospace'; cx.fillText('∞', W/2, pipY + 4); }
     else for (let j = 0; j < RUNE_MAX; j++) runePip(W/2 + (j - (RUNE_MAX - 1) / 2) * 13, pipY, 4, S.color, j, n, G.cracked[key] || 0);
     cx.textAlign = 'center'; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.fillStyle = owned ? S.color : PAL.dim;
-    cx.shadowColor = '#000'; cx.shadowBlur = 4; cx.fillText(S.name, W/2, pipY + 21); cx.shadowBlur = 0;
+    cx.shadowColor = '#000'; cx.shadowBlur = 4; cx.fillText(S.name, W/2, ay - 6); cx.shadowBlur = 0;
     cx.globalAlpha = 1;
     // NEW pulls you to open the spellbook; ×2 marks the enemy's weakness (on the art's corner)
     const badge = G.unseen.has(key) ? ['NEW', PAL.gold] : weak ? ['×2', PAL.bad] : null;
@@ -2181,6 +2216,7 @@ function drawRunePanel(t) {
       cx.fillStyle = 'rgba(10,4,24,.9)'; rr(ax + 2, ay + as - 16, bw, 14, 4); cx.fill();
       cx.fillStyle = badge[1]; cx.textAlign = 'left'; cx.fillText(badge[0], ax + 6, ay + as - 5); cx.globalAlpha = 1;
     }
+    cx.restore(); cx.globalAlpha = 1;
     cx.textAlign = 'center';
   });
 }

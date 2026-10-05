@@ -709,6 +709,20 @@ so its boon comes with that spell instead of the next.
 Every effect and sound is the game's own, so the demo stays true as the game
 changes.
 
+**Decided (playtest): a start cinematic, then the grid takes over.** The first
+click on the title runs a short (~4 s) intro on the AudioContext clock before
+the beat grid owns time. The caster fades up in the left margin (a low fifth
+swells up), then the six runes drop into the center RUNES panel slot by slot,
+top to bottom — fire, water, earth, air, mend, ward — each landing with a
+metal anvil strike. The
+chapter-1 banner and horn are held back and fire exactly at the handoff, so
+"CHAPTER 1" reads as the grid taking over rather than the first thing you see.
+While it plays there are no clicks and no glyphs (the grid is built but begins
+at the handoff, `startRun(at)`); the first enemy walks in as chapter 1 opens.
+Retrying after a game over skips the cinematic and starts at once — you have
+already seen it. **[OPEN]** whether a click or key should be able to skip it
+(it cannot today, so every fresh start waits out the ~4 s).
+
 ## 10. High Scores, Memory & Hosting
 
 **Decided (user): Cloudflare Workers + D1** (D1 is SQLite), after a local
