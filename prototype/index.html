@@ -103,8 +103,7 @@ const ELC = {fire:'#ff6a3d', water:'#38c8ff', earth:'#3cf0a0', air:'#b36bff'};
 // The start cinematic runs entirely in real time before the beat grid takes the beat: the caster steps in,
 // the four sigils forge in one-by-one (an anvil each), then chapter 1 begins on the grid. Times are seconds
 // from the click; dur is when the grid (clicks + glyphs) takes over.
-const IN = { dur: 4.0, casterAt: 0.4, casterFade: 0.7, sigilAt: 0.95, sigilStep: 0.45, sigilDrop: 0.55 }; // caster arrives, then the emblems drop in one by one
-const INTRO_SIGILS = [['fire', 'burst'], ['water', 'wave'], ['earth', 'pillar'], ['air', 'sweep']]; // order the emblems forge in
+const IN = { dur: 4.0, casterAt: 0.4, casterFade: 0.7, runeAt: 0.85, runeStep: 0.42, runeFall: 0.5 }; // caster arrives, then each rune drops into its panel slot top-to-bottom
 // retro-wizard synthwave palette, sampled from art/splash.jpg
 const PAL = { void:'#07030f', night:'#0c0a3a', indigo:'#1b1280', violet:'#5c15bd', magenta:'#d225d1', pink:'#f96999',
   blush:'#f3a5e6', wine:'#650a44', crimson:'#d5263f', cyan:'#32b3cd', gold:'#ffcf6b', good:'#3cf0a0', bad:'#ff4d7d', ink:'#0b0618', text:'#e9dcff', dim:'#a993c9' };
@@ -581,31 +580,11 @@ function introStart() { // first click: run the cinematic, then hand off to the 
   startEncounter(); // chapter 1 builds silently (no banner, no horn)
   G.foeDead = G.intro.at; G.foeEnter = G.intro.at + IN.dur; // first enemy off-stage, then walks in as chapter 1 opens
 }
-function introSigilPos(i) { // landing spot of the i-th (0-based) emblem, fanned across the upper lane field (canvas space)
-  return [W / 2 + (i - 1.5) * 90, 300];
-}
 function introTick(t) { // drive the intro's cues on the real-time clock
-  const e = t - G.intro.at;
+  const e = t - G.intro.at, keys = Object.keys(RUNES), RH = (RP.h - 24) / keys.length;
   if (G.intro.fired === 0 && e >= IN.casterAt) { G.intro.fired = 1; summonSnd(); burst(WIZ_X + 52, GROUND_Y + STAGE_TOP - 96, PAL.cyan, 30, 300); G.shake = Math.max(G.shake, 3); }
-  while (G.intro && G.intro.fired >= 1 && G.intro.fired <= 4 && e >= IN.sigilAt + IN.sigilDrop + (G.intro.fired - 1) * IN.sigilStep) { const i = G.intro.fired - 1, [el] = INTRO_SIGILS[i], [x, y] = introSigilPos(i); anvilSnd(Math.max(-0.6, Math.min(0.6, (x - W / 2) / (W / 2)))); burst(x, y, ELC[el], 16, 240); G.intro.fired++; } // the emblem lands: anvil + spark on impact
+  while (G.intro && G.intro.fired >= 1 && G.intro.fired - 1 < keys.length && e >= IN.runeAt + IN.runeFall + (G.intro.fired - 1) * IN.runeStep) { const i = G.intro.fired - 1, S = RUNES[keys[i]]; anvilSnd((i - (keys.length - 1) / 2) * 0.06); burst(W / 2, RP.y + 26 + i * RH, S.color, 16, 240); G.intro.fired++; } // the rune lands in its slot: anvil + spark
   if (G.intro && e >= G.intro.dur) { G.intro = null; startRun(); G.foeEnter = -9; musicPlay(); showStartBanner(); } // handoff: the grid starts now, exactly as a normal run begins (foeDead holds the enemy hidden through its enter slide)
-}
-function drawEmblem(x, y, shape, col, a) { // one elemental sigil emblem; a = 0..1 materialize (scale-pop + glow)
-  const e = 1 - Math.pow(1 - a, 3), R = 22 * (0.4 + 0.6 * e), r = 27 + 16 * (1 - a);
-  cx.save(); cx.translate(x, y); cx.globalAlpha = a; cx.strokeStyle = col; cx.shadowColor = col; cx.shadowBlur = 18 * a; cx.lineCap = 'round';
-  cx.lineWidth = 2; cx.globalAlpha = a * 0.45; cx.beginPath(); cx.arc(0, 0, r, 0, 7); cx.stroke(); // forge ring contracts as it lands
-  cx.globalAlpha = a; cx.lineWidth = 3.2; cx.beginPath();
-  if (shape === 'pillar') { cx.moveTo(0, -R); cx.lineTo(0, R); cx.moveTo(-R*0.6, -R); cx.lineTo(R*0.6, -R); cx.moveTo(-R*0.6, R); cx.lineTo(R*0.6, R); }
-  else if (shape === 'wave') for (let k = 0; k <= 24; k++) { const xx = -R + (2 * R) * k / 24, yy = Math.sin(k / 24 * Math.PI * 2) * R * 0.5; k ? cx.lineTo(xx, yy) : cx.moveTo(xx, yy); }
-  else if (shape === 'sweep') { cx.moveTo(-R, R); cx.quadraticCurveTo(0, -R * 0.2, R, -R); }
-  else for (let k = 0; k < 6; k++) { const ang = k * Math.PI / 3; cx.moveTo(0, 0); cx.lineTo(Math.cos(ang) * R, Math.sin(ang) * R); } // burst
-  cx.stroke(); cx.restore(); cx.globalAlpha = 1;
-}
-function drawIntroSigils(t) { // the four elemental sigils dropping into the empty lane field (canvas space, not the stage's shifted frame)
-  const e = t - G.intro.at;
-  for (let i = 0; i < INTRO_SIGILS.length; i++) { const lt = e - (IN.sigilAt + i * IN.sigilStep); if (lt < 0) continue;
-    const p = Math.min(1, lt / IN.sigilDrop), fall = 1 - Math.pow(1 - p, 2.4), [x, y] = introSigilPos(i), [el, sh] = INTRO_SIGILS[i];
-    drawEmblem(x, 90 + (y - 90) * fall, sh, ELC[el], Math.min(1, lt / 0.22)); } // descends from above the field top into place
 }
 // ---- tempo map: a tempo change takes effect on the first glyph of the spell that
 // introduced it, so the clicks never disagree with glyphs already on screen (§5)
@@ -1859,7 +1838,6 @@ function draw(t) {
     cx.globalAlpha = .12; cx.beginPath(); cx.arc(LNX[l.id], HIT_Y, 21, 0, 7); cx.stroke();
   }
   cx.globalAlpha = 1; cx.lineWidth = 1;
-  if (G.intro) drawIntroSigils(t); // the sigils dropping into the (empty) lane field, above the keycap legend
 
   // keycap strip (finger teaching legend)
   for (const l of LANES) {
@@ -2211,6 +2189,9 @@ function drawRunePanel(t) {
   keys.forEach((key, i) => {
     const S = RUNES[key], n = G.runes[key] || 0, y = RP.y + 24 + i * RH, owned = owns(key), weak = S.el && S.el === G.enemy.weak;
     const flash = G.runeFlash && G.runeFlash.key === key && t - G.runeFlash.at < 0.9 ? 1 - (t - G.runeFlash.at) / 0.9 : 0;
+    let dy = 0; // the start cinematic: the card drops from just above the panel into its slot
+    if (G.intro) { const lt = (t - G.intro.at) - (IN.runeAt + i * IN.runeStep); if (lt < 0) return; dy = (90 - (y + 2)) * Math.pow(1 - Math.min(1, lt / IN.runeFall), 2.4); }
+    cx.save(); cx.translate(0, dy);
     if (flash) { cx.fillStyle = S.color; cx.globalAlpha = .3 * flash; rr(px + 3, y, RP.w - 6, RH - 4, 8); cx.fill(); cx.globalAlpha = 1; }
     // one centred column: the art, the charges under it, the name
     const as = Math.min(52, RH - 32), ax = W/2 - as / 2, ay = y + 2, im = RUNE_ART[key];
@@ -2235,6 +2216,7 @@ function drawRunePanel(t) {
       cx.fillStyle = 'rgba(10,4,24,.9)'; rr(ax + 2, ay + as - 16, bw, 14, 4); cx.fill();
       cx.fillStyle = badge[1]; cx.textAlign = 'left'; cx.fillText(badge[0], ax + 6, ay + as - 5); cx.globalAlpha = 1;
     }
+    cx.restore(); cx.globalAlpha = 1;
     cx.textAlign = 'center';
   });
 }
