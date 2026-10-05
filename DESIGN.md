@@ -711,9 +711,10 @@ changes.
 
 **Decided (playtest): a start cinematic, then the grid takes over.** The first
 click on the title runs a short (~4 s) intro on the AudioContext clock before
-the beat grid owns time. The caster steps in (a low fifth swells up), then the
-four elemental sigils forge in across the stage left-to-right — burst, wave,
-pillar, sweep — each on a metal anvil strike panned to its own position. The
+the beat grid owns time. The caster fades up in the left margin (a low fifth
+swells up), then the four elemental sigils drop into the upper lane field
+left-to-right — burst, wave, pillar, sweep — each landing with a metal anvil
+strike panned to its own position. The
 chapter-1 banner and horn are held back and fire exactly at the handoff, so
 "CHAPTER 1" reads as the grid taking over rather than the first thing you see.
 While it plays there are no clicks and no glyphs (the grid is built but begins
