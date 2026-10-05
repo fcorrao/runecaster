@@ -333,7 +333,7 @@ function chapterAt(ci) {
   // each boss. ch.boss stays the boss's real name so its music theme is still chosen; reviveName is the display
   // name, and revived (1-based pass) draws the aura — a second ring once a boss is re-revived.
   const cycle = ci - last - 1, passes = Math.floor(cycle / (last + 1)), b = CHAPTERS[cycle % (last + 1)];
-  const revive = (passes === 0 ? 'Revived ' : 'Re'.repeat(passes) + '-Revived ') + b.boss;
+  const revive = 'Re-'.repeat(passes) + 'Revived ' + b.boss; // a dash between each Re: Re-Re-Revived
   return { name: revive, tier: 6, dens: 7, bpm: Math.min(88, 16 + 3 * cycle), encs: ['boss'],
     boss: b.boss, bossSchool: b.bossSchool, reviveName: revive, revived: passes + 1 };
 }
