@@ -74,7 +74,7 @@
       <li><b>Riffs</b> (Glyphs setting, the default): glyphs come in key patterns played in quick 8th/16th bursts with a breath between. Every spell is a <b>sigil</b>: its strokes share one shape, and the shape is the rune a clean spell earns — <b>pillar</b> (one key repeated) earth, <b>wave</b> (two fingers trading) water, <b>sweep</b> (a roll across neighbouring fingers) air, <b>burst</b> (mirrored pairs hand to hand, opening from the index fingers) fire. The thread through its glyphs glows in the rune's color. From chapter 2 a sigil ends in a word, its inscription. Each encounter repeats a handful of strokes, so learn them as one movement. The chapters open the keyboard row by row, starting with the home row. "words" brings back the runic-tongue spells.</li>
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
-      <li><b>Runes are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no glyph missed) earns a rune of its element (the lane most of its glyphs ride: fire, water, earth, air); in <b>lenient</b> mode a spell with exactly one miss still seals a <b>cracked</b> rune (hollow pip: its bolt hits ×0.5; cracked charges are spent first); defeating an enemy earns a <b>mend</b> rune (bosses 2). Press <b>Space</b> — time stops (music and timers too) and the letters hide, but only for a few seconds (6 s in chapter 1, 3.5 s by chapter 6: the bar around the ring; empty, the cast fizzles). The faster you finish a name, the harder it hits: ×1.5 instantly down to ×0.5 at the buzzer (bolts and mend) — the panel opens into the <b>spellbook</b>; type a name to cast: <i>vorkai</i> fire, <i>gamkai</i> water, <i>brykai</i> earth, <i>wynkai</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar; the bar's pale ghost is what your held bolts would deal, the gold notch the counter, LETHAL when they'd kill), <i>pyrhal</i> mend (+30 HP), <i>dunfen</i> ward (always ready). A wrong letter fizzles (charge kept) — fizzle twice in a row and it <b>backfires</b> for 12 damage (a successful cast resets it); Space again cancels; the ring closes itself when a glyph reaches the line.</li>
+      <li><b>Runes are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no glyph missed) earns a rune of its element (the lane most of its glyphs ride: fire, water, earth, air); in <b>lenient</b> mode a spell with exactly one miss still seals a <b>cracked</b> rune (hollow pip: its bolt hits ×0.5; cracked charges are spent first); defeating an enemy earns a <b>mend</b> rune (bosses 2). Press <b>Space</b> — time stops (music and timers too) and the letters hide, but only for a few seconds (6 s in chapter 1, 3.5 s by chapter 6: the bar around the ring; empty, the cast fizzles). The faster you finish a name, the harder it hits: ×1.5 instantly down to ×0.5 at the buzzer (bolts and mend) — the panel opens into the <b>spellbook</b>; type a name to cast: <i>vorkai</i> fire, <i>gamkai</i> water, <i>brykai</i> earth, <i>wynkai</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar; the bar's pale ghost is what your held bolts would deal, the gold notch the counter, LETHAL when they'd kill), <i>pyrhal</i> mend (+30 HP), <i>dunfen</i> ward (always ready). A wrong letter fizzles (charge kept) — fizzle twice in a row and it <b>backfires</b> for 12 damage <b>and seals the spellbook for 2 s</b> (a successful cast resets it); Space again cancels; the ring closes itself when a glyph reaches the line.</li>
       <li><b>Charged attacks:</b> every enemy charges a big attack — the ring over its head fills; in the last bar it counts down the beats. Cast <i>dunfen</i> then: the ward holds for 5 seconds and <b>counters</b> the charged attack back at the enemy (12 damage) — it answers the charge only: missed glyphs still let the enemy hit you, ward or not. A counter is a <b>riposte</b>: it opens your empowered window at once. Kill an enemy in fewer spells than par (the spells a ward-only fight would take) and each spell saved scores <b>SWIFT</b> 1,200 × your combo multiplier. The countdown is loud on purpose: a rising doom pulse each beat, the hit line turns red, the enemy's screen edge flashes.</li>
       <li><b>Empowered:</b> you charge too — the ring over the caster fills over 20 beats, like the enemy's. Full, it rings a bright chime and opens 5 seconds (cyan aura, cyan screen edge) in which every bolt rune hits ×2. A countered charge opens it at once.</li>
       <li><b>Flawless spells</b> (every glyph PERFECT) trigger the incantation's school power at once, no cast needed: storm Gale (glyphs and the charge pushed back a bar, your ring a bar fuller), stone Bulwark (next counter ×2), shadow Veil (next bolt counts as the enemy's weakness), tide Stillwater (next mend heals ×2), flame Kindle (next bolt ×2). A cracked rune's spell never wakes a boon.</li>
@@ -521,7 +521,7 @@ function newGame() {
     wizCast: null, wizHurt: -9, foeEnter: -9, foeDead: -9,
     // runes (§8): charges per rune, cast mode; the ward is known from the start (NEW until the spellbook is read)
     runes: {}, learned: new Set(['ward']), unseen: new Set(['ward']), cast: null, castFx: null, toast: null, runeFlash: null,
-    fizzles: 0, // cast fizzles in a row: the second backfires
+    fizzles: 0, castLock: 0, // cast fizzles in a row: the second backfires; castLock = the caster's screen is sealed until this time (a backfire's extra penalty)
     focusFrom: null, focusAt: null, empower: null, empowerEnd: -9, // the caster's own charge (a timer, like the enemy's) and the bolt-bonus window it opens
     guard: null, guardBreak: -9, foeCharge: -9, // the ward rune's counter-shield; when the enemy last loosed its charged attack
     // flawless-spell powers (boons) running now
@@ -893,6 +893,7 @@ function lethalPreview(warn) {
   return { bolts: bolts.reduce((a, b) => a + Math.max(1, Math.round(b.d)), 0), counter: warn ? COUNTER_DMG * (G.bulwark ? 2 : 1) : 0 };
 }
 const BACKFIRE_DMG = 12; // a second fizzle in a row backfires on the caster (a successful cast clears the streak)
+const CAST_LOCK = 2; // a backfire also seals the caster's screen (cast mode) for this many real seconds
 const RUNE_DMG = 6, WEAK_X = 2, MEND_HP = 30, WARD_S = 5, COUNTER_DMG = 12, CHARGE_F = 0.6, WARN_BEATS = 4;
 const CRACKED_X = 0.5, SWIFT_PTS = 1200; // a cracked rune's bolt power; a swift kill's points per spell under par (× combo multiplier)
 const comboMult = () => 1 + Math.min(3, G.combo / 10); // 1 → 4 over the first 30 hits of a combo
@@ -1019,7 +1020,7 @@ function castFizzle(text) { // the mode closes, the charge is kept; twice in a r
   const backfire = ++G.fizzles >= 2;
   G.castFx = { kind: 'fizzle', at: now(), backfire, text };
   fizzleSnd();
-  if (backfire) { G.fizzles = 0; hurt(BACKFIRE_DMG, 'BACKFIRE'); burst(CAST_X, CAST_AY, PAL.pink, 24, 200, 'fire'); }
+  if (backfire) { G.fizzles = 0; hurt(BACKFIRE_DMG, 'BACKFIRE'); burst(CAST_X, CAST_AY, PAL.pink, 24, 200, 'fire'); G.castLock = now() + CAST_LOCK; G.toast = { color: PAL.pink, icon: '✕', text: 'FOCUS BROKEN', sub: `backfired · the spellbook is sealed for ${CAST_LOCK} s`, at: now(), until: now() + CAST_LOCK }; }
 }
 function castRune(key, power = 1, cracked = false) {
   const S = RUNES[key];
@@ -1082,7 +1083,7 @@ addEventListener('keydown', e => {
     if (e.key === 'Escape') demoEnd(); else if (['Enter', ' ', 'ArrowRight'].includes(e.key)) demoAdvance();
     return;
   }
-  if (e.key === ' ') { e.preventDefault(); if (G.cast) closeCast('cast cancelled'); else openCast(); return; } // the thumb: cast mode
+  if (e.key === ' ') { e.preventDefault(); if (G.cast) { closeCast('cast cancelled'); return; } if (now() < G.castLock) { G.toast = { color: PAL.pink, icon: '✕', text: 'FOCUS BROKEN', sub: `still reeling · casting returns in ${Math.max(1, Math.ceil(G.castLock - now()))} s`, at: now(), until: now() + 1.2 }; return; } openCast(); return; } // the thumb: cast mode (a backfire seals it for CAST_LOCK s)
   if (G.cast) { // cast mode: letters spell a rune's name, they never reach the glyphs
     if (e.key.length === 1 && /[a-z]/i.test(e.key)) castLetter(e.key.toLowerCase());
     return;
@@ -2380,7 +2381,7 @@ function drawRunes(t) {
       cx.globalAlpha = Math.min(1, (1.2 - age) / 0.3); cx.textAlign = 'center';
       cx.fillStyle = PAL.bad; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(F.backfire ? 'BACKFIRE' : 'FIZZLE', R.x, R.y - 6);
       cx.fillStyle = PAL.text; cx.font = '11px ui-monospace, Menlo, monospace';
-      cx.fillText(F.text + (F.backfire ? ` · second fizzle in a row: -${BACKFIRE_DMG} HP` : ' · charge kept · fizzle again and it backfires'), R.x, R.y + 14);
+      cx.fillText(F.text + (F.backfire ? ` · second fizzle in a row: -${BACKFIRE_DMG} HP · spellbook sealed ${CAST_LOCK}s` : ' · charge kept · fizzle again and it backfires'), R.x, R.y + 14);
       cx.globalAlpha = 1; cx.lineWidth = 1;
     } else if (F.kind === 'close' && age < 1.3) {
       cx.globalAlpha = Math.min(1, (1.3 - age) / 0.4); cx.textAlign = 'center';
@@ -2391,12 +2392,13 @@ function drawRunes(t) {
   }
   // earned-rune toast
   if (G.toast && t < G.toast.until) {
-    const P = RUNES[G.toast.key], a = Math.min(1, (G.toast.until - t) / 0.4, (t - G.toast.at) / 0.2);
+    const P = RUNES[G.toast.key], col = G.toast.color || (P && P.color) || PAL.pink, icon = G.toast.icon != null ? `${G.toast.icon} ` : (P ? `${P.icon} ` : '');
+    const a = Math.min(1, (G.toast.until - t) / 0.4, (t - G.toast.at) / 0.2);
     cx.globalAlpha = Math.max(0, Math.min(1, a)); cx.textAlign = 'center';
     cx.fillStyle = 'rgba(10,4,24,.94)'; rr(W/2 - 190, 176, 380, 52, 10); cx.fill();
-    cx.strokeStyle = P.color; cx.shadowColor = P.color; cx.shadowBlur = 12; rr(W/2 - 190, 176, 380, 52, 10); cx.stroke();
-    cx.fillStyle = P.color; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(`${P.icon} ${G.toast.text}`, W/2, 199);
-    cx.shadowBlur = 0; cx.fillStyle = PAL.text; cx.font = '12px ui-monospace, Menlo, monospace'; cx.fillText(`${G.toast.sub} · ${P.desc}`, W/2, 218);
+    cx.strokeStyle = col; cx.shadowColor = col; cx.shadowBlur = 12; rr(W/2 - 190, 176, 380, 52, 10); cx.stroke();
+    cx.fillStyle = col; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(`${icon}${G.toast.text}`, W/2, 199);
+    cx.shadowBlur = 0; cx.fillStyle = PAL.text; cx.font = '12px ui-monospace, Menlo, monospace'; cx.fillText(G.toast.sub + (P ? ` · ${P.desc}` : ''), W/2, 218);
     cx.globalAlpha = 1;
   }
 }
