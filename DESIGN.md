@@ -429,7 +429,7 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > encounter's* theme is prefetched; a new enemy's track crossfades in on a click
   > about a beat later, the old one holds if the new isn't decoded yet, and if the
   > spellbook is open (time stopped) it starts on the grid when it closes.
-  > Per-boss *mechanics* (not just music) is deferred to a later discussion.
+  > Per-boss *mechanics* (not just music) begin with the boss ward decay (§8, R6).
   >
   > All eight are ACE-Step 1.5 synthwave in the splash's house style,
   > character-tuned, loudness-matched to **−14 LUFS** (the sparse Counting Wraith
@@ -562,6 +562,26 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   (**decided, playtest: the ward lasts 5 s** — one bar plus the attack's flight
   was too tight; 5 s spans the whole on-screen countdown, so casting at any
   point of it holds).
+
+  **Decided (mechanics review R6): the ward decays on bosses — anti-turtle.**
+  The swift-kill par (§6) is *defined* as the spells a ward-only fight takes,
+  and a flat 5 s ward covers the whole 4-beat telegraph, so pure ward-and-
+  counter was the *safest* line and still scored near-max — the game paid you
+  not to attack. Against a **boss only**, every charged attack it has already
+  loosed shrinks the ward you can next raise: `wardDur = max(2.5, 5 · 0.85^
+  chargeLoosed)` (`WARD_DECAY 0.85`, `WARD_MIN 2.5`), so charge 1 is a full 5 s
+  but the ward is down to its 2.5 s floor by ~charge 6. A ward still **counters**
+  whatever charge is active when it lands, so a *pre-cast* ward (raised before
+  the red telegraph) still covers even a late boss; a *lazy* ward cast after you
+  see red expires before impact at high charges — you take the hit unless bolts
+  have been killing it. It resets per boss (the counter lives on `G.enemy`);
+  **minions are untouched** — archers and cavalry keep the flat 5 s ward, so
+  they stay a clean accuracy drill. The `ward: dunfen` telegraph now shows the
+  seconds it will grant and reddens toward the floor, so the shrinking window is
+  legible at the moment you decide. **[OPEN]** whether decay alone suffices:
+  pairing it with *boss-heal-when-you-ward* (a boss regains HP when its charge is
+  countered but no bolt landed) is the recommended follow-up that makes attacking
+  mandatory rather than merely safer.
 
   **Decided (playtest): the countdown must reach you while you watch the
   glyphs.** Your eyes are on the hit line, so the warning comes there and to

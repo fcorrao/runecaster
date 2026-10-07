@@ -75,7 +75,7 @@
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
       <li><b>Runes are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no glyph missed) earns a rune of its element (the lane most of its glyphs ride: fire, water, earth, air); in <b>lenient</b> mode a spell with exactly one miss still seals a <b>cracked</b> rune (hollow pip: its bolt hits ×0.5; cracked charges are spent first); defeating an enemy earns a <b>mend</b> rune (bosses 2). Press <b>Space</b> — time stops (music and timers too) and the letters hide, but only for a few seconds (6 s in chapter 1, 3.5 s by chapter 6: the bar around the ring; empty, the cast fizzles). The faster you finish a name, the harder it hits: ×1.5 instantly down to ×0.5 at the buzzer (bolts and mend) — the panel opens into the <b>spellbook</b>; type a name to cast: <i>vorkai</i> fire, <i>gamkai</i> water, <i>brykai</i> earth, <i>wynkai</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar; the bar's pale ghost is what your held bolts would deal, the gold notch the counter, LETHAL when they'd kill), <i>pyrhal</i> mend (+30 HP), <i>dunfen</i> ward (always ready). A wrong letter fizzles (charge kept) — fizzle twice in a row and it <b>backfires</b> for 12 damage <b>and seals the spellbook for 2 s</b> (a successful cast resets it); Space again cancels; the ring closes itself when a glyph reaches the line.</li>
-      <li><b>Charged attacks:</b> every enemy charges a big attack — the ring over its head fills; in the last bar it counts down the beats. Cast <i>dunfen</i> then: the ward holds for 5 seconds and <b>counters</b> the charged attack back at the enemy (12 damage) — it answers the charge only: missed glyphs still let the enemy hit you, ward or not. A counter is a <b>riposte</b>: it opens your empowered window at once. Kill an enemy in fewer spells than par (the spells a ward-only fight would take) and each spell saved scores <b>SWIFT</b> 1,200 × your combo multiplier. The countdown is loud on purpose: a rising doom pulse each beat, the hit line turns red, the enemy's screen edge flashes.</li>
+      <li><b>Charged attacks:</b> every enemy charges a big attack — the ring over its head fills; in the last bar it counts down the beats. Cast <i>dunfen</i> then: the ward holds for 5 seconds and <b>counters</b> the charged attack back at the enemy (12 damage) — it answers the charge only (against a <b>boss</b>, each successive charge gives a <b>shorter</b> ward, so warding alone stops being a plan: attack too): missed glyphs still let the enemy hit you, ward or not. A counter is a <b>riposte</b>: it opens your empowered window at once. Kill an enemy in fewer spells than par (the spells a ward-only fight would take) and each spell saved scores <b>SWIFT</b> 1,200 × your combo multiplier. The countdown is loud on purpose: a rising doom pulse each beat, the hit line turns red, the enemy's screen edge flashes.</li>
       <li><b>Empowered:</b> you charge too — the ring over the caster fills over 20 beats, like the enemy's. Full, it rings a bright chime and opens 5 seconds (cyan aura, cyan screen edge) in which every bolt rune hits ×2. A countered charge opens it at once.</li>
       <li><b>Flawless spells</b> (every glyph PERFECT) trigger the incantation's school power at once, no cast needed: storm Gale (glyphs and the charge pushed back a bar, your ring a bar fuller), stone Bulwark (next counter ×2), shadow Veil (next bolt counts as the enemy's weakness), tide Stillwater (next mend heals ×2), flame Kindle (next bolt ×2). A cracked rune's spell never wakes a boon.</li>
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
@@ -538,7 +538,7 @@ function startEncounter() {
   const school = kind === 'boss' ? ch.bossSchool : schools[Math.floor(Math.random() * schools.length)];
   G.lastSchool = school;
   G.enemy = { kind, name: kind === 'boss' ? (ch.reviveName || ch.boss) : E.label, hp: E.hp(G.ci), max: E.hp(G.ci), dmg: E.dmg, color: (kind === 'boss' && ch.bossColor) || E.color, school, art: kind === 'boss' ? ch.bossId : kind, revived: ch.revived || 0,
-    weak: SCHOOL_WEAK[school], chargeBeats: E.charge, cdmg: E.cdmg, chargeFrom: null, chargeAt: null, warned: 0, spells: 0 }; // charge starts with its first spell (frame)
+    weak: SCHOOL_WEAK[school], chargeBeats: E.charge, cdmg: E.cdmg, chargeFrom: null, chargeAt: null, chargeLoosed: 0, warned: 0, spells: 0 }; // charge starts with its first spell (frame)
   G.bpm = Math.min(200, G.baseBpm + ch.bpm); // cavalry ramps reset with every new encounter
   const newCh = G.ei === 0;
   if (newCh && !G.intro) chapterSnd(); // the intro re-issues the chapter horn at handoff
@@ -894,6 +894,8 @@ function lethalPreview(warn) {
 }
 const BACKFIRE_DMG = 12; // a second fizzle in a row backfires on the caster (a successful cast clears the streak)
 const CAST_LOCK = 2; // a backfire also seals the caster's screen (cast mode) for this many real seconds
+const WARD_DECAY = 0.85, WARD_MIN = 2.5; // a boss's ward holds less with each charge it has already loosed (counters alone stop being a plan); resets per boss
+const wardDur = () => G.enemy.kind === 'boss' ? Math.max(WARD_MIN, WARD_S * Math.pow(WARD_DECAY, G.enemy.chargeLoosed | 0)) : WARD_S; // the ward's hold seconds right now
 const RUNE_DMG = 6, WEAK_X = 2, MEND_HP = 30, WARD_S = 5, COUNTER_DMG = 12, CHARGE_F = 0.6, WARN_BEATS = 4;
 const CRACKED_X = 0.5, SWIFT_PTS = 1200; // a cracked rune's bolt power; a swift kill's points per spell under par (× combo multiplier)
 const comboMult = () => 1 + Math.min(3, G.combo / 10); // 1 → 4 over the first 30 hits of a combo
@@ -1040,8 +1042,8 @@ function castRune(key, power = 1, cracked = false) {
     popup(`+${got} HP · MEND ×${power}` + (still ? ' · STILLWATER ×2' : ''), S.color, WIZ_X + 30, WIZ_AY - 120);
     burst(WIZ_X + 20, WIZ_AY - 60, S.color, 30, 160, 'water');
     castRuneSnd();
-  } else { // ward: WARD_S seconds from the cast — as long as the charge countdown is on screen, so casting at any point of it holds
-    G.guard = { at: now(), until: now() - OPT.inOff / 1000 + WARD_S };
+  } else { // ward: wardDur() seconds from the cast (a boss decays it each successive charge); a pre-cast still covers the countdown
+    G.guard = { at: now(), until: now() - OPT.inOff / 1000 + wardDur() };
     castRuneSnd();
   }
 }
@@ -1376,6 +1378,7 @@ function frame(ts) {
       if (tg >= E.chargeAt) {
         G.strikes.push({ t0: now(), at: now() + CHARGE_F, dmg: E.cdmg, why: 'CHARGED ATTACK', charged: true });
         chargeSnd(); G.foeCharge = now(); G.shake = Math.max(G.shake, 4);
+        E.chargeLoosed = (E.chargeLoosed | 0) + 1; // bosses: every charge it looses shortens the ward you can raise next
         E.chargeFrom = E.chargeAt; E.chargeAt += E.chargeBeats * segAt(tg).beat; E.warned = 0; E.barTick = 0;
       }
     }
@@ -1586,7 +1589,7 @@ function drawEnemy(t) {
       const warded = !!G.guard;
       cx.fillStyle = warded ? RUNES.ward.color : PAL.bad; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
       cx.fillText(warded ? 'WARDED ◎' : 'CHARGED ATTACK', 0, hy - 24);
-      if (!warded) { cx.fillStyle = RUNES.ward.color; cx.globalAlpha = .75 + .25 * Math.sin(t * 8); cx.fillText('ward: dunfen', 0, hy - 38); cx.globalAlpha = 1; }
+      if (!warded) { const wd = wardDur(), wc = wd < WARD_S - 0.05 ? (wd <= WARD_MIN + 0.05 ? PAL.bad : '#ff9a3d') : RUNES.ward.color; cx.fillStyle = wc; cx.globalAlpha = .75 + .25 * Math.sin(t * 8); cx.fillText(G.enemy.kind === 'boss' ? `ward: dunfen ${wd.toFixed(1)}s` : 'ward: dunfen', 0, hy - 38); cx.globalAlpha = 1; }
     }
   }
   if (fl < 0.25) { // bolt impact flash, sized to the body
