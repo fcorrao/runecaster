@@ -376,6 +376,28 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > shared prompt template, phoenix chosen from two seeds), resized to 256²
   > JPEG in `prototype/art/runes/<key>.jpg` (~30 KB each). Until an image
   > loads, the card shows the rune's icon.
+>
+> **Boss models (decided, user):** each chapter boss is its own full-body
+> model rather than one shared sprite (all six previously drew as the same
+> procedural crowned lich). Generated locally with Qwen-Image 2.1 (mlx-serve,
+> transparent RGBA, the splash's neon dark-fantasy house style — one shared
+> style prompt plus a per-character subject), alpha-trimmed and normalized to
+> 512 px tall with the feet flush to the bottom edge (matching the boss's
+> feet-at-y=0 pivot) in `prototype/art/enemies/<id>.png` (~180–340 KB each,
+> 1.6 MB for the six): `stone-warden` (a runed stone golem, amber),
+> `storm-hierophant` (a lightning-crowned thunder-priest, electric cyan),
+> `tide-lich` (a drowned trident necromancer, teal), `counting-wraith` (a
+> floating ledger-ghost trailed by numerals, cold violet), `glyph-tyrant` (a
+> lava-seamed rune warlord, molten orange), `shadow-archon` (a tall hooded
+> void judge, magenta). Each boss carries an accent colour (`bossColor`) that
+> the stage reuses for its HP bar, name plate, charge aura and charged-attack
+> gauge, so a boss is identifiable even in its death throes; the two
+> shadow-school bosses read apart on silhouette alone. `drawBoss` blits the
+> model at the same pivot, so the enter slide, hit flash, charge glow and the
+> revived boss-rush aura all wrap it unchanged; the school's word-roots still
+> orbit on top, and the old lich survives only as the fallback until an image
+> decodes. Provenance: MLX-served Qwen-Image 2.1, generated for this project
+> (no third-party or separately-licensed source).
   >
   > **Prototype answer (art direction): retro-wizard synthwave**, set by the
   > key art (`prototype/art/splash.jpg`, also the splash screen). Palette
@@ -384,7 +406,8 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > earth green, air violet — the art's Q/W/E/R glyph colors). Glyphs are glowing
   > element rings with serif glyphs, the hit line a magenta laser, the stage a
   > vista with a perspective-grid floor, and the enemies an undead host
-  > (skeleton archer, skeletal knight on a spectral horse, crowned lich).
+  > (a skeleton archer and a skeletal knight on a spectral horse, drawn in code;
+  > each of the six bosses has its own bitmap model — see **Boss models** below).
   > The caster is deliberately off-palette for contrast (playtest: purple
   > blended into the magenta night): teal cloth, gold glyph band and belt, a
   > cyan rim light and floor glyph circle, a lit face.
