@@ -322,12 +322,12 @@ function makeRiff(tier, boss) {
 // dens = max glyphs per 4-beat bar (a spell spans as many bars as it needs, glyphs spread
 // evenly across them); tier = incantation templates; bpm = offset from the start tempo.
 const CHAPTERS = [
-  { name: 'Apprentice',  tier: 1, dens: 5, bpm: 0,  encs: ['archer', 'archer', 'boss'],                     boss: 'Stone Warden',     bossSchool: 'stone' },
-  { name: 'Adept',       tier: 2, dens: 5, bpm: 4,  encs: ['archer', 'cavalry', 'boss'],                    boss: 'Storm Hierophant', bossSchool: 'storm' },
-  { name: 'Magus',       tier: 3, dens: 6, bpm: 8,  encs: ['archer', 'cavalry', 'archer', 'boss'],          boss: 'Tide Lich',        bossSchool: 'tide' },
-  { name: 'Numerist',    tier: 4, dens: 6, bpm: 10, encs: ['archer', 'cavalry', 'boss'],                    boss: 'Counting Wraith',  bossSchool: 'shadow' },
-  { name: 'Glyphwright', tier: 5, dens: 7, bpm: 12, encs: ['archer', 'cavalry', 'archer', 'boss'],          boss: 'Glyph Tyrant',     bossSchool: 'flame' },
-  { name: 'Archmage',    tier: 6, dens: 7, bpm: 16, encs: ['archer', 'cavalry', 'boss', 'cavalry', 'boss'], boss: 'Shadow Archon',    bossSchool: 'shadow' },
+  { name: 'Apprentice',  tier: 1, dens: 5, bpm: 0,  encs: ['archer', 'archer', 'boss'],                     boss: 'Stone Warden', bossId: 'stone-warden', bossColor: '#f0a24a',     bossSchool: 'stone' },
+  { name: 'Adept',       tier: 2, dens: 5, bpm: 4,  encs: ['archer', 'cavalry', 'boss'],                    boss: 'Storm Hierophant', bossId: 'storm-hierophant', bossColor: '#3fd0ff', bossSchool: 'storm' },
+  { name: 'Magus',       tier: 3, dens: 6, bpm: 8,  encs: ['archer', 'cavalry', 'archer', 'boss'],          boss: 'Tide Lich', bossId: 'tide-lich', bossColor: '#39d0c9',        bossSchool: 'tide' },
+  { name: 'Numerist',    tier: 4, dens: 6, bpm: 10, encs: ['archer', 'cavalry', 'boss'],                    boss: 'Counting Wraith', bossId: 'counting-wraith', bossColor: '#9fb4ff',  bossSchool: 'shadow' },
+  { name: 'Glyphwright', tier: 5, dens: 7, bpm: 12, encs: ['archer', 'cavalry', 'archer', 'boss'],          boss: 'Glyph Tyrant', bossId: 'glyph-tyrant', bossColor: '#ff6b3d',     bossSchool: 'flame' },
+  { name: 'Archmage',    tier: 6, dens: 7, bpm: 16, encs: ['archer', 'cavalry', 'boss', 'cavalry', 'boss'], boss: 'Shadow Archon', bossId: 'shadow-archon', bossColor: '#c05cff',    bossSchool: 'shadow' },
 ];
 function chapterAt(ci) {
   const last = CHAPTERS.length - 1;
@@ -339,7 +339,7 @@ function chapterAt(ci) {
   const cycle = ci - last - 1, passes = Math.floor(cycle / (last + 1)), b = CHAPTERS[cycle % (last + 1)];
   const revive = 'Re-'.repeat(passes) + 'Revived ' + b.boss; // a dash between each Re: Re-Re-Revived
   return { name: revive, tier: 6, dens: 7, bpm: Math.min(88, 16 + 3 * cycle), encs: ['boss'],
-    boss: b.boss, bossSchool: b.bossSchool, reviveName: revive, revived: passes + 1 };
+    boss: b.boss, bossSchool: b.bossSchool, bossId: b.bossId, bossColor: b.bossColor, reviveName: revive, revived: passes + 1 };
 }
 // archers: steady volleys (learn accuracy) · cavalry: the charge accelerates every spell (speed)
 // · boss: incantations follow rhythm patterns, off-beats included (rhythm) — §5 enemy structures
@@ -537,7 +537,7 @@ function startEncounter() {
   const schools = Object.keys(SCHOOLS).filter(s => s !== G.lastSchool);
   const school = kind === 'boss' ? ch.bossSchool : schools[Math.floor(Math.random() * schools.length)];
   G.lastSchool = school;
-  G.enemy = { kind, name: kind === 'boss' ? (ch.reviveName || ch.boss) : E.label, hp: E.hp(G.ci), max: E.hp(G.ci), dmg: E.dmg, color: E.color, school, revived: ch.revived || 0,
+  G.enemy = { kind, name: kind === 'boss' ? (ch.reviveName || ch.boss) : E.label, hp: E.hp(G.ci), max: E.hp(G.ci), dmg: E.dmg, color: (kind === 'boss' && ch.bossColor) || E.color, school, art: kind === 'boss' ? ch.bossId : kind, revived: ch.revived || 0,
     weak: SCHOOL_WEAK[school], chargeBeats: E.charge, cdmg: E.cdmg, chargeFrom: null, chargeAt: null, warned: 0, spells: 0 }; // charge starts with its first spell (frame)
   G.bpm = Math.min(200, G.baseBpm + ch.bpm); // cavalry ramps reset with every new encounter
   const newCh = G.ei === 0;
@@ -1647,7 +1647,10 @@ function drawRider(t, pull) { // cavalry: a skeletal knight on a spectral horse 
   cx.beginPath(); cx.moveTo(-104, tipY - 1); cx.lineTo(-90, tipY - 5); cx.lineTo(-90, tipY + 4); cx.fill();
   cx.shadowBlur = 0; cx.lineWidth = 1;
 }
-function drawBoss(t, pull) { // boss: a crowned lich, its school's roots orbiting it
+// boss models: per-character sprites (art/enemies/<id>.png, Qwen-Image emblems in the splash's style).
+// Until a sprite is loaded, drawBoss falls back to the procedural lich so the stage is never empty.
+const BOSS_ART = Object.fromEntries(CHAPTERS.map(c => { const im = new Image(); im.src = `art/enemies/${c.bossId}.png`; return [c.bossId, im]; }));
+function drawBoss(t, pull) { // boss: its model + school aura; a school's roots orbit it
   const hover = Math.sin(t * 1.6) * 3, eye = G.enemy.color;
   cx.fillStyle = 'rgba(0,0,0,.5)'; cx.beginPath(); cx.ellipse(0, 3, 50, 8, 0, 0, 7); cx.fill();
   cx.save(); cx.translate(0, hover);
@@ -1664,6 +1667,21 @@ function drawBoss(t, pull) { // boss: a crowned lich, its school's roots orbitin
       cx.beginPath(); cx.arc(0, -84, R + 22 + Math.sin(t * 2 + i) * 5, a, a + 0.8); cx.stroke(); }
     cx.restore();
   }
+  const im = BOSS_ART[G.enemy.art];
+  if (im && im.complete && im.naturalWidth) { const fh = 168, fw = fh * im.naturalWidth / im.naturalHeight; cx.drawImage(im, -fw / 2, -fh, fw, fh); }
+  else lichBody(t, pull, eye);
+  // the school's roots circle it: the words this boss answers to (drawn over the model too)
+  const roots = Object.keys(SCHOOLS[G.enemy.school]);
+  cx.font = 'bold 14px Georgia, "Times New Roman", serif'; cx.textAlign = 'center';
+  roots.concat(roots).forEach((r, i, a) => {
+    const ang = t * 0.9 + i * (Math.PI * 2 / a.length);
+    cx.globalAlpha = .45 + .35 * Math.sin(ang);
+    cx.fillStyle = eye; cx.shadowColor = eye; cx.shadowBlur = 8; cx.fillText(r, Math.cos(ang) * 62, -80 + Math.sin(ang) * 20);
+  });
+  cx.shadowBlur = 0; cx.globalAlpha = 1; cx.lineWidth = 1;
+  cx.restore();
+}
+function lichBody(t, pull, eye) { // the fallback crowned-lich body, drawn only until the model loads
   cx.fillStyle = '#1a0b33'; // robe, tattered hem
   cx.beginPath(); cx.moveTo(-6, -120); cx.bezierCurveTo(-26, -90, -46, -30, -50, 0);
   for (let i = 0; i <= 8; i++) cx.lineTo(-50 + i * 12, i % 2 ? -8 + Math.sin(t * 4 + i) * 2 : 0);
@@ -1679,21 +1697,10 @@ function drawBoss(t, pull) { // boss: a crowned lich, its school's roots orbitin
   cx.beginPath(); cx.moveTo(-14, -148);
   for (let i = 0; i < 5; i++) { cx.lineTo(-14 + i * 7 + 3.5, -162 - (i % 2 ? 4 : 8)); cx.lineTo(-14 + (i + 1) * 7, -150); }
   cx.lineTo(-14, -148); cx.fill(); cx.shadowBlur = 0;
-  // staff rises with the counter
   cx.save(); cx.translate(-30, -70); cx.rotate(-0.25 - pull * 0.5);
   cx.strokeStyle = BONE_SH; cx.lineWidth = 4; cx.beginPath(); cx.moveTo(0, 60); cx.lineTo(0, -80); cx.stroke();
   cx.fillStyle = eye; cx.shadowColor = eye; cx.shadowBlur = 14 + 20 * pull;
   cx.beginPath(); cx.arc(0, -86, 7 + 5 * pull, 0, 7); cx.fill(); cx.shadowBlur = 0;
-  cx.restore();
-  // the school's roots circle it: the words this boss answers to
-  const roots = Object.keys(SCHOOLS[G.enemy.school]);
-  cx.font = 'bold 14px Georgia, "Times New Roman", serif'; cx.textAlign = 'center';
-  roots.concat(roots).forEach((r, i, a) => {
-    const ang = t * 0.9 + i * (Math.PI * 2 / a.length);
-    cx.globalAlpha = .45 + .35 * Math.sin(ang);
-    cx.fillStyle = eye; cx.shadowColor = eye; cx.shadowBlur = 8; cx.fillText(r, Math.cos(ang) * 62, -80 + Math.sin(ang) * 20);
-  });
-  cx.shadowBlur = 0; cx.globalAlpha = 1; cx.lineWidth = 1;
   cx.restore();
 }
 function drawArcher(pull) { // skeleton archer in tattered cloth
