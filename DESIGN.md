@@ -398,18 +398,6 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
 > orbit on top, and the old lich survives only as the fallback until an image
 > decodes. Provenance: MLX-served Qwen-Image 2.1, generated for this project
 > (no third-party or separately-licensed source).
-> **Splash attract animation (decided, user):** the title screen animates in
-> the classic arcade **attract-mode** style, drawn live on the canvas over
-> `splash.jpg` — a slow ~26 s Ken Burns push/drift, a fixed field of drifting
-> embers for depth, and a **CRT pass** (scanlines, a corner vignette, a faint
-> magenta bloom and a small flicker) layered *under* the splash UI so the
-> buttons and text stay legible. Chosen over an MLX-serve video: the server has
-> **no image-to-video model** (only a 70 GB text-to-video that would invent new
-> art and bake in a soundtrack), so animating the real key art in-engine is both
-> faithful to the identity and free. It defaults **on**, auto-**off** under
-> `prefers-reduced-motion`, and is a settings toggle (`Splash`) persisted to
-> `localStorage`. **[OPEN]** bloom / scanline / flicker strength is taste-tuned
-> (kept light so the art stays vivid).
   >
   > **Prototype answer (art direction): retro-wizard synthwave**, set by the
   > key art (`prototype/art/splash.jpg`, also the splash screen). Palette
