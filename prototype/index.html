@@ -67,6 +67,9 @@
     <fieldset><legend>Soundtrack</legend>
       <label><input type="checkbox" id="music" checked> synthwave — a theme per enemy, its own for each boss (locked to the beat)</label>
     </fieldset>
+    <fieldset><legend>Splash</legend>
+      <label><input type="checkbox" id="crt" checked> arcade splash — scanlines, glow and a slow push-in on the title screen</label>
+    </fieldset>
   </div>
   <div id="help">
     <b>How a run goes:</b> chapters of short encounters — archers (steady volleys), cavalry (the charge speeds up each spell), and a boss (its incantations follow a rhythm pattern, off-beat glyphs included). Clear a chapter and the incantations grow: short two-word spells → longer derived words → three-word invocations → numbers → symbols. Spells are phrases in one invented tongue (the gloss under the word says what you're casting), and each encounter keeps to one school of words, so they repeat and become learnable.
@@ -374,18 +377,21 @@ function syncOpts() {
   OPT.startCh = +document.getElementById('chapter').value;
   OPT.guide = document.getElementById('guide').checked;
   OPT.music = document.getElementById('music').checked;
+  OPT.crt = document.getElementById('crt').checked;
   OPT.delay = +document.getElementById('delay').value;
   OPT.inOff = +document.getElementById('inoff').value;
   document.getElementById('delayv').textContent = OPT.delay;
   document.getElementById('inoffv').textContent = OPT.inOff;
   localStorage.setItem('runecaster.delay', OPT.delay);
   localStorage.setItem('runecaster.inoff', OPT.inOff);
+  localStorage.setItem('runecaster.crt', OPT.crt ? '1' : '0');
 }
 document.getElementById('chapter').innerHTML = CHAPTERS.map((c, i) => `<option value="${i}">${i + 1} · ${c.name}</option>`).join('');
 // calibration is per device: restore it before the first sync
 for (const [id, key] of [['delay', 'runecaster.delay'], ['inoff', 'runecaster.inoff']]) {
   const v = localStorage.getItem(key); if (v !== null) document.getElementById(id).value = v;
 }
+{ const v = localStorage.getItem('runecaster.crt'), el = document.getElementById('crt'); el.checked = v !== null ? v === '1' : !matchMedia('(prefers-reduced-motion: reduce)').matches; } // arcade splash on unless the OS asks for calm
 syncOpts();
 document.querySelectorAll('#opts input, #opts select').forEach(i => i.addEventListener('change', () => {
   syncOpts();
@@ -2442,12 +2448,41 @@ function drawErrorBar() {
 
 // splash: the key art fills the canvas (same 4:3 as the game); its title is painted in, so only the call to action is drawn
 const SPLASH = new Image(); SPLASH.src = 'art/splash.jpg';
-function drawIdle() {
-  const p = performance.now() / 1000;
-  if (SPLASH.complete && SPLASH.naturalWidth) cx.drawImage(SPLASH, 0, 0, W, H);
-  else { cx.fillStyle = PAL.void; cx.fillRect(0, 0, W, H); }
+// classic arcade attract loop over the key art: a slow Ken Burns 'breath', drifting embers for depth, and a
+// CRT scanline + vignette + faint flicker pass. Drawn UNDER the splash UI so the buttons and text stay legible.
+const CRT = document.createElement('canvas'); CRT.width = 4; CRT.height = 3; // a scanline tile: one dark row in three
+const CRTX = CRT.getContext('2d'); CRTX.fillStyle = 'rgba(0,0,0,.34)'; CRTX.fillRect(0, 0, 4, 1);
+const VBLOOM = document.createElement('canvas'); VBLOOM.width = 8; VBLOOM.height = 8; // a pre-baked dark frame for the vignette
+{ const vx = VBLOOM.getContext('2d'), g = vx.createRadialGradient(4, 4, 1.7, 4, 4, 4.9); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(4,1,12,0.74)'); vx.fillStyle = g; vx.fillRect(0, 0, 8, 8); }
+function drawAttract(p) {
+  if (!(SPLASH.complete && SPLASH.naturalWidth)) { cx.fillStyle = PAL.void; cx.fillRect(0, 0, W, H); return; }
+  const T = 26, ph = p * Math.PI * 2 / T;               // one slow in/out cycle every 26 s (seamless)
+  const zoom = 1.12 - 0.05 * Math.cos(ph);              // 1.07..1.17: the art always covers the frame as it pans
+  const panX = 24 * Math.sin(ph), panY = 15 * Math.sin(ph * 0.7 + 1);
+  const iw = W * zoom, ih = H * zoom;
+  cx.drawImage(SPLASH, (W - iw) / 2 + panX, (H - ih) / 2 + panY, iw, ih);
+  if (OPT.crt) {
+    cx.globalCompositeOperation = 'lighter';           // a faint magenta bloom that swells on the beat of the loop
+    cx.globalAlpha = 0.028 + 0.032 * Math.sin(ph * 2); cx.fillStyle = PAL.magenta; cx.fillRect(0, 0, W, H);
+    cx.globalCompositeOperation = 'source-over';
+    for (let i = 0; i < 26; i++) {                     // embers: a fixed seed field drifting up at parallax rates
+      const fx = (Math.sin(i * 12.9898) * 43758.5453) % 1, fy = (Math.sin(i * 78.233) * 12345.678) % 1;
+      const spd = 26 + 40 * Math.abs(fx), rise = (H + 40) * (((p * spd / (H + 40)) + fy) % 1);
+      const ey = H + 20 - rise, ex = ((fx < 0 ? fx + 1 : fx) * W + Math.sin(p * 0.5 + i) * 16);
+      cx.globalAlpha = 0.12 + 0.2 * Math.abs(Math.sin(p * 0.7 + i)); cx.fillStyle = i % 3 ? '#ff6ec7' : '#5be1ff';
+      cx.beginPath(); cx.arc(ex, ey, 1 + 1.6 * Math.abs(fy), 0, 7); cx.fill();
+    }
+    cx.globalAlpha = 1;
+    cx.fillStyle = 'rgba(0,0,0,' + (0.02 + 0.025 * (0.5 + 0.5 * Math.sin(p * 8.7))).toFixed(3) + ')'; cx.fillRect(0, 0, W, H); // flicker (tiny amplitude, no strobe)
+    const cp = cx.createPattern(CRT, 'repeat'); cx.globalAlpha = 0.5; cx.fillStyle = cp; cx.fillRect(0, 0, W, H); cx.globalAlpha = 1; // scanlines
+    cx.drawImage(VBLOOM, 0, 0, W, H);                   // vignette (dark frame)
+  }
   const fade = cx.createLinearGradient(0, H - 190, 0, H); fade.addColorStop(0, 'rgba(7,3,15,0)'); fade.addColorStop(1, 'rgba(7,3,15,.9)');
   cx.fillStyle = fade; cx.fillRect(0, H - 190, W, 190);
+}
+function drawIdle() {
+  const p = performance.now() / 1000;
+  drawAttract(p);
   const pulse = 0.5 + 0.5 * Math.sin(p * 3);
   cx.fillStyle = 'rgba(10,4,24,.85)'; rr(W/2 - 150, H - 124, 300, 44, 22); cx.fill();
   cx.strokeStyle = PAL.pink; cx.lineWidth = 2; cx.shadowColor = PAL.magenta; cx.shadowBlur = 10 + 14 * pulse;
