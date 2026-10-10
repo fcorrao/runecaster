@@ -398,6 +398,15 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
 > orbit on top, and the old lich survives only as the fallback until an image
 > decodes. Provenance: MLX-served Qwen-Image 2.1, generated for this project
 > (no third-party or separately-licensed source).
+> **Splash micro-motion (decided, user):** the title screen stays the exact
+> full-bleed key art with **no camera move** — an earlier Ken Burns zoom
+> rescaled the art and was reverted (PR #20). To keep it from feeling static:
+> a soft light band **sweeps back and forth across the RUNECASTER title** (a
+> clipped `lighter` sheen, subtle); **CLICK TO BEGIN breathes** (a slow glow plus
+> a ~2% scale pulse); the **HOW TO PLAY / HIGH SCORES buttons lift and light on
+> hover** (eased, cursor → pointer); and a synthesized **`beginSnd()`** flourish
+> (a fifth swell, a widening arpeggio, glassy sparkles, a ringing top note) plays
+> on Begin. All are splash-only overlays; the in-game art is untouched.
   >
   > **Prototype answer (art direction): retro-wizard synthwave**, set by the
   > key art (`prototype/art/splash.jpg`, also the splash screen). Palette
