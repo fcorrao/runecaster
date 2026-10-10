@@ -499,14 +499,6 @@ function defeatSnd() { sfx('defeat'); }                          // enemy falls 
 function gameOverSnd() { sfx('game_over'); }
 function chapterSnd() { sfx('chapter', .8); }
 function summonSnd() { if (!AC) return; const t = AC.currentTime; beep(t, 98, 0.6, 'sine', 0.10); beep(t + 0.02, 147, 0.6, 'sine', 0.055); beep(t + 0.04, 196, 0.5, 'triangle', 0.04); } // the caster arrives: a low fifth swelling up
-function beginSnd() { // the splash "begin": a rising flourish — fifth swell, widening arpeggio, sparkles, a ringing top note
-  if (!AC) return; const t = AC.currentTime;
-  beep(t, 98, 0.9, 'sine', 0.09); beep(t + 0.02, 147, 0.9, 'sine', 0.05);           // a low fifth swelling up underneath
-  const arp = [392, 523, 587, 784, 988, 1175, 1568];                                // G4 C5 D5 G5 B5 D6 G6, a bright open run
-  arp.forEach((f, i) => beep(t + 0.04 + i * 0.065, f, 0.55, 'triangle', 0.055, i ? (i % 2 ? 0.4 : -0.4) : 0));
-  for (let i = 0; i < 7; i++) beep(t + 0.30 + i * 0.04, 1976 + i * 180, 0.16, 'sine', 0.02, i % 2 ? 0.5 : -0.5); // glassy sparkle
-  beep(t + 0.04 + arp.length * 0.065, 2093, 1.0, 'sine', 0.05);                     // one high note rings out
-}
 function anvilSnd(pan = 0) { if (!AC) return; const t = AC.currentTime; // a metal strike: inharmonic partials over a short body thump
   for (const [f, v] of [[1250, 0.05], [1790, 0.04], [2630, 0.028], [880, 0.045]]) beep(t, f, 0.14, 'square', v, pan);
   for (const [f, v] of [[560, 0.05], [430, 0.035]]) beep(t + 0.006, f, 0.09, 'triangle', v, pan); }
@@ -1141,16 +1133,10 @@ cv.addEventListener('click', e => {
     if (showBoard) { showBoard = false; return; } // any click closes the board
     if (hit(HOWTO_BTN)) { demoStart(); return; }
     if (hit(BOARD_BTN)) { showBoard = true; scoresLoad(); return; }
-    beginSnd(); started = true; newGame(); syncOpts(); introStart();
+    started = true; newGame(); syncOpts(); introStart();
   }
   else if (G.over) { if (G.entry && G.entry.state === 'typing') scoreSave(); newGame(); syncOpts(); startEncounter(); startRun(); musicPlay(); } // retry records the run first, then begins at once
 });
-cv.addEventListener('mousemove', e => { // for the splash hover animation
-  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
-  MOUSE.x = x; MOUSE.y = y; MOUSE.on = true;
-  if (!started) { const h = b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h; cv.style.cursor = (h(HOWTO_BTN) || h(BOARD_BTN) || (!showBoard && h({ x: W/2 - 150, y: H - 124, w: 300, h: 44 }))) ? 'pointer' : 'default'; }
-});
-cv.addEventListener('mouseleave', () => { MOUSE.on = false; });
 
 // ================= high scores & memory: worker/index.js keeps runs in D1 (SQLite) =================
 // this browser's player id: the memory key (last name used, best, runs), kept with the calibration
@@ -1216,8 +1202,6 @@ function drawBoard(x, y, w, mine) {
 // its idea (~5 s each) the rhythm stops (as in cast mode) until you press next (Enter / Space / → / click); next
 // also skips a lesson still playing. Esc leaves.
 const HOWTO_BTN = { x: W/2 - 210, y: H - 70, w: 200, h: 32 }, BOARD_BTN = { x: W/2 + 10, y: H - 70, w: 200, h: 32 }; // on the splash, under CLICK TO BEGIN
-const MOUSE = { x: 0, y: 0, on: false }; // the splash pointer, so the buttons can light up on hover
-const TITLE = { x: W * 0.13, y: H * 0.05, w: W * 0.74, h: H * 0.2 }; // the painted RUNECASTER title: the band its sheen sweeps
 let showBoard = false; // the splash's high-score board is open
 const demoKey = k => window.dispatchEvent(new KeyboardEvent('keydown', { key: k }));
 const demoTg = () => now() - OPT.inOff / 1000;
@@ -2464,24 +2448,16 @@ function drawIdle() {
   else { cx.fillStyle = PAL.void; cx.fillRect(0, 0, W, H); }
   const fade = cx.createLinearGradient(0, H - 190, 0, H); fade.addColorStop(0, 'rgba(7,3,15,0)'); fade.addColorStop(1, 'rgba(7,3,15,.9)');
   cx.fillStyle = fade; cx.fillRect(0, H - 190, W, 190);
-  const T = TITLE, sh = 0.5 - 0.5 * Math.cos(p * Math.PI / 2.2); // a soft light band sweeping back and forth across the title, so the art feels lit
-  cx.save(); cx.beginPath(); cx.rect(T.x, T.y, T.w, T.h); cx.clip(); cx.globalCompositeOperation = 'lighter';
-  const bx = T.x + sh * T.w, sheen = cx.createLinearGradient(bx - 130, T.y, bx + 130, T.y + T.h);
-  sheen.addColorStop(0, 'rgba(150,255,255,0)'); sheen.addColorStop(0.5, `rgba(196,232,255,${0.11 + 0.05 * Math.sin(p * 6)})`); sheen.addColorStop(1, 'rgba(255,160,255,0)');
-  cx.fillStyle = sheen; cx.fillRect(T.x, T.y, T.w, T.h); cx.restore();
-  const pulse = 0.5 + 0.5 * Math.sin(p * 2.6); // the call to action breathes
-  { const sc = 1 + 0.02 * pulse; cx.save(); cx.translate(W/2, H - 102); cx.scale(sc, sc); cx.translate(-W/2, -(H - 102));
-    cx.fillStyle = 'rgba(10,4,24,.85)'; rr(W/2 - 150, H - 124, 300, 44, 22); cx.fill();
-    cx.strokeStyle = PAL.pink; cx.lineWidth = 2; cx.shadowColor = PAL.magenta; cx.shadowBlur = 8 + 20 * pulse;
-    rr(W/2 - 150, H - 124, 300, 44, 22); cx.stroke();
-    cx.fillStyle = '#fff'; cx.textAlign = 'center'; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif';
-    cx.fillText('CLICK TO BEGIN', W/2, H - 95); cx.shadowBlur = 0; cx.lineWidth = 1; cx.restore(); }
-  for (const [b, label] of [[HOWTO_BTN, 'HOW TO PLAY'], [BOARD_BTN, 'HIGH SCORES']]) { // hover lifts and lights the button
-    const over = MOUSE.on && MOUSE.x >= b.x && MOUSE.x <= b.x + b.w && MOUSE.y >= b.y && MOUSE.y <= b.y + b.h;
-    b.k = (b.k || 0) + ((over ? 1 : 0) - (b.k || 0)) * 0.22; const k = b.k, e = 4 * k;
-    cx.fillStyle = 'rgba(10,4,24,.9)'; rr(b.x - e, b.y - e, b.w + 2 * e, b.h + 2 * e, 16 + e); cx.fill();
-    cx.strokeStyle = PAL.gold; cx.lineWidth = 1.5 + 1.5 * k; cx.shadowColor = PAL.magenta; cx.shadowBlur = 16 * k; cx.globalAlpha = 0.8 + 0.2 * k; rr(b.x - e, b.y - e, b.w + 2 * e, b.h + 2 * e, 16 + e); cx.stroke(); cx.shadowBlur = 0; cx.globalAlpha = 1;
-    cx.fillStyle = k > 0.5 ? '#fff' : PAL.gold; cx.font = 'bold 14px ui-monospace, Menlo, monospace'; cx.fillText(label, b.x + b.w / 2, b.y + 21); cx.lineWidth = 1;
+  const pulse = 0.5 + 0.5 * Math.sin(p * 3);
+  cx.fillStyle = 'rgba(10,4,24,.85)'; rr(W/2 - 150, H - 124, 300, 44, 22); cx.fill();
+  cx.strokeStyle = PAL.pink; cx.lineWidth = 2; cx.shadowColor = PAL.magenta; cx.shadowBlur = 10 + 14 * pulse;
+  rr(W/2 - 150, H - 124, 300, 44, 22); cx.stroke();
+  cx.fillStyle = '#fff'; cx.textAlign = 'center'; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif';
+  cx.fillText('CLICK TO BEGIN', W/2, H - 95); cx.shadowBlur = 0; cx.lineWidth = 1;
+  for (const [b, label] of [[HOWTO_BTN, 'HOW TO PLAY'], [BOARD_BTN, 'HIGH SCORES']]) { // the narrated demo · the board
+    cx.fillStyle = 'rgba(10,4,24,.85)'; rr(b.x, b.y, b.w, b.h, 16); cx.fill();
+    cx.strokeStyle = PAL.gold; cx.lineWidth = 1.5; cx.globalAlpha = .8; rr(b.x, b.y, b.w, b.h, 16); cx.stroke(); cx.globalAlpha = 1;
+    cx.fillStyle = PAL.gold; cx.font = 'bold 14px ui-monospace, Menlo, monospace'; cx.fillText(label, b.x + b.w / 2, b.y + 21); cx.lineWidth = 1;
   }
   if (SCORES.ok && SCORES.me.name) { // memory: who played last, and their best
     cx.fillStyle = 'rgba(10,4,24,.75)'; rr(W/2 - 230, H - 158, 460, 26, 13); cx.fill();
