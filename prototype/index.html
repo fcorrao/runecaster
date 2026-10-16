@@ -1256,7 +1256,7 @@ const DEMO = [
 function demoStart() {
   started = true; syncOpts();
   Object.assign(OPT, { startCh: 0, glyphs: 'riffs', pen: 'lenient' }); // the demo shows the game as it starts, whatever the settings
-  newGame(); startRun(); musicPlay();
+  newGame(); startRun(); startEncounter(); musicPlay(); // startEncounter builds G.enemy (the intro cinematic moved enemy creation out of startRun)
   G.enemy.hp = G.enemy.max = 80; // sturdy enough to survive the whole lesson
   G.demo = { i: -1 }; demoNext();
 }
