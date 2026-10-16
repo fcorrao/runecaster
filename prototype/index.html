@@ -74,8 +74,8 @@
       <li><b>Riffs</b> (Glyphs setting, the default): glyphs come in key patterns played in quick 8th/16th bursts with a breath between. Every spell is a <b>sigil</b>: its strokes share one shape, and the shape is the rune a clean spell earns — <b>pillar</b> (one key repeated) earth, <b>wave</b> (two fingers trading) water, <b>sweep</b> (a roll across neighbouring fingers) air, <b>burst</b> (mirrored pairs hand to hand, opening from the index fingers) fire. The thread through its glyphs glows in the rune's color. From chapter 2 a sigil ends in a word, its inscription. Each encounter repeats a handful of strokes, so learn them as one movement. The chapters open the keyboard row by row, starting with the home row. "words" brings back the runic-tongue spells.</li>
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
-      <li><b>Runes are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no glyph missed) earns a rune of its element (the lane most of its glyphs ride: fire, water, earth, air); in <b>lenient</b> mode a spell with exactly one miss still seals a <b>cracked</b> rune (hollow pip: its bolt hits ×0.5; cracked charges are spent first); defeating an enemy earns a <b>mend</b> rune (bosses 2). Press <b>Space</b> — time stops (music and timers too) and the letters hide, but only for a few seconds (6 s in chapter 1, 3.5 s by chapter 6: the bar around the ring; empty, the cast fizzles). The faster you finish a name, the harder it hits: ×1.5 instantly down to ×0.5 at the buzzer (bolts and mend) — the panel opens into the <b>spellbook</b>; type a name to cast: <i>vorkai</i> fire, <i>gamkai</i> water, <i>brykai</i> earth, <i>wynkai</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar; the bar's pale ghost is what your held bolts would deal, the gold notch the counter, LETHAL when they'd kill), <i>pyrhal</i> mend (+30 HP), <i>dunfen</i> ward (always ready). A wrong letter fizzles (charge kept) — fizzle twice in a row and it <b>backfires</b> for 12 damage <b>and seals the spellbook for 2 s</b> (a successful cast resets it); Space again cancels; the ring closes itself when a glyph reaches the line.</li>
-      <li><b>Charged attacks:</b> every enemy charges a big attack — the ring over its head fills; in the last bar it counts down the beats. Cast <i>dunfen</i> then: the ward holds for 5 seconds and <b>counters</b> the charged attack back at the enemy (12 damage) — it answers the charge only (against a <b>boss</b>, each successive charge gives a <b>shorter</b> ward, so warding alone stops being a plan: attack too): missed glyphs still let the enemy hit you, ward or not. A counter is a <b>riposte</b>: it opens your empowered window at once. Kill an enemy in fewer spells than par (the spells a ward-only fight would take) and each spell saved scores <b>SWIFT</b> 1,200 × your combo multiplier. The countdown is loud on purpose: a rising doom pulse each beat, the hit line turns red, the enemy's screen edge flashes.</li>
+      <li><b>Runes are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no glyph missed) earns a rune of its element (the lane most of its glyphs ride: fire, water, earth, air); in <b>lenient</b> mode a spell with exactly one miss still seals a <b>cracked</b> rune (hollow pip: its bolt hits ×0.5; cracked charges are spent first); defeating an enemy earns a <b>mend</b> rune (bosses 2). Press <b>Space</b> — time stops (music and timers too) and the letters hide, but only for a few seconds (6 s in chapter 1, 3.5 s by chapter 6: the bar around the ring; empty, the cast fizzles). The faster you finish a name, the harder it hits: ×1.5 instantly down to ×0.5 at the buzzer (bolts and mend) — the panel opens into the <b>spellbook</b>; type a name to cast: <i>jorvax</i> fire, <i>quvold</i> water, <i>gormuz</i> earth, <i>zephys</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar; the bar's pale ghost is what your held bolts would deal, the gold notch the counter, LETHAL when they'd kill), <i>bifakt</i> mend (+30 HP), <i>warcen</i> ward (always ready). A wrong letter fizzles (charge kept) — fizzle twice in a row and it <b>backfires</b> for 12 damage <b>and seals the spellbook for 2 s</b> (a successful cast resets it); Space again cancels; the ring closes itself when a glyph reaches the line.</li>
+      <li><b>Charged attacks:</b> every enemy charges a big attack — the ring over its head fills; in the last bar it counts down the beats. Cast <i>warcen</i> then: the ward holds for 5 seconds and <b>counters</b> the charged attack back at the enemy (12 damage) — it answers the charge only (against a <b>boss</b>, each successive charge gives a <b>shorter</b> ward, so warding alone stops being a plan: attack too): missed glyphs still let the enemy hit you, ward or not. A counter is a <b>riposte</b>: it opens your empowered window at once. Kill an enemy in fewer spells than par (the spells a ward-only fight would take) and each spell saved scores <b>SWIFT</b> 1,200 × your combo multiplier. The countdown is loud on purpose: a rising doom pulse each beat, the hit line turns red, the enemy's screen edge flashes.</li>
       <li><b>Empowered:</b> you charge too — the ring over the caster fills over 20 beats, like the enemy's. Full, it rings a bright chime and opens 5 seconds (cyan aura, cyan screen edge) in which every bolt rune hits ×2. A countered charge opens it at once.</li>
       <li><b>Flawless spells</b> (every glyph PERFECT) trigger the incantation's school power at once, no cast needed: storm Gale (glyphs and the charge pushed back a bar, your ring a bar fuller), stone Bulwark (next counter ×2), shadow Veil (next bolt counts as the enemy's weakness), tide Stillwater (next mend heals ×2), flame Kindle (next bolt ×2). A cracked rune's spell never wakes a boon.</li>
       <li><b>Lanes:</b> can you read the finger from color+position before you type it? The element + finger labels are under the hit line.</li>
@@ -872,7 +872,7 @@ function hurt(dmg, why) { // the caster takes damage: an enemy strike, or his ow
 // Space opens cast mode; typing an owned rune's name casts it the moment the name is complete
 // (names are prefix-free); a letter that fits no owned name fizzles and closes the mode (the charge
 // is kept); Space again cancels. Cast mode closes itself, free, when a glyph reaches its window.
-// Each name = a noun of the tongue + a verb (kai strike, hal mend, fen ward).
+// Each name is a coined word spanning the alphabet (typing trainer); the gloss under it says what it does.
 // the caster's mirror of the enemy charge: every FOCUS_BEATS beats it fills and opens EMPOWER_S seconds in which bolts hit ×EMPOWER_X
 const FOCUS_BEATS = 20, EMPOWER_S = 5, EMPOWER_X = 2, EMPOWER_C = '#7cf7ff'; // the caster's rim-light cyan
 // the window opens when the ring fills, or at once on a counter (the riposte); it closes into a fresh 20-beat charge
@@ -900,15 +900,15 @@ const RUNE_DMG = 6, WEAK_X = 2, MEND_HP = 30, WARD_S = 5, COUNTER_DMG = 12, CHAR
 const CRACKED_X = 0.5, SWIFT_PTS = 1200; // a cracked rune's bolt power; a swift kill's points per spell under par (× combo multiplier)
 const comboMult = () => 1 + Math.min(3, G.combo / 10); // 1 → 4 over the first 30 hits of a combo
 const RUNES = {
-  fire:  { name: 'vorkai', label: 'FIRE',  el: 'fire',  color: ELC.fire,  icon: '✦', desc: `fire bolt · ${RUNE_DMG} damage`,  earn: 'clean fire spells',  sigil: 'clean burst sigils' },
-  water: { name: 'gamkai', label: 'WATER', el: 'water', color: ELC.water, icon: '≈', desc: `water bolt · ${RUNE_DMG} damage`, earn: 'clean water spells', sigil: 'clean wave sigils' },
-  earth: { name: 'brykai', label: 'EARTH', el: 'earth', color: ELC.earth, icon: '▲', desc: `earth bolt · ${RUNE_DMG} damage`, earn: 'clean earth spells', sigil: 'clean pillar sigils' },
-  air:   { name: 'wynkai', label: 'AIR',   el: 'air',   color: ELC.air,   icon: '≋', desc: `air bolt · ${RUNE_DMG} damage`,   earn: 'clean air spells',   sigil: 'clean sweep sigils' },
-  mend:  { name: 'pyrhal', label: 'MEND',  color: '#ff9ad5', icon: '✚', desc: `heals ${MEND_HP} HP`, earn: 'defeat enemies' },
-  ward:  { name: 'dunfen', label: 'WARD',  color: PAL.gold,  icon: '◎', desc: `holds ${WARD_S} s · counters a charged attack`, earn: 'always ready' },
+  fire:  { name: 'jorvax', gloss: '(flame strike)', label: 'FIRE',  el: 'fire',  color: ELC.fire,  icon: '✦', desc: `fire bolt · ${RUNE_DMG} damage`,  earn: 'clean fire spells',  sigil: 'clean burst sigils' },
+  water: { name: 'quvold', gloss: '(wave strike)', label: 'WATER', el: 'water', color: ELC.water, icon: '≈', desc: `water bolt · ${RUNE_DMG} damage`, earn: 'clean water spells', sigil: 'clean wave sigils' },
+  earth: { name: 'gormuz', gloss: '(stone strike)', label: 'EARTH', el: 'earth', color: ELC.earth, icon: '▲', desc: `earth bolt · ${RUNE_DMG} damage`, earn: 'clean earth spells', sigil: 'clean pillar sigils' },
+  air:   { name: 'zephys', gloss: '(wind strike)', label: 'AIR',   el: 'air',   color: ELC.air,   icon: '≋', desc: `air bolt · ${RUNE_DMG} damage`,   earn: 'clean air spells',   sigil: 'clean sweep sigils' },
+  mend:  { name: 'bifakt', gloss: '(restoration)', label: 'MEND',  color: '#ff9ad5', icon: '✚', desc: `heals ${MEND_HP} HP`, earn: 'defeat enemies' },
+  ward:  { name: 'warcen', gloss: '(bulwark)', label: 'WARD',  color: PAL.gold,  icon: '◎', desc: `holds ${WARD_S} s · counters a charged attack`, earn: 'always ready' },
 };
-// what a rune's name says in the tongue — noun + verb, shown under the name so nobody has to memorize it: vorkai (flame strike)
-for (const R of Object.values(RUNES)) { const n = R.name.slice(0, 3), v = R.name.slice(3); R.gloss = `(${Object.values(SCHOOLS).find(sc => sc[n])[n]} ${VERBS[v]})`; }
+// names are coined to span the whole alphabet (a typing-trainer choice, deliberately not the old shared-verb tongue);
+// each carries an explicit gloss of what it does, shown under the name in the spellbook so nothing has to be memorized.
 const RUNE_MAX = 3;
 const owns = key => key === 'ward' || (G.runes[key] || 0) > 0; // the ward is innate: the charged attack must always be answerable
 // flawless spells (every glyph perfect) wake their school's power directly — the old castable runes
@@ -1230,7 +1230,7 @@ const DEMO = [
   { title: 'Closing counts you back in',
     text: 'The next glyph waits at least 2 beats, so you catch the beat again before you play.', min: 4 },
   { title: 'The enemy charges a big attack',
-    text: 'Its ring fills (a low thrum each bar), then 4 doom beats: the hit line and its edge turn red. Cast dunfen, the ward (always ready): it turns the charge back (only the charge: misses still hit), and the counter opens your EMPOWERED window.',
+    text: 'Its ring fills (a low thrum each bar), then 4 doom beats: the hit line and its edge turn red. Cast warcen, the ward (always ready): it turns the charge back (only the charge: misses still hit), and the counter opens your EMPOWERED window.',
     charge: true, enter: d => { const E = G.enemy, tg = demoTg(), b = segAt(tg).beat; E.chargeAt = tg + 5 * b; E.chargeFrom = E.chargeAt - E.chargeBeats * b; E.warned = 0; E.barTick = 0; },
     act: d => { if (!d.warded && G.enemy.warned && G.enemy.warned <= 3) { d.warded = true; demoCast(d, 'ward', 0.3); } },
     until: d => G.foeCharge > d.at && now() - G.foeCharge > 1.2, min: 5 },
@@ -1248,7 +1248,7 @@ const DEMO = [
     enter: d => { G.demoPerfect = true; for (const s of G.spells) if (!s.done) for (const r of s.glyphs) if (r.status === 'good') r.status = 'perfect'; },
     until: d => demoSealed(d, s => s.glyphs.every(r => r.status === 'perfect')), min: 4 },
   { title: 'Defeat the enemy, earn a mend rune',
-    text: 'Kills earn pyrhal, which heals you (bosses give two). Kill in fewer spells than par and each spell saved scores SWIFT. Then the next enemy steps up.',
+    text: 'Kills earn bifakt, which heals you (bosses give two). Kill in fewer spells than par and each spell saved scores SWIFT. Then the next enemy steps up.',
     enter: d => { G.demoPerfect = false; G.enemy.hp = Math.min(G.enemy.hp, 3); demoCast(d, G.enemy.weak, 0.6); }, until: d => G.foeDead > d.at && now() - G.foeDead > 2, min: 4 },
   { title: "That's how to play",
     text: 'Accuracy first: clean sigils earn runes, runes win fights. Finish to return to the title, then CLICK TO BEGIN.', min: 3, last: true },
@@ -1589,7 +1589,7 @@ function drawEnemy(t) {
       const warded = !!G.guard;
       cx.fillStyle = warded ? RUNES.ward.color : PAL.bad; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
       cx.fillText(warded ? 'WARDED ◎' : 'CHARGED ATTACK', 0, hy - 24);
-      if (!warded) { const wd = wardDur(), wc = wd < WARD_S - 0.05 ? (wd <= WARD_MIN + 0.05 ? PAL.bad : '#ff9a3d') : RUNES.ward.color; cx.fillStyle = wc; cx.globalAlpha = .75 + .25 * Math.sin(t * 8); cx.fillText(G.enemy.kind === 'boss' ? `ward: dunfen ${wd.toFixed(1)}s` : 'ward: dunfen', 0, hy - 38); cx.globalAlpha = 1; }
+      if (!warded) { const wd = wardDur(), wc = wd < WARD_S - 0.05 ? (wd <= WARD_MIN + 0.05 ? PAL.bad : '#ff9a3d') : RUNES.ward.color; cx.fillStyle = wc; cx.globalAlpha = .75 + .25 * Math.sin(t * 8); cx.fillText(G.enemy.kind === 'boss' ? `ward: warcen ${wd.toFixed(1)}s` : 'ward: warcen', 0, hy - 38); cx.globalAlpha = 1; }
     }
   }
   if (fl < 0.25) { // bolt impact flash, sized to the body

@@ -518,10 +518,10 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   Popup "SWIFT ×2 · +4,800". The run reports `swift` (spells saved in all).
   Speed still runs through accuracy: bolts come only from sealed spells.
 
-  Cast: **Space opens cast mode, you type the rune's name** — a noun of the
-  tongue + a verb (`kai` strike, `hal` mend, `fen` ward), prefix-free so it
-  fires on the last letter; its meaning is shown under it in parentheses —
-  `vorkai` *(flame strike)* — so nothing has to be memorized (playtest). A
+  Cast: **Space opens cast mode, you type the rune's name** — a coined word (the
+  names span the whole alphabet — see the note below), prefix-free so it fires
+  on the last letter; its meaning is shown under it in parentheses — `jorvax`
+  *(flame strike)* — so nothing has to be memorized (playtest). A
   letter that fits no owned name **fizzles** (mode
   closes, charge kept); Space again cancels. Max 3 charges each.
   **Decided (playtest): fizzling has a cost.** Two fizzles in a row
@@ -535,9 +535,21 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
 
   | rune | name | effect |
   |---|---|---|
-  | Fire / Water / Earth / Air | `vorkai` `gamkai` `brykai` `wynkai` | bolt, 6 damage; ×2 against the enemy's weakness |
-  | Mend | `pyrhal` | +30 HP |
-  | Ward | `dunfen` | innate (∞): holds 5 s and answers the **charged attack only** — it is **countered** (12 damage back) and the counter opens your empowered window (riposte) |
+  | Fire / Water / Earth / Air | `jorvax` `quvold` `gormuz` `zephys` | bolt, 6 damage; ×2 against the enemy's weakness |
+  | Mend | `bifakt` | +30 HP |
+  | Ward | `warcen` | innate (∞): holds 5 s and answers the **charged attack only** — it is **countered** (12 damage back) and the counter opens your empowered window (riposte) |
+
+  **Decided (typing trainer): rune names span the alphabet.** The cast names were
+  dropped from the shared-verb "tongue" — `jorvax`/`quvold`/`gormuz`/`zephys` all
+  ended in the same `kai` verb, so casting barely moved past a few keys — for six
+  coined words that **together use every letter a–z**: `jorvax` `quvold` `gormuz`
+  `zephys` (the four bolts, 6 letters) plus `bifakt` (mend) and `warcen` (ward),
+  so typing the cast drills the whole keyboard. Each name now carries an explicit
+  gloss instead of a noun+verb decomposition. Bolt names are 6 letters (harder to
+  type fast); mend/ward may run to 8. **[OPEN]** a separate pass to search/permute
+  for prettier alphabet-covering names (a solver found the space collapses to one
+  core — `gormuz jorvax quvold warcen zephys` + a `b·f·k·t·i` filler — under
+  pronounceable + no-consonant-pile + distinct-first-letter + full-26 constraints).
 
   **Decided (mechanics review R1): the ward answers the charge only.** It used
   to block every strike while it held, so a ward erased typing mistakes
@@ -556,7 +568,7 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   cavalry 20, boss 16; dealing 30 / 30 / 40), starting with its first spell. A
   ring over its head and a thin bar under its health fill; the last bar (4
   beats) turns red, counts down, growls on each beat and prompts `ward:
-  dunfen`. The charge lives on the rhythm timeline, so cast mode stops it with
+  warcen`. The charge lives on the rhythm timeline, so cast mode stops it with
   everything else. The ward is innate rather than earned so the charged attack
   is always answerable: the skill is reading the telegraph and casting in time
   (**decided, playtest: the ward lasts 5 s** — one bar plus the attack's flight
@@ -576,7 +588,7 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   see red expires before impact at high charges — you take the hit unless bolts
   have been killing it. It resets per boss (the counter lives on `G.enemy`);
   **minions are untouched** — archers and cavalry keep the flat 5 s ward, so
-  they stay a clean accuracy drill. The `ward: dunfen` telegraph now shows the
+  they stay a clean accuracy drill. The `ward: warcen` telegraph now shows the
   seconds it will grant and reddens toward the floor, so the shrinking window is
   legible at the moment you decide. **[OPEN]** whether decay alone suffices:
   pairing it with *boss-heal-when-you-ward* (a boss regains HP when its charge is
