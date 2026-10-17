@@ -54,6 +54,11 @@
       start tempo <input id="bpm" type="range" min="60" max="140" value="84"><span id="bpmv">84</span> bpm<br>
       start at <select id="chapter"></select>
     </fieldset>
+    <fieldset id="devopts" hidden><legend>Dev (playtest)</legend>
+      jump to <select id="devjump"></select><br>
+      <label><input type="checkbox" id="devinf" checked> infinite health</label><br>
+      <span style="color:#66738d">shown by ?dev in the URL · dev runs are never recorded</span>
+    </fieldset>
     <fieldset><legend>Timing calibration (§8)</legend>
       audio <input id="delay" type="range" min="-300" max="300" value="0"><span id="delayv">0</span> ms
       <span style="color:#66738d">click/music earlier ← → later</span><br>
@@ -369,7 +374,10 @@ const OPT = {};
 function syncOpts() {
   OPT.pen = document.querySelector('input[name=pen]:checked').value;
   OPT.glyphs = document.querySelector('input[name=glyphs]:checked').value;
-  OPT.startCh = +document.getElementById('chapter').value;
+  OPT.startCh = +document.getElementById('chapter').value; OPT.startEi = 0;
+  const jump = DEV && document.getElementById('devjump').value; // dev: any encounter of any chapter, the Boss Rush included
+  if (jump) [OPT.startCh, OPT.startEi] = jump.split('.').map(Number);
+  OPT.dev = DEV; OPT.inf = DEV && document.getElementById('devinf').checked;
   OPT.guide = document.getElementById('guide').checked;
   OPT.music = document.getElementById('music').checked;
   OPT.delay = +document.getElementById('delay').value;
@@ -380,6 +388,15 @@ function syncOpts() {
   localStorage.setItem('runecaster.inoff', OPT.inOff);
 }
 document.getElementById('chapter').innerHTML = CHAPTERS.map((c, i) => `<option value="${i}">${i + 1} · ${c.name}</option>`).join('');
+// dev mode (?dev): jump to any encounter, infinite health, nothing recorded — for playtesting the late game
+const DEV = new URLSearchParams(location.search).has('dev');
+if (DEV) {
+  document.getElementById('devopts').hidden = false;
+  const opts = ['<option value="">— use "start at" —</option>'];
+  for (let ci = 0; ci <= CHAPTERS.length; ci++) { const ch = chapterAt(ci);
+    ch.encs.forEach((k, ei) => { const B = bossAt(ci, ei); opts.push(`<option value="${ci}.${ei}">${ci + 1}.${ei + 1} · ${ch.name} · ${k === 'boss' ? (B.reviveName || B.boss) : k}</option>`); }); }
+  document.getElementById('devjump').innerHTML = opts.join('');
+}
 // calibration is per device: restore it before the first sync
 for (const [id, key] of [['delay', 'runecaster.delay'], ['inoff', 'runecaster.inoff']]) {
   const v = localStorage.getItem(key); if (v !== null) document.getElementById(id).value = v;
@@ -514,7 +531,7 @@ function newGame() {
     deltas: [], // judged presses: {d, raw, g} seconds (d = graded error, raw = before input offset)
     pops: [], fx: [], flash: null, redFlash: 0, over: false, banner: null,
     // run progression: chapter index, encounter index within it, the enemy being fought
-    baseBpm: +document.getElementById('bpm').value, ci: OPT.startCh, ei: 0, enemy: null, cleared: 0, lastSchool: null,
+    baseBpm: +document.getElementById('bpm').value, ci: OPT.startCh, ei: OPT.startEi || 0, enemy: null, cleared: 0, lastSchool: null,
     // effects: in-flight spell bolts, enemy strikes, particles
     bolts: [], strikes: [], parts: [],
     shake: 0, foeFlash: 0, lastT: 0,
@@ -891,7 +908,7 @@ function applyStrike(s) { // an enemy strike reached the caster
   }
 }
 function hurt(dmg, why) { // the caster takes damage: an enemy strike, or his own backfire
-  G.hp -= dmg; G.redFlash = now();
+  if (!OPT.inf) G.hp -= dmg; // dev: infinite health (the hit still shows and sounds) G.redFlash = now();
   G.wizHurt = now();
   G.shake = Math.max(G.shake, 3 + 6 * (dmg/DMG));
   thudSnd();
@@ -1185,7 +1202,7 @@ async function scoresLoad() {
 }
 scoresLoad();
 // game over: type a name (prefilled with the last one used), Enter records the run; clicking to retry records it too
-function scoreEntryStart() { G.entry = { name: SCORES.me.name || '', state: SCORES.ok ? 'typing' : 'off' }; }
+function scoreEntryStart() { G.entry = { name: SCORES.me.name || '', state: OPT.dev ? 'dev' : SCORES.ok ? 'typing' : 'off' }; }
 function scoreKey(e) {
   const E = G.entry; if (E.state !== 'typing') return false;
   if (e.key === 'Enter') { scoreSave(); return true; }
@@ -1287,7 +1304,7 @@ const DEMO = [
 ];
 function demoStart() {
   started = true; syncOpts();
-  Object.assign(OPT, { startCh: 0, glyphs: 'riffs', pen: 'lenient' }); // the demo shows the game as it starts, whatever the settings
+  Object.assign(OPT, { startCh: 0, startEi: 0, glyphs: 'riffs', pen: 'lenient' }); // the demo shows the game as it starts, whatever the settings
   newGame(); startRun(); startEncounter(); musicPlay(); // startEncounter builds G.enemy (the intro cinematic moved enemy creation out of startRun)
   G.enemy.hp = G.enemy.max = 80; // sturdy enough to survive the whole lesson
   G.demo = { i: -1 }; demoNext();
@@ -2089,7 +2106,7 @@ function draw(t) {
   const playing = Math.round(60 / segAt(t).beat), queued = Math.round(G.bpm);
   cx.fillText(playing + ' bpm' + (queued !== playing ? ' → ' + queued : ''), 16, 102);
   const chh = chapterAt(G.ci);
-  cx.fillStyle = PAL.blush; cx.fillText(`ch.${G.ci + 1} ${chh.name} · ${G.ei + 1}/${chh.encs.length}`, 16, 120);
+  cx.fillStyle = PAL.blush; cx.fillText(`ch.${G.ci + 1} ${chh.name} · ${G.ei + 1}/${chh.encs.length}${OPT.dev ? ' · DEV' : ''}${OPT.inf ? ' ∞hp' : ''}`, 16, 120);
 
   // current word, graded
   const sp = activeSpell();
@@ -2586,7 +2603,8 @@ function drawGameOver(t) {
   cx.fillStyle = 'rgba(10,4,24,.9)'; rr(W/2 - 260, ny - 22, 520, 34, 10); cx.fill();
   cx.strokeStyle = E && E.state === 'typing' ? PAL.pink : '#3a1a5e'; cx.lineWidth = 1.5; rr(W/2 - 260, ny - 22, 520, 34, 10); cx.stroke();
   cx.font = 'bold 15px ui-monospace, Menlo, monospace';
-  if (!E || E.state === 'off') { cx.fillStyle = PAL.dim; cx.fillText('not recorded: high scores are offline right now', W/2, ny); }
+  if (E && E.state === 'dev') { cx.fillStyle = PAL.dim; cx.fillText('dev run: not recorded', W/2, ny); }
+  else if (!E || E.state === 'off') { cx.fillStyle = PAL.dim; cx.fillText('not recorded: high scores are offline right now', W/2, ny); }
   else if (E.state === 'typing') {
     cx.fillStyle = PAL.text; cx.fillText(`your name: ${E.name}${(t * 2) % 1 < 0.5 ? '▏' : ' '}`, W/2, ny);
     cx.fillStyle = PAL.dim; cx.font = '11px ui-monospace, Menlo, monospace'; cx.fillText('type it · Enter records the run', W/2, ny + 30);
