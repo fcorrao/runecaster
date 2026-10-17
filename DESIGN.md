@@ -357,8 +357,10 @@ cavalry (learn speed), as encounter types that coexist rather than eras.
 >   counter denies it, so warding matters again on the last fight.
 >
 > Felling him a second time **wins the run**: a VICTORY screen with the usual
-> score entry (the run records as chapter 7). The six chapter bosses have no
-> per-boss mechanic yet — they differ by school, weakness, model and theme.
+> score entry (the run records as chapter 7). **Boss curses (decided, user,
+> not yet built):** each chapter boss casts a timed curse on the glyphs at 2/3
+> and 1/3 HP — Landslide, Lightning, Rising Tide, Tally, Tyranny, Mirror — and
+> Attirus casts all six in order; see `docs/plans/2026-10-17-boss-curses-design.md`.
 > Placeholders until real assets land: Attirus is drawn procedurally
 > (`attirusBody`) and borrows the Shadow Archon theme.
 
