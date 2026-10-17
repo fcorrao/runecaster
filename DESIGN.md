@@ -474,6 +474,12 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > neon dark fantasy" — seed 41 of six (steadiest kick, 5 ms jitter), looped
   > bars 2→22 of the song (the seam picked by matching the spectra around both
   > ends), −14 LUFS, 96 kbps AAC → 99.994 / 0.0507 / 20, 0.59 MB.
+  > **His entrance stinger** (`sfx/attirus_stinger.wav`, played once as his
+  > nameplate drops, in place of the synthesized boss toll): the organ-and-choir
+  > downbeat of the same take's climax (bar 16, so always in his key) with an
+  > echo tail, under a boom + cymbal from Stable Audio 3 Small SFX (seed 7 of
+  > four: cleanest attack, no second bump), 4.2 s, mono 32 kHz, −16 LUFS like the
+  > other samples.
 
   > **Prototype answer (sound effects):** ACE-Step can't make one-shots (every
   > request returns 60 s of music, whatever the duration asked), so foley comes

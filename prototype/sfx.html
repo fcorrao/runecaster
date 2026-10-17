@@ -26,6 +26,7 @@ const SOUNDS = {
   ward_block: 'the ward turns a charged attack back (counter)', defeat: 'an enemy falls', rune_earn: 'you earn a rune',
   speed_up: 'cast mode closes, time resumes',
   fizzle: 'a spell or a rune cast fizzles', rune_cast: 'a mend/ward rune is cast, or a flawless spell wakes its power', chapter: 'a new chapter begins', game_over: 'struck down',
+  attirus_stinger: 'Attirus, Necromancer Supreme, makes his entrance',
 };
 let ac = null; const bufs = {};
 document.getElementById('grid').innerHTML = Object.entries(SOUNDS).map(([k, v]) => `<button data-k="${k}"><b>${k}</b><span>${v}</span></button>`).join('');

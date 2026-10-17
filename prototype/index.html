@@ -491,7 +491,7 @@ function beep(t, f, dur, type, vol, pan) {
 // Timing-critical sounds (glyph hits, wrong key, name ticks, the metronome) stay synthesized: sample-accurate and
 // instant. Every sampled event keeps its synthesized version for file:// (where fetch of samples fails).
 const SFX_FILES = ['cast_fire', 'cast_water', 'cast_earth', 'cast_air', 'impact', 'arrow_loose', 'hit_player', 'ward_block',
-  'defeat', 'rune_earn', 'speed_up', 'fizzle', 'rune_cast', 'game_over', 'chapter'];
+  'defeat', 'rune_earn', 'speed_up', 'fizzle', 'rune_cast', 'game_over', 'chapter', 'attirus_stinger'];
 const SFX = {}; let sfxGain = null, sfxLoaded = false;
 const SFX_V = 3; // bump when any file in audio/sfx changes: the URL changes, so browsers can't serve a cached old take
 function loadSfx() {
@@ -621,13 +621,14 @@ function startEncounter() {
   };
   if (newCh && G.intro) G.banner = null; // the start cinematic shows the chapter banner at handoff, not now
   // a boss gets its own nameplate over its head as it lands (bossArrive); it carries the encounter banner's news
-  G.bossCard = kind === 'boss' ? { at: Math.max(now(), G.foeEnter) + 0.35, fired: false, name: G.enemy.name.toUpperCase(),
+  G.bossCard = kind === 'boss' ? { at: Math.max(now(), G.foeEnter) + 0.35, fired: false, entrance: true, name: G.enemy.name.toUpperCase(),
     sub: B.final ? `drains life · ward to deny · weak to ${SCHOOL_WEAK[school]}` : `school of ${school} · weak to ${SCHOOL_WEAK[school]}` } : null;
   if (kind === 'boss' && !newCh) G.banner = null;
   G.curse = null; // a fallen boss's curse dies with it
 }
 function bossArrive() { // the nameplate drops in: toll, a ring of sparks in the boss's color, a jolt
-  G.bossCard.fired = true; bossSnd();
+  G.bossCard.fired = true;
+  if (!(G.bossCard.entrance && G.enemy.final && sfx('attirus_stinger'))) bossSnd(); // Attirus enters on his own stinger: his theme's organ-and-choir climax over a boom
   burst(ARC_X, ARC_AY - 80, G.enemy.color, 44, 300); G.shake = Math.max(G.shake, 6);
 }
 // Attirus's twists: the first time he falls he collapses and rises again at 40% HP, quicker; and his charged attack
