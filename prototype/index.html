@@ -54,6 +54,12 @@
       start tempo <input id="bpm" type="range" min="60" max="140" value="84"><span id="bpmv">84</span> bpm<br>
       start at <select id="chapter"></select>
     </fieldset>
+    <fieldset id="devopts" hidden><legend>Dev (playtest)</legend>
+      jump to <select id="devjump"></select><br>
+      <label><input type="checkbox" id="devinf" checked> infinite health</label><br>
+      curse now <select id="devcurse"></select> <span style="color:#66738d">(during a boss fight)</span><br>
+      <span style="color:#66738d">shown by ?dev in the URL · dev runs are never recorded</span>
+    </fieldset>
     <fieldset><legend>Timing calibration (§8)</legend>
       audio <input id="delay" type="range" min="-300" max="300" value="0"><span id="delayv">0</span> ms
       <span style="color:#66738d">click/music earlier ← → later</span><br>
@@ -75,6 +81,7 @@
       <li><b>Penalty:</b> switch to strict mid-run — one wrong key kills the whole incantation. Is this motivating or rage-quit for a learner?</li>
       <li><b>Pacing:</b> are encounters short enough early on, and does each chapter feel like a step up? "start at" jumps straight to a later chapter.</li>
       <li><b>Runes are how you fight:</b> typing no longer attacks. Every <b>clean</b> spell (no glyph missed) earns a rune of its element (the lane most of its glyphs ride: fire, water, earth, air); in <b>lenient</b> mode a spell with exactly one miss still seals a <b>cracked</b> rune (hollow pip: its bolt hits ×0.5; cracked charges are spent first); defeating an enemy earns a <b>mend</b> rune (bosses 2). Press <b>Space</b> — time stops (music and timers too) and the letters hide, but only for a few seconds (6 s in chapter 1, 3.5 s by chapter 6: the bar around the ring; empty, the cast fizzles). The faster you finish a name, the harder it hits: ×1.5 instantly down to ×0.5 at the buzzer (bolts and mend) — the panel opens into the <b>spellbook</b>; type a name to cast: <i>jorvax</i> fire, <i>quvold</i> water, <i>gormuz</i> earth, <i>zephys</i> air (bolts; ×2 against the enemy's weakness, shown on its health bar; the bar's pale ghost is what your held bolts would deal, the gold notch the counter, LETHAL when they'd kill), <i>bifakt</i> mend (+30 HP), <i>warcen</i> ward (always ready). A wrong letter fizzles (charge kept) — fizzle twice in a row and it <b>backfires</b> for 12 damage <b>and seals the spellbook for 2 s</b> (a successful cast resets it); Space again cancels; the ring closes itself when a glyph reaches the line.</li>
+      <li><b>Boss curses:</b> at 2/3 and 1/3 of its HP a boss curses its next two spells (three when Revived), named on its nameplate — <b>Landslide</b> (Stone Warden: glyphs hang, then drop hard), <b>Lightning</b> (Storm Hierophant: glyphs show only in the beat's flash), <b>Rising Tide</b> (Tide Lich: water hides the last third of the lanes), <b>Tally</b> (Counting Wraith: 3×k = press k three times), <b>Tyranny</b> (Glyph Tyrant: glyphs turn into Shift symbols), <b>Mirror</b> (Shadow Archon: glyphs fall in the other hand's lanes — press the letter shown). Attirus, at the end of the Boss Rush, casts all six in turn, rises once from death, and drinks what his charged attack takes.</li>
       <li><b>Charged attacks:</b> every enemy charges a big attack — the ring over its head fills; in the last bar it counts down the beats. Cast <i>warcen</i> then: the ward holds for 5 seconds and <b>counters</b> the charged attack back at the enemy (12 damage) — it answers the charge only (against a <b>boss</b>, each successive charge gives a <b>shorter</b> ward, so warding alone stops being a plan: attack too): missed glyphs still let the enemy hit you, ward or not. A counter is a <b>riposte</b>: it opens your empowered window at once. Kill an enemy in fewer spells than par (the spells a ward-only fight would take) and each spell saved scores <b>SWIFT</b> 1,200 × your combo multiplier. The countdown is loud on purpose: a rising doom pulse each beat, the hit line turns red, the enemy's screen edge flashes.</li>
       <li><b>Empowered:</b> you charge too — the ring over the caster fills over 20 beats, like the enemy's. Full, it rings a bright chime and opens 5 seconds (cyan aura, cyan screen edge) in which every bolt rune hits ×2. A countered charge opens it at once.</li>
       <li><b>Flawless spells</b> (every glyph PERFECT) trigger the incantation's school power at once, no cast needed: storm Gale (glyphs and the charge pushed back a bar, your ring a bar fuller), stone Bulwark (next counter ×2), shadow Veil (next bolt counts as the enemy's weakness), tide Stillwater (next mend heals ×2), flame Kindle (next bolt ×2). A cracked rune's spell never wakes a boon.</li>
@@ -183,9 +190,10 @@ const SCHOOLS = {
   stone:  { dun:'stone', bry:'thorn' },
   tide:   { gam:'tide', cyl:'frost' },
   shadow: { mox:'shadow', jex:'hex' },
+  grave:  { mor:'death', oss:'bone' }, // Attirus alone
 };
 // §4 elemental weakness: each school takes double damage from one element's bolts
-const SCHOOL_WEAK = { flame: 'water', storm: 'earth', stone: 'air', tide: 'fire', shadow: 'fire' };
+const SCHOOL_WEAK = { flame: 'water', storm: 'earth', stone: 'air', tide: 'fire', shadow: 'fire', grave: 'earth' }; // the grave: earth buries what he raised
 const plural = g => g + (/[sx]$/.test(g) ? 'es' : 's');
 const SUF2 = { a: g => 'great ' + g, en: plural, is: g => 'of ' + g };                                    // tier 2+
 const SUF3 = { eth: g => 'ancient ' + g, ara: g => 'bright ' + g, ondo: g => 'endless ' + g, ium: g => 'circle of ' + g }; // tier 3+
@@ -321,25 +329,66 @@ function makeRiff(tier, boss) {
 // ================= progression (§7): chapters of short encounters =================
 // dens = max glyphs per 4-beat bar (a spell spans as many bars as it needs, glyphs spread
 // evenly across them); tier = incantation templates; bpm = offset from the start tempo.
+const MINIONS_BOSS = ['archer', 'cavalry', 'boss']; // every chapter: minion 1, minion 2, its boss (a third minion would be a new kind)
 const CHAPTERS = [
-  { name: 'Apprentice',  tier: 1, dens: 5, bpm: 0,  encs: ['archer', 'archer', 'boss'],                     boss: 'Stone Warden', bossId: 'stone-warden', bossColor: '#f0a24a',     bossSchool: 'stone' },
-  { name: 'Adept',       tier: 2, dens: 5, bpm: 4,  encs: ['archer', 'cavalry', 'boss'],                    boss: 'Storm Hierophant', bossId: 'storm-hierophant', bossColor: '#3fd0ff', bossSchool: 'storm' },
-  { name: 'Magus',       tier: 3, dens: 6, bpm: 8,  encs: ['archer', 'cavalry', 'archer', 'boss'],          boss: 'Tide Lich', bossId: 'tide-lich', bossColor: '#39d0c9',        bossSchool: 'tide' },
-  { name: 'Numerist',    tier: 4, dens: 6, bpm: 10, encs: ['archer', 'cavalry', 'boss'],                    boss: 'Counting Wraith', bossId: 'counting-wraith', bossColor: '#9fb4ff',  bossSchool: 'shadow' },
-  { name: 'Glyphwright', tier: 5, dens: 7, bpm: 12, encs: ['archer', 'cavalry', 'archer', 'boss'],          boss: 'Glyph Tyrant', bossId: 'glyph-tyrant', bossColor: '#ff6b3d',     bossSchool: 'flame' },
-  { name: 'Archmage',    tier: 6, dens: 7, bpm: 16, encs: ['archer', 'cavalry', 'boss', 'cavalry', 'boss'], boss: 'Shadow Archon', bossId: 'shadow-archon', bossColor: '#c05cff',    bossSchool: 'shadow' },
+  { name: 'Apprentice',  tier: 1, dens: 5, bpm: 0,  encs: MINIONS_BOSS, boss: 'Stone Warden', bossId: 'stone-warden', bossColor: '#f0a24a',     bossSchool: 'stone', curse: 'landslide' },
+  { name: 'Adept',       tier: 2, dens: 5, bpm: 4,  encs: MINIONS_BOSS, boss: 'Storm Hierophant', bossId: 'storm-hierophant', bossColor: '#3fd0ff', bossSchool: 'storm', curse: 'lightning' },
+  { name: 'Magus',       tier: 3, dens: 6, bpm: 8,  encs: MINIONS_BOSS, boss: 'Tide Lich', bossId: 'tide-lich', bossColor: '#39d0c9',        bossSchool: 'tide', curse: 'tide' },
+  { name: 'Numerist',    tier: 4, dens: 6, bpm: 10, encs: MINIONS_BOSS, boss: 'Counting Wraith', bossId: 'counting-wraith', bossColor: '#9fb4ff',  bossSchool: 'shadow', curse: 'tally' },
+  { name: 'Glyphwright', tier: 5, dens: 7, bpm: 12, encs: MINIONS_BOSS, boss: 'Glyph Tyrant', bossId: 'glyph-tyrant', bossColor: '#ff6b3d',     bossSchool: 'flame', curse: 'tyranny' },
+  { name: 'Archmage',    tier: 6, dens: 7, bpm: 16, encs: MINIONS_BOSS, boss: 'Shadow Archon', bossId: 'shadow-archon', bossColor: '#c05cff',    bossSchool: 'shadow', curse: 'mirror' },
 ];
-function chapterAt(ci) {
-  const last = CHAPTERS.length - 1;
-  if (ci <= last) return CHAPTERS[ci];
-  // The final boss has fallen: an endless boss rush. Cycle the six bosses forever; a boss earns another
-  // "Re-" only when it comes back around after a full pass (Revived → Re-Revived → ReRe-Revived, …), faster
-  // each boss. ch.boss stays the boss's real name so its music theme is still chosen; reviveName is the display
-  // name, and revived (1-based pass) draws the aura — a second ring once a boss is re-revived.
-  const cycle = ci - last - 1, passes = Math.floor(cycle / (last + 1)), b = CHAPTERS[cycle % (last + 1)];
-  const revive = 'Re-'.repeat(passes) + 'Revived ' + b.boss; // a dash between each Re: Re-Re-Revived
-  return { name: revive, tier: 6, dens: 7, bpm: Math.min(88, 16 + 3 * cycle), encs: ['boss'],
-    boss: b.boss, bossSchool: b.bossSchool, bossId: b.bossId, bossColor: b.bossColor, reviveName: revive, revived: passes + 1 };
+// chapter 7, the Boss Rush: the six bosses again, Revived, back to back — raised by Attirus, Necromancer Supreme, who
+// waits at its end. Felling him wins the run. A rush boss's .boss stays its real name so its music theme is still
+// chosen; reviveName is the display name, and revived draws the aura.
+const ATTIRUS = { boss: 'Attirus, Necromancer Supreme', bossId: 'attirus', bossColor: '#9dff57', bossSchool: 'grave', final: true };
+const RUSH_CH = { name: 'Boss Rush', tier: 6, dens: 7, bpm: 16, encs: Array(CHAPTERS.length + 1).fill('boss'),
+  rush: CHAPTERS.map(c => ({ boss: c.boss, bossId: c.bossId, bossColor: c.bossColor, bossSchool: c.bossSchool, curse: c.curse, reviveName: 'Revived ' + c.boss, revived: 1 })).concat(ATTIRUS) };
+const chapterAt = ci => ci < CHAPTERS.length ? CHAPTERS[ci] : RUSH_CH;
+const bossAt = (ci, ei) => { const ch = chapterAt(ci); return ch.rush ? ch.rush[ei] : ch; }; // who the boss of encounter ei is
+// ---- boss curses (docs/plans/2026-10-17-boss-curses-design.md): each boss bends the glyphs for its next few spells
+// when its HP falls past a mark. Draw curses only change how a glyph looks (noteY / the glyph pass); generate curses
+// rewrite the spell as makeSpell builds it. A curse rides on the spells it tags, so it starts and ends on spell lines.
+const CURSES = {
+  landslide: { name: 'LANDSLIDE',   boss: 'Stone Warden',     hint: 'boulders fall · slow, then a hard drop' },
+  lightning: { name: 'LIGHTNING',   boss: 'Storm Hierophant', hint: 'dark glyphs · read them in the flashes' },
+  tide:      { name: 'RISING TIDE', boss: 'Tide Lich',        hint: 'the water hides the last stretch' },
+  tally:     { name: 'TALLY',       boss: 'Counting Wraith',  hint: '3×k: press it that many times' },
+  tyranny:   { name: 'TYRANNY',     boss: 'Glyph Tyrant',     hint: 'symbols: shift with the other hand' },
+  mirror:    { name: 'MIRROR',      boss: 'Shadow Archon',    hint: 'lanes lie · press the letter shown' },
+};
+const CURSE_ORDER = Object.keys(CURSES); // Attirus wields them all, in this order
+const MIRROR = { LP: 'RP', LR: 'RR', LM: 'RM', LI: 'RI', RI: 'LI', RM: 'LM', RR: 'LR', RP: 'LP' };
+const TYRANNY = {}; // lane → the Shift symbols its finger plays (4 → $ …)
+for (const c of SHIFT) { const l = KEY2LANE[c]; if (l) (TYRANNY[l] = TYRANNY[l] || []).push(c); }
+function curseMarks(E) { return E.final ? [3/4, 1/2, 1/4] : [2/3, 1/3]; } // HP fractions, per life for Attirus
+function checkCurse() { // after a hit: cast when HP falls past the next mark (one cast even if a big hit crosses two)
+  const E = G.enemy; if (E.kind !== 'boss' || E.hp <= 0) return;
+  const marks = curseMarks(E); let crossed = false;
+  while (E.markIdx < marks.length && E.hp <= marks[E.markIdx] * E.max) { E.markIdx++; crossed = true; }
+  if (crossed) castCurse(E.final ? CURSE_ORDER[E.cursesCast % CURSE_ORDER.length] : E.curse);
+}
+function castCurse(id) {
+  const E = G.enemy, C = CURSES[id]; if (!C) return;
+  E.cursesCast++;
+  G.curse = { id, left: E.final ? 2 : E.revived ? 3 : 2 };
+  G.bossCard = { at: now(), fired: false, name: `☠ ${C.name}`, sub: E.final ? `the ${C.boss}'s curse · ${C.hint}` : C.hint };
+}
+function curseOf() { const s = G.spells.find(x => x.curse && !x.done); return s ? s.curse : G.curse && G.curse.id; } // the curse on screen now
+function cursedLeft() { const id = curseOf(); return (G.curse && G.curse.id === id ? G.curse.left : 0) + G.spells.filter(s => s.curse === id && !s.done).length; }
+function curseGlyphs(spell, id) { // generate curses rewrite the glyphs; every glyph remembers its curse for drawing
+  const gs = spell.glyphs;
+  if (id === 'tyranny') for (const r of gs) { const sy = TYRANNY[r.lane]; if (sy && Math.random() < 0.45) r.ch = rnd(sy); }
+  if (id === 'tally') { // a run of glyphs close in time becomes one key pressed n times: the head shows n×, the rest are pips
+    for (let i = 0; i < gs.length - 1; i++) {
+      if (Math.random() > 0.4) continue;
+      let n = 1; while (n < 4 && i + n < gs.length && !gs[i + n].wordStart && gs[i + n].time - gs[i + n - 1].time < 0.45) n++;
+      if (n < 2) continue;
+      for (let j = 1; j < n; j++) Object.assign(gs[i + j], { ch: gs[i].ch, lane: gs[i].lane, tallyOf: gs[i] });
+      gs[i].tally = n; i += n - 1;
+    }
+  }
+  for (const r of gs) { r.curse = id; if (id === 'mirror') r.shown = MIRROR[r.lane]; }
 }
 // archers: steady volleys (learn accuracy) · cavalry: the charge accelerates every spell (speed)
 // · boss: incantations follow rhythm patterns, off-beats included (rhythm) — §5 enemy structures
@@ -371,7 +420,10 @@ const OPT = {};
 function syncOpts() {
   OPT.pen = document.querySelector('input[name=pen]:checked').value;
   OPT.glyphs = document.querySelector('input[name=glyphs]:checked').value;
-  OPT.startCh = +document.getElementById('chapter').value;
+  OPT.startCh = +document.getElementById('chapter').value; OPT.startEi = 0;
+  const jump = DEV && document.getElementById('devjump').value; // dev: any encounter of any chapter, the Boss Rush included
+  if (jump) [OPT.startCh, OPT.startEi] = jump.split('.').map(Number);
+  OPT.dev = DEV; OPT.inf = DEV && document.getElementById('devinf').checked;
   OPT.guide = document.getElementById('guide').checked;
   OPT.music = document.getElementById('music').checked;
   OPT.delay = +document.getElementById('delay').value;
@@ -382,6 +434,21 @@ function syncOpts() {
   localStorage.setItem('runecaster.inoff', OPT.inOff);
 }
 document.getElementById('chapter').innerHTML = CHAPTERS.map((c, i) => `<option value="${i}">${i + 1} · ${c.name}</option>`).join('');
+// dev mode (?dev): jump to any encounter, infinite health, nothing recorded — for playtesting the late game
+const DEV = new URLSearchParams(location.search).has('dev');
+if (DEV) {
+  document.getElementById('devopts').hidden = false;
+  const opts = ['<option value="">— use "start at" —</option>'];
+  for (let ci = 0; ci <= CHAPTERS.length; ci++) { const ch = chapterAt(ci);
+    ch.encs.forEach((k, ei) => { const B = bossAt(ci, ei); opts.push(`<option value="${ci}.${ei}">${ci + 1}.${ei + 1} · ${ch.name} · ${k === 'boss' ? (B.reviveName || B.boss) : k}</option>`); }); }
+  document.getElementById('devjump').innerHTML = opts.join('');
+  const dc = document.getElementById('devcurse');
+  dc.innerHTML = '<option value="">—</option>' + CURSE_ORDER.map(id => `<option value="${id}">${CURSES[id].name} (${CURSES[id].boss})</option>`).join('');
+  dc.addEventListener('change', () => { // fire it on the current boss at once, then hand the keyboard back to the game
+    if (dc.value && started && G && !G.over && G.enemy && G.enemy.kind === 'boss') castCurse(dc.value);
+    dc.value = ''; dc.blur();
+  });
+}
 // calibration is per device: restore it before the first sync
 for (const [id, key] of [['delay', 'runecaster.delay'], ['inoff', 'runecaster.inoff']]) {
   const v = localStorage.getItem(key); if (v !== null) document.getElementById(id).value = v;
@@ -424,7 +491,7 @@ function beep(t, f, dur, type, vol, pan) {
 // Timing-critical sounds (glyph hits, wrong key, name ticks, the metronome) stay synthesized: sample-accurate and
 // instant. Every sampled event keeps its synthesized version for file:// (where fetch of samples fails).
 const SFX_FILES = ['cast_fire', 'cast_water', 'cast_earth', 'cast_air', 'impact', 'arrow_loose', 'hit_player', 'ward_block',
-  'defeat', 'rune_earn', 'speed_up', 'fizzle', 'rune_cast', 'game_over', 'chapter'];
+  'defeat', 'rune_earn', 'speed_up', 'fizzle', 'rune_cast', 'game_over', 'chapter', 'attirus_stinger'];
 const SFX = {}; let sfxGain = null, sfxLoaded = false;
 const SFX_V = 3; // bump when any file in audio/sfx changes: the URL changes, so browsers can't serve a cached old take
 function loadSfx() {
@@ -516,7 +583,7 @@ function newGame() {
     deltas: [], // judged presses: {d, raw, g} seconds (d = graded error, raw = before input offset)
     pops: [], fx: [], flash: null, redFlash: 0, over: false, banner: null,
     // run progression: chapter index, encounter index within it, the enemy being fought
-    baseBpm: +document.getElementById('bpm').value, ci: OPT.startCh, ei: 0, enemy: null, cleared: 0, lastSchool: null,
+    baseBpm: +document.getElementById('bpm').value, ci: OPT.startCh, ei: OPT.startEi || 0, enemy: null, cleared: 0, lastSchool: null,
     // effects: in-flight spell bolts, enemy strikes, particles
     bolts: [], strikes: [], parts: [],
     shake: 0, foeFlash: 0, lastT: 0,
@@ -535,14 +602,15 @@ function newGame() {
   };
 }
 function startEncounter() {
-  const ch = chapterAt(G.ci), kind = ch.encs[G.ei], E = ENEMIES[kind];
+  const ch = chapterAt(G.ci), kind = ch.encs[G.ei], E = ENEMIES[kind], B = bossAt(G.ci, G.ei);
   // each encounter speaks one school of words; bosses have their own, others rotate
-  const schools = Object.keys(SCHOOLS).filter(s => s !== G.lastSchool);
-  const school = kind === 'boss' ? ch.bossSchool : schools[Math.floor(Math.random() * schools.length)];
+  const schools = Object.keys(SCHOOLS).filter(s => s !== G.lastSchool && s !== 'grave');
+  const school = kind === 'boss' ? B.bossSchool : schools[Math.floor(Math.random() * schools.length)];
   G.lastSchool = school;
-  G.enemy = { kind, name: kind === 'boss' ? (ch.reviveName || ch.boss) : E.label, hp: E.hp(G.ci), max: E.hp(G.ci), dmg: E.dmg, color: (kind === 'boss' && ch.bossColor) || E.color, school, art: kind === 'boss' ? ch.bossId : kind, revived: ch.revived || 0,
+  const hp = E.hp(G.ci + (ch.rush ? G.ei : 0)) * (B.final ? 1.5 : 1); // rush bosses toughen one by one; Attirus half again
+  G.enemy = { kind, name: kind === 'boss' ? (B.reviveName || B.boss) : E.label, hp, max: hp, dmg: E.dmg, color: (kind === 'boss' && B.bossColor) || E.color, school, art: kind === 'boss' ? B.bossId : kind, revived: B.revived || 0, final: !!B.final, risen: false, curse: B.curse, markIdx: 0, cursesCast: 0,
     weak: SCHOOL_WEAK[school], chargeBeats: E.charge, cdmg: E.cdmg, chargeFrom: null, chargeAt: null, chargeLoosed: 0, warned: 0, spells: 0 }; // charge starts with its first spell (frame)
-  G.bpm = Math.min(200, G.baseBpm + ch.bpm); // cavalry ramps reset with every new encounter
+  G.bpm = Math.min(200, G.baseBpm + ch.bpm + (ch.rush ? 3 * G.ei : 0)); // cavalry ramps reset with every new encounter; the rush quickens boss by boss
   const newCh = G.ei === 0;
   if (newCh && !G.intro) chapterSnd(); // the intro re-issues the chapter horn at handoff
   G.banner = {
@@ -553,13 +621,29 @@ function startEncounter() {
   };
   if (newCh && G.intro) G.banner = null; // the start cinematic shows the chapter banner at handoff, not now
   // a boss gets its own nameplate over its head as it lands (bossArrive); it carries the encounter banner's news
-  G.bossCard = kind === 'boss' ? { at: Math.max(now(), G.foeEnter) + 0.35, fired: false, name: G.enemy.name.toUpperCase(),
-    sub: `school of ${school} · weak to ${SCHOOL_WEAK[school]}` } : null;
+  G.bossCard = kind === 'boss' ? { at: Math.max(now(), G.foeEnter) + 0.35, fired: false, entrance: true, name: G.enemy.name.toUpperCase(),
+    sub: B.final ? `drains life · ward to deny · weak to ${SCHOOL_WEAK[school]}` : `school of ${school} · weak to ${SCHOOL_WEAK[school]}` } : null;
   if (kind === 'boss' && !newCh) G.banner = null;
+  G.curse = null; // a fallen boss's curse dies with it
 }
 function bossArrive() { // the nameplate drops in: toll, a ring of sparks in the boss's color, a jolt
-  G.bossCard.fired = true; bossSnd();
+  G.bossCard.fired = true;
+  if (!(G.bossCard.entrance && G.enemy.final && sfx('attirus_stinger'))) bossSnd(); // Attirus enters on his own stinger: his theme's organ-and-choir climax over a boom
   burst(ARC_X, ARC_AY - 80, G.enemy.color, 44, 300); G.shake = Math.max(G.shake, 6);
+}
+// Attirus's twists: the first time he falls he collapses and rises again at 40% HP, quicker; and his charged attack
+// drains — what it deals you heals him, unless a ward counters it (applyStrike)
+const RISE_HP = 0.4, RISE_TEMPO = 1.12;
+function attirusRises() {
+  const E = G.enemy; E.risen = true; E.hp = E.max = Math.round(E.max * RISE_HP); E.markIdx = 0; G.curse = null; // a new life, a fresh bar: the curse marks run again
+  defeatSnd(); burst(ARC_X, ARC_AY - 40, E.color, 50, 300); G.shake = 10;
+  G.foeDead = now(); G.foeEnter = now() + 1.4; G.strikes = []; // he crumples, then stands again
+  G.bpm = Math.min(200, G.bpm * RISE_TEMPO);
+  G.bossCard = { at: G.foeEnter + 0.35, fired: false, name: 'ATTIRUS RISES', sub: 'death cannot hold him · faster now' };
+}
+function victory() { // Attirus falls: the dead he raised stay dead, and the run is won
+  G.cleared++; G.won = true; G.over = true; G.foeEnter = Infinity; G.strikes = [];
+  chapterSnd(); scoreEntryStart();
 }
 function nextEncounter() { // the enemy fell: advance the run
   G.cleared++;
@@ -627,9 +711,10 @@ const TRACKS = {
   'Glyph Tyrant':     { src: 'audio/tyrant.m4a',    bpm: 110.002, off: 0.051,  bars: 24 }, // burning fierce lead, war drums; ±3 ms
   'Shadow Archon':    { src: 'audio/archon.m4a',    bpm: 92.044,  off: 0.4642, bars: 21 }, // epic choral final-boss dread; ±9 ms
 };
+TRACKS[ATTIRUS.boss] = { src: 'audio/attirus.m4a', bpm: 99.994, off: 0.0507, bars: 20 }; // necromancer finale: pipe organ, deep choir, funeral bells over a driving pulse; ±5 ms
 const trackFor = key => TRACKS[key] || TRACKS.archer; // the enemy's own theme; the archer theme is the fallback
 // a track key is an enemy kind, or a boss's specific name — every named boss has his own theme
-const encKey = (ci, ei) => { const ch = chapterAt(ci); return ch.encs[ei] === 'boss' ? ch.boss : ch.encs[ei]; };
+const encKey = (ci, ei) => { const ch = chapterAt(ci); return ch.encs[ei] === 'boss' ? bossAt(ci, ei).boss : ch.encs[ei]; };
 const curEncKey = () => encKey(G.ci, G.ei); // the current enemy's theme key
 function nextEncKey() { const ch = chapterAt(G.ci), ni = G.ei + 1; return ni < ch.encs.length ? encKey(G.ci, ni) : encKey(G.ci + 1, 0); } // prefetch target
 const musicBufs = {}; // src -> Promise<AudioBuffer|null>
@@ -720,6 +805,7 @@ function makeSpell(t0) {
   const last = glyphs[glyphs.length-1];
   const spell = { word: inc.text, gloss: inc.gloss, rune: inc.rune, school: foe.school, glyphs, rests, t0, end: last.time, done: false, fizzled: false,
     arrow: { from: t0 - beat, to: last.time + GW + 0.12 } };
+  if (G.curse && G.curse.left > 0) { spell.curse = G.curse.id; curseGlyphs(spell, G.curse.id); if (--G.curse.left <= 0) G.curse = null; }
   G.spells.push(spell);
   if (G.spells.length > 6) G.spells = G.spells.filter(s => !s.done || now() < s.end + 1);
   G.nextT0 = t0 + Math.ceil(bars * 4 + REST - 1e-9) * beat; // whole beats: the next spell starts on a click
@@ -790,8 +876,8 @@ function grade(r, g, delta, raw) {
   showCalib();
   // tell the learner WHICH way and HOW FAR the timing was off (§6: mistakes are lessons)
   judge(r.lane, g === 'perfect' ? 'PERFECT' : 'GOOD', fmtMs(delta), g === 'perfect' ? PAL.gold : PAL.good);
-  G.fx.push({ kind:'ring', color: g==='perfect' ? PAL.gold : PAL.good, t0: now(), dur: .25, x: LNX[r.lane], y: HIT_Y });
-  burst(LNX[r.lane], HIT_Y, g === 'perfect' ? PAL.gold : PAL.good, g === 'perfect' ? 12 : 5, 150);
+  G.fx.push({ kind:'ring', color: g==='perfect' ? PAL.gold : PAL.good, t0: now(), dur: .25, x: gx(r), y: HIT_Y });
+  burst(gx(r), HIT_Y, g === 'perfect' ? PAL.gold : PAL.good, g === 'perfect' ? 12 : 5, 150);
   hitSnd(g);
 }
 function resolveCast(sp) {
@@ -827,11 +913,14 @@ function resolveCast(sp) {
 }
 function applyImpact(b) { // a bolt reached the enemy
   if (G.enemy.hp <= 0) return; // already falling: the next enemy isn't on stage yet
+  if (G.enemy.risen && now() < G.foeEnter) return; // Attirus is down, rising: bolts pass through the empty air
   G.enemy.hp -= b.dmg;
+  checkCurse();
   impactSnd(b.power);
   G.foeFlash = now();
   burst(ARC_X, ARC_AY - 44, b.color, 14 + Math.round(22*b.power), 180 + 240*b.power, b.el || 'fire');
   popup('-' + b.dmg + (b.tag ? ' · ' + b.tag : ''), b.color, ARC_X - 20, ARC_AY - 170);
+  if (G.enemy.hp <= 0 && G.enemy.final && !G.enemy.risen) { attirusRises(); return; }
   if (G.enemy.hp <= 0) { // encounter cleared: the enemy falls, the run advances (§7)
     popup(G.enemy.name.toUpperCase() + ' DEFEATED', PAL.gold, W/2, 150);
     defeatSnd();
@@ -847,6 +936,7 @@ function applyImpact(b) { // a bolt reached the enemy
       G.score += pts; G.swift += saved;
       popup(`SWIFT ×${saved} · +${pts.toLocaleString()}`, PAL.gold, W/2, 180);
     }
+    if (G.enemy.final) { victory(); return; }
     grantRune('mend', G.enemy.kind === 'boss' ? 2 : 1, G.enemy.name + ' defeated');
     nextEncounter();
   }
@@ -868,9 +958,13 @@ function applyStrike(s) { // an enemy strike reached the caster
     return;
   }
   hurt(s.dmg, s.why);
+  if (s.charged && G.enemy.final && G.enemy.hp > 0) { // Attirus drinks what his charged attack takes
+    const heal = Math.min(s.dmg, G.enemy.max - G.enemy.hp);
+    if (heal > 0) { G.enemy.hp += heal; popup('+' + heal + ' · LIFE DRAIN', G.enemy.color, ARC_X - 20, ARC_AY - 190); burst(ARC_X, ARC_AY - 80, G.enemy.color, 20, 160); }
+  }
 }
 function hurt(dmg, why) { // the caster takes damage: an enemy strike, or his own backfire
-  G.hp -= dmg; G.redFlash = now();
+  if (!OPT.inf) G.hp -= dmg; // dev: infinite health (the hit still shows and sounds) G.redFlash = now();
   G.wizHurt = now();
   G.shake = Math.max(G.shake, 3 + 6 * (dmg/DMG));
   thudSnd();
@@ -1164,7 +1258,7 @@ async function scoresLoad() {
 }
 scoresLoad();
 // game over: type a name (prefilled with the last one used), Enter records the run; clicking to retry records it too
-function scoreEntryStart() { G.entry = { name: SCORES.me.name || '', state: SCORES.ok ? 'typing' : 'off' }; }
+function scoreEntryStart() { G.entry = { name: SCORES.me.name || '', state: OPT.dev ? 'dev' : SCORES.ok ? 'typing' : 'off' }; }
 function scoreKey(e) {
   const E = G.entry; if (E.state !== 'typing') return false;
   if (e.key === 'Enter') { scoreSave(); return true; }
@@ -1266,7 +1360,7 @@ const DEMO = [
 ];
 function demoStart() {
   started = true; syncOpts();
-  Object.assign(OPT, { startCh: 0, glyphs: 'riffs', pen: 'lenient' }); // the demo shows the game as it starts, whatever the settings
+  Object.assign(OPT, { startCh: 0, startEi: 0, glyphs: 'riffs', pen: 'lenient' }); // the demo shows the game as it starts, whatever the settings
   newGame(); startRun(); startEncounter(); musicPlay(); // startEncounter builds G.enemy (the intro cinematic moved enemy creation out of startRun)
   G.enemy.hp = G.enemy.max = 80; // sturdy enough to survive the whole lesson
   G.demo = { i: -1 }; demoNext();
@@ -1442,8 +1536,12 @@ function floorPath(x0, y0, x1, y1, dy, p) {
 function noteY(r, t) { // Gale's shift eases in over 0.35 s (grading already uses the new time)
   let time = r.time;
   if (r.shiftAt && t - r.shiftAt < 0.35) { const k = (t - r.shiftAt) / 0.35, e = 1 - (1 - k) ** 3; time = r.fromTime + (r.time - r.fromTime) * e; }
-  return HIT_Y - (time - t) * PXS;
+  let u = (time - t) / LOOK; // 1 at the top of the field, 0 on the line
+  if (r.curse === 'landslide' && u > 0 && u < 1) u += 0.8 * u * (1 - u); // boulders: they hang up top, then drop hard (same hit time)
+  return HIT_Y - u * LOOK * PXS;
 }
+const gx = r => LNX[r.shown || r.lane]; // where a glyph is drawn: Mirror shows it in the other hand's lane
+const TIDE_Y = HIT_Y - (HIT_Y - TOP_Y) / 3; // Rising Tide: the water line
 
 // ================= battle stage (top quarter) =================
 function nextCharge(t) { // staff crystal tracks the next glyph: element + charge level
@@ -1463,7 +1561,7 @@ function drawWizard(t, phase) { // long-haired caster, glyph-trimmed cloak strea
   const P = WIZ_PAL;
   cx.save();
   cx.translate(WIZ_X + (hurt < 0.3 ? -7 * (1 - hurt/0.3) : 0), WIZ_Y + (G.intro ? 0 : Math.sin(t * 2.2) * 2));
-  if (G.over) { cx.translate(-10, 26); cx.rotate(-0.5); } // struck down
+  if (G.over && !G.won) { cx.translate(-10, 26); cx.rotate(-0.5); } // struck down
   const ch = nextCharge(t), castEl = casting ? G.wizCast.el : null;
   const orbC = ELC[castEl] || ELC[ch && ch.el] || PAL.pink;
   const wave = Math.sin(t * 3), wave2 = Math.sin(t * 3 + 1.3);
@@ -1684,6 +1782,7 @@ function drawBoss(t, pull) { // boss: its model + school aura; a school's roots 
   }
   const im = BOSS_ART[G.enemy.art];
   if (im && im.complete && im.naturalWidth) { const fh = 168, fw = fh * im.naturalWidth / im.naturalHeight; cx.drawImage(im, -fw / 2, -fh, fw, fh); }
+  else if (G.enemy.art === 'attirus') attirusBody(t, pull, eye);
   else lichBody(t, pull, eye);
   // the school's roots circle it: the words this boss answers to (drawn over the model too)
   const roots = Object.keys(SCHOOLS[G.enemy.school]);
@@ -1695,6 +1794,48 @@ function drawBoss(t, pull) { // boss: its model + school aura; a school's roots 
   });
   cx.shadowBlur = 0; cx.globalAlpha = 1; cx.lineWidth = 1;
   cx.restore();
+}
+function attirusBody(t, pull, eye) { // Attirus, Necromancer Supreme: a corrupted wizard, eyes blacked out, a staff of bone (procedural placeholder)
+  cx.save(); cx.globalCompositeOperation = 'lighter'; // grave-mist curling at his feet
+  for (let i = 0; i < 6; i++) { const mx = Math.sin(t * 0.8 + i * 1.7) * 40, r = 18 + 6 * Math.sin(t * 1.3 + i), g = cx.createRadialGradient(mx, -6, 2, mx, -6, r);
+    g.addColorStop(0, eye + '33'); g.addColorStop(1, eye + '00'); cx.fillStyle = g; cx.fillRect(mx - r, -6 - r, 2 * r, 2 * r); }
+  cx.restore();
+  cx.fillStyle = '#120a1c'; // the robe: a wizard's, rotted to tatters
+  cx.beginPath(); cx.moveTo(-10, -128); cx.bezierCurveTo(-34, -96, -54, -34, -58, 0);
+  for (let i = 0; i <= 10; i++) cx.lineTo(-58 + i * 11.6, i % 2 ? -14 + Math.sin(t * 3 + i) * 3 : 0);
+  cx.bezierCurveTo(48, -34, 30, -96, 10, -128); cx.closePath(); cx.fill();
+  cx.strokeStyle = eye; cx.globalAlpha = .55; cx.lineWidth = 1.5; cx.shadowColor = eye; cx.shadowBlur = 8; // corrupted sigils seeping down the hem
+  for (let i = 0; i < 5; i++) { const x = -40 + i * 20, y = -18 - (i % 2) * 10; cx.beginPath(); cx.arc(x, y, 4, 0, 7); cx.moveTo(x, y - 7); cx.lineTo(x, y + 7); cx.stroke(); }
+  cx.beginPath(); cx.moveTo(0, -122); cx.lineTo(-6, -40); cx.stroke(); // a sash of veins
+  cx.globalAlpha = 1; cx.shadowBlur = 0;
+  cx.fillStyle = '#1c1030'; // pauldrons: ribbed bone mantle
+  for (const sx of [-1, 1]) { cx.beginPath(); cx.ellipse(sx * 20, -118, 16, 9, sx * 0.3, 0, 7); cx.fill(); }
+  cx.strokeStyle = BONE_SH; cx.lineWidth = 2;
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) { cx.beginPath(); cx.arc(sx * 20, -114 + i * 4, 12 - i * 2, Math.PI * 1.1, Math.PI * 1.9); cx.stroke(); }
+  cx.fillStyle = '#0d0716'; // the tall hood, its peak bent like a wizard's hat
+  cx.beginPath(); cx.moveTo(-18, -122); cx.bezierCurveTo(-26, -150, -14, -176, 6, -196 + Math.sin(t * 1.2) * 2); cx.bezierCurveTo(4, -176, 22, -150, 18, -122); cx.closePath(); cx.fill();
+  cx.fillStyle = '#b9a9cf'; // gaunt grey face
+  cx.beginPath(); cx.ellipse(-3, -140, 9, 12, 0, 0, 7); cx.fill();
+  cx.fillStyle = '#000'; cx.shadowColor = eye; cx.shadowBlur = 6; // eyes blacked out: hollow, rimmed faintly in green
+  for (const ex of [-8, 1]) { cx.beginPath(); cx.ellipse(ex, -143, 3.2, 3.8, 0, 0, 7); cx.fill(); }
+  cx.shadowBlur = 0; cx.strokeStyle = '#000'; cx.lineWidth = 1; cx.globalAlpha = .7; // black tears where the rot ran
+  for (const ex of [-8, 1]) { cx.beginPath(); cx.moveTo(ex, -140); cx.lineTo(ex - 1, -131); cx.stroke(); }
+  cx.globalAlpha = 1; cx.fillStyle = '#3a2d4c'; cx.fillRect(-8, -132, 10, 1.5); // a thin cruel mouth
+  cx.fillStyle = '#d8d0e6'; // the beard: long, lank, wizardly
+  cx.beginPath(); cx.moveTo(-10, -132); cx.quadraticCurveTo(-6, -104 + Math.sin(t * 2) * 2, -2, -96); cx.quadraticCurveTo(2, -110, 4, -132); cx.closePath(); cx.globalAlpha = .7; cx.fill(); cx.globalAlpha = 1;
+  // the staff: a spine of vertebrae topped by a horned skull cradled in finger bones, green fire in its eyes
+  cx.save(); cx.translate(-36, -66); cx.rotate(-0.18 - pull * 0.45);
+  cx.strokeStyle = '#5b4c72'; cx.lineWidth = 5; cx.beginPath(); cx.moveTo(0, 66); cx.lineTo(0, -92); cx.stroke();
+  cx.fillStyle = BONE; for (let i = 0; i < 12; i++) { const y = 58 - i * 13; cx.beginPath(); cx.ellipse(0, y, 5, 3.4, 0, 0, 7); cx.fill(); cx.fillRect(-7, y - 1, 14, 2); }
+  cx.strokeStyle = BONE; cx.lineWidth = 2; // a ribcage collar
+  for (let i = 0; i < 3; i++) { cx.beginPath(); cx.arc(0, -70 + i * 7, 9 + i * 1.5, Math.PI * 0.15, Math.PI * 0.85); cx.stroke(); cx.beginPath(); cx.arc(0, -70 + i * 7, 9 + i * 1.5, Math.PI * 1.15, Math.PI * 1.85); cx.stroke(); }
+  for (const sx of [-1, 1]) { cx.beginPath(); cx.moveTo(sx * 3, -90); cx.quadraticCurveTo(sx * 16, -98, sx * 11, -112); cx.stroke(); } // finger-bone claws
+  cx.fillStyle = eye; cx.shadowColor = eye; cx.shadowBlur = 18 + 22 * pull; cx.globalAlpha = .35 + .2 * Math.sin(t * 5); // grave-fire behind the skull
+  cx.beginPath(); cx.arc(0, -104, 13 + 6 * pull, 0, 7); cx.fill(); cx.globalAlpha = 1;
+  drawSkull(0, -104, 8, eye);
+  cx.strokeStyle = BONE_SH; cx.lineWidth = 2.5; for (const sx of [-1, 1]) { cx.beginPath(); cx.moveTo(sx * 5, -110); cx.quadraticCurveTo(sx * 14, -118, sx * 10, -126); cx.stroke(); } // horns
+  cx.shadowBlur = 0; cx.restore(); cx.lineWidth = 1;
+  cx.fillStyle = '#b9a9cf'; cx.beginPath(); cx.arc(-30, -78, 4, 0, 7); cx.fill(); // the hand on the staff
 }
 function lichBody(t, pull, eye) { // the fallback crowned-lich body, drawn only until the model loads
   cx.fillStyle = '#1a0b33'; // robe, tattered hem
@@ -1840,7 +1981,7 @@ function draw(t) {
     const w = LW, x = LNX[l.id] - w/2;
     const sp = activeSpell();
     const guide = OPT.guide && sp && sp.glyphs.find(r => r.status === 'pending');
-    const lit = guide && guide.lane === l.id;
+    const lit = guide && (guide.shown || guide.lane) === l.id;
     cx.fillStyle = 'rgba(7,3,15,.6)'; cx.fillRect(x, TOP_Y - 30, w, HIT_Y - (TOP_Y - 30)); // scrim: glyphs stay readable over the vista
     cx.fillStyle = l.color; cx.globalAlpha = lit ? 0.12 : 0.035;
     rr(x, TOP_Y - 30, w, HIT_Y + 30 - (TOP_Y - 30), 8); cx.fill();
@@ -1932,8 +2073,9 @@ function draw(t) {
       for (let i = 0; i < s.glyphs.length - 1; i++) {
         const a = s.glyphs[i], b = s.glyphs[i+1];
         if (b.wordStart || (!!s.rune && !b.word) !== ink) continue; // the connector breaks between chunks
+        if (s.curse === 'lightning' || (s.curse === 'tide' && (noteY(a, t) > TIDE_Y || noteY(b, t) > TIDE_Y))) continue; // a curse hides the thread too
         const ya = noteY(a, t), yb = noteY(b, t);
-        if (ya > -60 && ya < HIT_Y + 80 && yb > -60 && yb < HIT_Y + 80) { cx.moveTo(LNX[a.lane], ya); cx.lineTo(LNX[b.lane], yb); }
+        if (ya > -60 && ya < HIT_Y + 80 && yb > -60 && yb < HIT_Y + 80) { cx.moveTo(gx(a), ya); cx.lineTo(gx(b), yb); }
       }
       cx.stroke(); cx.shadowBlur = 0; cx.globalAlpha = 1;
     }
@@ -1945,9 +2087,16 @@ function draw(t) {
     for (let gi = s.glyphs.length - 1; gi >= 0; gi--) { // back to front: in a quick same-lane run the next glyph to hit sits on top
       const r = s.glyphs[gi];
       const y = noteY(r, t); if (y < -60 || y > HIT_Y + 80) continue;
-      const l = LANE[r.lane];
+      const l = LANE[r.shown || r.lane];
+      if (r.status === 'pending' && r.curse === 'tide' && y > TIDE_Y) continue; // under the water
+      if (r.status === 'pending' && r.tallyOf) { // a tally's later presses: pips in the head's lane
+        cx.fillStyle = l.color; cx.shadowColor = l.color; cx.shadowBlur = 8; cx.beginPath(); cx.arc(gx(r), y, 6, 0, 7); cx.fill(); cx.shadowBlur = 0;
+        continue;
+      }
       if (r.status === 'pending') {
-        const cxr = LNX[r.lane];
+        const cxr = gx(r);
+        const flash = r.curse === 'lightning' ? Math.max(0, 1 - beatPhase(t) / 0.3) : 1; // dark between the beat's flashes
+        const fa = 0.07 + 0.93 * flash; cx.globalAlpha = fa;
         const gr = cx.createLinearGradient(0, y - 78, 0, y - 20); // elemental comet trail
         gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, l.color + '66');
         cx.fillStyle = gr;
@@ -1956,7 +2105,7 @@ function draw(t) {
         cx.fillStyle = PAL.ink; cx.beginPath(); cx.arc(cxr, y, 25, 0, 7); cx.fill();
         cx.shadowColor = l.color; cx.shadowBlur = 16;
         cx.strokeStyle = l.color; cx.lineWidth = 3; cx.beginPath(); cx.arc(cxr, y, 24, 0, 7); cx.stroke();
-        cx.lineWidth = 1; cx.globalAlpha = .55; cx.beginPath(); cx.arc(cxr, y, 19, 0, 7); cx.stroke(); cx.globalAlpha = 1;
+        cx.lineWidth = 1; cx.globalAlpha = .55 * fa; cx.beginPath(); cx.arc(cxr, y, 19, 0, 7); cx.stroke(); cx.globalAlpha = fa;
         cx.fillStyle = '#ffffff'; cx.font = 'bold 25px Georgia, "Times New Roman", serif'; cx.textAlign = 'center';
         if (!G.cast) cx.fillText(r.ch, cxr, y + 8); // letters are hidden while casting: slow time is not a free look
         cx.shadowBlur = 0;
@@ -1977,12 +2126,18 @@ function draw(t) {
           cx.fillStyle = PAL.blush; cx.font = 'bold 13px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
           cx.fillText('\u21E7', cxr + 17, y - 13);
         }
+        if (!G.cast && r.tally) { // Tally: press it n times
+          cx.fillStyle = PAL.ink; cx.beginPath(); cx.arc(cxr - 22, y - 18, 11, 0, 7); cx.fill();
+          cx.fillStyle = G.enemy.color; cx.font = 'bold 12px ui-monospace, Menlo, monospace'; cx.textAlign = 'center';
+          cx.fillText(r.tally + '×', cxr - 22, y - 14);
+        }
+        cx.globalAlpha = 1;
       } else if (r.hitAt && t - r.hitAt < 0.25) {
         const a = 1 - (t - r.hitAt) / 0.25;
         cx.globalAlpha = a * .85;
         cx.strokeStyle = r.status === 'miss' ? PAL.crimson : l.color;
         cx.lineWidth = 3; cx.shadowColor = cx.strokeStyle; cx.shadowBlur = 12;
-        cx.beginPath(); cx.arc(LNX[r.lane], y, 25 + 14 * (1 - a), 0, 7); cx.stroke(); cx.shadowBlur = 0;
+        cx.beginPath(); cx.arc(gx(r), y, 25 + 14 * (1 - a), 0, 7); cx.stroke(); cx.shadowBlur = 0;
         cx.globalAlpha = 1; cx.lineWidth = 1;
       }
     }
@@ -1997,6 +2152,14 @@ function draw(t) {
     }
   }
 
+  if (G.spells.some(s => s.curse === 'tide' && !s.done && s.t0 - t < LOOK)) { // Rising Tide: water over the bottom third of both hands' lanes
+    const g = cx.createLinearGradient(0, TIDE_Y, 0, HIT_Y + 30); g.addColorStop(0, 'rgba(57,208,201,.55)'); g.addColorStop(.15, 'rgba(12,60,80,.92)'); g.addColorStop(1, 'rgba(6,30,48,.97)');
+    for (const x0 of [X0, X0 + 4 * LW + SPLIT]) {
+      cx.fillStyle = g; cx.beginPath(); cx.moveTo(x0, HIT_Y + 30);
+      for (let x = 0; x <= 4 * LW; x += 8) cx.lineTo(x0 + x, TIDE_Y + 4 * Math.sin(x / 22 + t * 3));
+      cx.lineTo(x0 + 4 * LW, HIT_Y + 30); cx.closePath(); cx.fill();
+    }
+  }
   // timing overlay drawn OVER the tiles, so it is visible at the moment of judgment:
   // dashed gold lines = PERFECT window (±PW), white line = the beat (pulses on the clicks)
   const LX0 = X0 - 12, LX1 = X0 + LANES_W + 12, band = PW * PXS;
@@ -2025,7 +2188,7 @@ function draw(t) {
   const playing = Math.round(60 / segAt(t).beat), queued = Math.round(G.bpm);
   cx.fillText(playing + ' bpm' + (queued !== playing ? ' → ' + queued : ''), 16, 102);
   const chh = chapterAt(G.ci);
-  cx.fillStyle = PAL.blush; cx.fillText(`ch.${G.ci + 1} ${chh.name} · ${G.ei + 1}/${chh.encs.length}`, 16, 120);
+  cx.fillStyle = PAL.blush; cx.fillText(`ch.${G.ci + 1} ${chh.name} · ${G.ei + 1}/${chh.encs.length}${OPT.dev ? ' · DEV' : ''}${OPT.inf ? ' ∞hp' : ''}`, 16, 120);
 
   // current word, graded
   const sp = activeSpell();
@@ -2137,7 +2300,7 @@ function draw(t) {
     cx.strokeStyle = G.enemy.color; cx.globalAlpha = Math.max(0, a) * .6; rr(W/2 - 330, 250, 660, 84, 12); cx.stroke();
     cx.globalAlpha = Math.max(0, a); cx.textAlign = 'center';
     cx.fillStyle = G.enemy.color; cx.shadowColor = G.enemy.color; cx.shadowBlur = 16;
-    const fit = (txt, base, min, tmpl) => { let fs = base; cx.font = tmpl(fs); if (cx.measureText(txt).width > 610) cx.font = tmpl(Math.max(min, fs * 610 / cx.measureText(txt).width)); }; // a deep-lap "ReRe…-Revived" name shrinks to fit the banner box
+    const fit = (txt, base, min, tmpl) => { let fs = base; cx.font = tmpl(fs); if (cx.measureText(txt).width > 610) cx.font = tmpl(Math.max(min, fs * 610 / cx.measureText(txt).width)); }; // a long name ("Attirus, Necromancer Supreme") shrinks to fit the banner box
     fit(G.banner.title, 30, 13, s => `italic 900 ${s}px "Trebuchet MS", "Arial Black", sans-serif`); cx.fillText(G.banner.title, W/2, 291);
     cx.shadowBlur = 0; cx.fillStyle = PAL.text; fit(G.banner.sub, 14, 9, s => `${s}px ui-monospace, Menlo, monospace`); cx.fillText(G.banner.sub, W/2, 317);
     cx.globalAlpha = 1;
@@ -2150,6 +2313,9 @@ function draw(t) {
     g.addColorStop(0, color); g.addColorStop(1, color.slice(0, 7) + '00');
     cx.globalAlpha = a; cx.fillStyle = g; cx.fillRect(fromRight ? W - w : 0, 0, w, H); cx.globalAlpha = 1;
   };
+  if (!G.over && cursedLeft()) { // a curse is up: the boss's edge tints, the HUD counts what's left
+    edge(true, G.enemy.color, .14 + .06 * Math.sin(t * 4));
+  }
   const cs = !G.over && chargeState(t);
   if (cs && cs.warn && !G.guard) edge(true, PAL.bad, .55 * (1 - beatPhase(t)) + .12);
   if (G.empower && !G.over) edge(false, EMPOWER_C, .22 + .1 * Math.sin(t * 6));
@@ -2178,9 +2344,9 @@ function drawBossCard(t) {
   g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(.5, 'rgba(255,255,255,.22)'); g.addColorStop(1, 'rgba(255,255,255,0)');
   cx.shadowBlur = 0; cx.fillStyle = g; cx.fillRect(0, 0, w, h); cx.restore();
   cx.textAlign = 'center'; cx.shadowBlur = 0;
-  cx.fillStyle = PAL.bad; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(G.enemy.revived ? '☠ BOSS · REVIVED ☠' : '☠ BOSS ☠', w / 2, 15);
+  cx.fillStyle = PAL.bad; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(G.enemy.final ? '☠ FINAL BOSS ☠' : G.enemy.revived ? '☠ BOSS · REVIVED ☠' : '☠ BOSS ☠', w / 2, 15);
   cx.fillStyle = col; cx.shadowColor = col; cx.shadowBlur = 12; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif';
-  const nw = cx.measureText(B.name).width; if (nw > w - 16) cx.font = `italic 900 ${Math.max(10, 20 * (w - 16) / nw)}px "Trebuchet MS", "Arial Black", sans-serif`; // a deep-lap revived name shrinks to fit
+  const nw = cx.measureText(B.name).width; if (nw > w - 16) cx.font = `italic 900 ${Math.max(10, 20 * (w - 16) / nw)}px "Trebuchet MS", "Arial Black", sans-serif`; // a long name shrinks to fit
   cx.fillText(B.name, w / 2, 38); cx.shadowBlur = 0;
   cx.fillStyle = PAL.text; cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillText(B.sub, w / 2, 55);
   cx.restore(); cx.lineWidth = 1;
@@ -2333,6 +2499,7 @@ function drawRuneStatus(t) {
   if (G.still) lines.push([BOONS.still, 'next mend ×2']);
   if (G.kindle) lines.push([BOONS.kindle, 'next bolt ×2']);
   if (t - G.galeFx < 1.5) lines.push([BOONS.gale, 'blown back · ring +1 bar']);
+  const cl = !G.over && cursedLeft(); if (cl) lines.push([{ color: G.enemy.color, icon: '☠', label: CURSES[curseOf()].name }, `${cl} cursed spell${cl > 1 ? 's' : ''}`]);
   lines.forEach(([P, text], i) => {
     const y = 146 + i * 36;
     cx.fillStyle = 'rgba(10,4,24,.85)'; rr(12, y, 156, 30, 7); cx.fill();
@@ -2510,8 +2677,9 @@ function drawIdle() {
 function drawGameOver(t) {
   const s = timingStats(200, false), E = G.entry;
   cx.fillStyle = 'rgba(10,3,22,.88)'; cx.fillRect(0, 0, W, H);
-  cx.textAlign = 'center'; cx.fillStyle = PAL.crimson; cx.shadowColor = PAL.crimson; cx.shadowBlur = 24;
-  cx.font = 'italic 900 48px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText('STRUCK DOWN', W/2, 92); cx.shadowBlur = 0;
+  const tc = G.won ? PAL.gold : PAL.crimson;
+  cx.textAlign = 'center'; cx.fillStyle = tc; cx.shadowColor = tc; cx.shadowBlur = 24;
+  cx.font = 'italic 900 48px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(G.won ? 'VICTORY · ATTIRUS FALLS' : 'STRUCK DOWN', W/2, 92); cx.shadowBlur = 0;
   cx.fillStyle = PAL.dim; cx.font = '14px ui-monospace, Menlo, monospace';
   cx.fillText(`score ${G.score.toLocaleString()}   chapter ${G.ci + 1} (${chapterAt(G.ci).name}) · ${G.cleared} enemies felled   max combo x${G.maxCombo}   P ${G.hits.perfect} / G ${G.hits.good} / M ${G.hits.miss}`, W/2, 128);
   cx.fillText(s ? `timing over ${s.n} hits: avg ${Math.round(Math.abs(s.mean))}ms ${s.mean < 0 ? 'early' : 'late'} · spread ±${Math.round(s.sd)}ms` +
@@ -2521,7 +2689,8 @@ function drawGameOver(t) {
   cx.fillStyle = 'rgba(10,4,24,.9)'; rr(W/2 - 260, ny - 22, 520, 34, 10); cx.fill();
   cx.strokeStyle = E && E.state === 'typing' ? PAL.pink : '#3a1a5e'; cx.lineWidth = 1.5; rr(W/2 - 260, ny - 22, 520, 34, 10); cx.stroke();
   cx.font = 'bold 15px ui-monospace, Menlo, monospace';
-  if (!E || E.state === 'off') { cx.fillStyle = PAL.dim; cx.fillText('not recorded: high scores are offline right now', W/2, ny); }
+  if (E && E.state === 'dev') { cx.fillStyle = PAL.dim; cx.fillText('dev run: not recorded', W/2, ny); }
+  else if (!E || E.state === 'off') { cx.fillStyle = PAL.dim; cx.fillText('not recorded: high scores are offline right now', W/2, ny); }
   else if (E.state === 'typing') {
     cx.fillStyle = PAL.text; cx.fillText(`your name: ${E.name}${(t * 2) % 1 < 0.5 ? '▏' : ' '}`, W/2, ny);
     cx.fillStyle = PAL.dim; cx.font = '11px ui-monospace, Menlo, monospace'; cx.fillText('type it · Enter records the run', W/2, ny + 30);

@@ -320,34 +320,50 @@ magic words*, not new keys. The lanes never change.
 cavalry (learn speed), as encounter types that coexist rather than eras.
 
 > **Prototype run structure (playtest: "waves go on too long; always an
-> archer"):** a run is a sequence of **chapters of 3–5 short encounters**,
+> archer"):** a run is a sequence of **chapters of 3 short encounters**,
 > each ending in a named boss. Enemy HP is small early (archer 12 = two
 > full-power casts, ~15 s) and grows per chapter; a bar of rest separates
 > encounters and a banner names the next enemy and its school.
 >
 > | ch | name | incantations | glyphs/bar | tempo | encounters |
 > |---|---|---|---|---|---|
-> | 1 | Apprentice | verb + root ("kai vor") | 5 | start | archer, archer, boss |
+> | 1 | Apprentice | verb + root ("kai vor") | 5 | start | archer, cavalry, boss |
 > | 2 | Adept | + suffixes ("kai vora") | 5 | +4 | archer, cavalry, boss |
-> | 3 | Magus | + ancient suffixes, three words | 6 | +8 | archer, cavalry, archer, boss |
+> | 3 | Magus | + ancient suffixes, three words | 6 | +8 | archer, cavalry, boss |
 > | 4 | Numerist | + digits ("kai 3 voren") | 6 | +10 | archer, cavalry, boss |
-> | 5 | Glyphwright | + symbols ("tor! dunen", "sel dun-bry") | 7 | +12 | archer, cavalry, archer, boss |
-> | 6 | Archmage | four-word invocations | 7 | +16 | archer, cavalry, boss, cavalry, boss |
+> | 5 | Glyphwright | + symbols ("tor! dunen", "sel dun-bry") | 7 | +12 | archer, cavalry, boss |
+> | 6 | Archmage | four-word invocations | 7 | +16 | archer, cavalry, boss |
 >
 > 65% of spells use the chapter's newest templates, the rest earlier ones, so
 > difficulty rises without every spell being the hardest.
 >
-> **Decided (user): after the last boss, an endless Revived boss rush.** Once
-> the Shadow Archon falls, the final chapter no longer repeats — the game cycles
-> the six bosses forever, each a solo `boss` encounter, each lap a harder
-> **Revived** re-fight: `Revived`, then `Re-Revived`, `ReRe-Revived`, … one
-> "Re" per full cycle. HP scales with the ever-rising chapter index, tempo climbs
-> +3 per cycle, and every revamp uses chapter-6 (hardest) incantations. Each
-> revived boss still plays **its own theme** — the display name is the Revived
-> string, but the track stays keyed by the boss's real name — and wears a
-> **swirling rainbow aura** (a deeper re-live adds a counter-spinning second
-> ring), so a revived boss reads at a glance; the escalating name auto-shrinks to
-> fit the banner. There is no win condition — the rush only ends when you fall.
+> **Decided (user): every chapter is minion 1, minion 2, boss** — archer,
+> cavalry, its boss. A third minion slot would have to be a new minion kind,
+> not a repeat (the old archer-again chapters and the doubled Shadow Archon in
+> chapter 6 are gone).
+>
+> **Decided (user): chapter 7 is the Boss Rush, ending in a final boss.**
+> After chapter 6 the six bosses come back once each, back to back, named
+> **Revived** (chapter-6 incantations, HP climbing boss by boss, tempo +3 per
+> boss, a swirling rainbow aura, nameplate BOSS · REVIVED). Each still plays
+> **its own theme** — the track stays keyed by the boss's real name. They were
+> raised by **Attirus, Necromancer Supreme**, the rush's last encounter: a
+> corrupted wizard with blacked-out eyes and an elaborate skeletal staff,
+> school of the grave (roots *mor* death, *oss* bone; weak to earth: the grave
+> takes back what he raised), 1.5× boss HP. His twists:
+> - **He rises again.** The first time he falls he crumples (bolts pass
+>   through) and stands back up with a fresh bar of 40% of his HP, the tempo
+>   ×1.12 — ATTIRUS RISES.
+> - **Life drain.** Whatever his charged attack deals you heals him; a ward
+>   counter denies it, so warding matters again on the last fight.
+>
+> Felling him a second time **wins the run**: a VICTORY screen with the usual
+> score entry (the run records as chapter 7). **Boss curses (decided, user;
+> built):** each chapter boss casts a timed curse on the glyphs at 2/3
+> and 1/3 HP — Landslide, Lightning, Rising Tide, Tally, Tyranny, Mirror — and
+> Attirus casts all six in order; see `docs/plans/2026-10-17-boss-curses-design.md`.
+> Attirus is still drawn procedurally (`attirusBody`) until he gets a model;
+> his theme is his own (`attirus.m4a`, below).
 
 ---
 
@@ -449,7 +465,21 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > glassy clockwork tick, hollow (105) → 105.001 / 0.0967 / 24; *Glyph Tyrant*:
   > burning fierce lead, war drums (110) → 110.002 / 0.051 / 24; *Shadow Archon*
   > (finale): epic choral apocalyptic dread (92) → 92.044 / 0.4642 / 21.
-  > ~0.64–0.68 MB per theme.
+  > ~0.64–0.68 MB per theme. **Attirus** (the Boss Rush finale, added later):
+  > ACE-Step 1.5 XL Turbo via the local mlx-serve (`/v1/audio/music-generations`,
+  > instrumental, 100 BPM, 60 s), prompt "dark arcane synthwave, final boss
+  > theme, undead necromancer sorcerer, cathedral pipe organ, deep male choir
+  > chanting, tolling funeral bells, heavy pulsing analog bass, driving
+  > four-on-the-floor kick, gated snare, minor key, ominous and grand, retro 80s
+  > neon dark fantasy" — seed 41 of six (steadiest kick, 5 ms jitter), looped
+  > bars 2→22 of the song (the seam picked by matching the spectra around both
+  > ends), −14 LUFS, 96 kbps AAC → 99.994 / 0.0507 / 20, 0.59 MB.
+  > **His entrance stinger** (`sfx/attirus_stinger.wav`, played once as his
+  > nameplate drops, in place of the synthesized boss toll): the organ-and-choir
+  > downbeat of the same take's climax (bar 16, so always in his key) with an
+  > echo tail, under a boom + cymbal from Stable Audio 3 Small SFX (seed 7 of
+  > four: cleanest attack, no second bump), 4.2 s, mono 32 kHz, −16 LUFS like the
+  > other samples.
 
   > **Prototype answer (sound effects):** ACE-Step can't make one-shots (every
   > request returns 60 s of music, whatever the duration asked), so foley comes
