@@ -352,13 +352,14 @@ cavalry (learn speed), as encounter types that coexist rather than eras.
 > school of the grave (roots *mor* death, *oss* bone; weak to earth: the grave
 > takes back what he raised), 1.5× boss HP. His twists:
 > - **He rises again.** The first time he falls he crumples (bolts pass
->   through) and stands back up at 40% HP, the tempo ×1.12 — ATTIRUS RISES.
+>   through) and stands back up with a fresh bar of 40% of his HP, the tempo
+>   ×1.12 — ATTIRUS RISES.
 > - **Life drain.** Whatever his charged attack deals you heals him; a ward
 >   counter denies it, so warding matters again on the last fight.
 >
 > Felling him a second time **wins the run**: a VICTORY screen with the usual
-> score entry (the run records as chapter 7). **Boss curses (decided, user,
-> not yet built):** each chapter boss casts a timed curse on the glyphs at 2/3
+> score entry (the run records as chapter 7). **Boss curses (decided, user;
+> built):** each chapter boss casts a timed curse on the glyphs at 2/3
 > and 1/3 HP — Landslide, Lightning, Rising Tide, Tally, Tyranny, Mirror — and
 > Attirus casts all six in order; see `docs/plans/2026-10-17-boss-curses-design.md`.
 > Placeholders until real assets land: Attirus is drawn procedurally

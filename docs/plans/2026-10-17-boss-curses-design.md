@@ -1,6 +1,6 @@
 # Boss curses — design
 
-Decided with the user, 2026-10-17. Each of the six chapter bosses gets one
+Decided with the user, 2026-10-17. **Built** on `feat/boss-curses`. Each of the six chapter bosses gets one
 unique power: a **timed curse on the glyphs**. Attirus wields all six.
 
 ## Rules
@@ -36,7 +36,8 @@ All six act on glyphs, so they work in both riffs and words modes.
 On top of rising again and life drain, Attirus casts **all six curses in
 order**, at **3/4, 1/2 and 1/4 HP of each life**: first life Landslide,
 Lightning, Rising Tide; after he rises, Tally, Tyranny, Mirror. 2 spells each.
-His nameplate names the servant whose power he wields.
+His nameplate names the servant whose power he wields. His risen life is a
+fresh bar (40% of his HP as its max), so its three marks are 3/4, 1/2, 1/4 of that.
 
 ## Build
 
