@@ -710,7 +710,7 @@ const TRACKS = {
   'Glyph Tyrant':     { src: 'audio/tyrant.m4a',    bpm: 110.002, off: 0.051,  bars: 24 }, // burning fierce lead, war drums; ±3 ms
   'Shadow Archon':    { src: 'audio/archon.m4a',    bpm: 92.044,  off: 0.4642, bars: 21 }, // epic choral final-boss dread; ±9 ms
 };
-TRACKS[ATTIRUS.boss] = TRACKS['Shadow Archon']; // placeholder until Attirus has his own theme
+TRACKS[ATTIRUS.boss] = { src: 'audio/attirus.m4a', bpm: 99.994, off: 0.0507, bars: 20 }; // necromancer finale: pipe organ, deep choir, funeral bells over a driving pulse; ±5 ms
 const trackFor = key => TRACKS[key] || TRACKS.archer; // the enemy's own theme; the archer theme is the fallback
 // a track key is an enemy kind, or a boss's specific name — every named boss has his own theme
 const encKey = (ci, ei) => { const ch = chapterAt(ci); return ch.encs[ei] === 'boss' ? bossAt(ci, ei).boss : ch.encs[ei]; };

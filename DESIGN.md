@@ -362,8 +362,8 @@ cavalry (learn speed), as encounter types that coexist rather than eras.
 > built):** each chapter boss casts a timed curse on the glyphs at 2/3
 > and 1/3 HP — Landslide, Lightning, Rising Tide, Tally, Tyranny, Mirror — and
 > Attirus casts all six in order; see `docs/plans/2026-10-17-boss-curses-design.md`.
-> Placeholders until real assets land: Attirus is drawn procedurally
-> (`attirusBody`) and borrows the Shadow Archon theme.
+> Attirus is still drawn procedurally (`attirusBody`) until he gets a model;
+> his theme is his own (`attirus.m4a`, below).
 
 ---
 
@@ -465,7 +465,15 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > glassy clockwork tick, hollow (105) → 105.001 / 0.0967 / 24; *Glyph Tyrant*:
   > burning fierce lead, war drums (110) → 110.002 / 0.051 / 24; *Shadow Archon*
   > (finale): epic choral apocalyptic dread (92) → 92.044 / 0.4642 / 21.
-  > ~0.64–0.68 MB per theme.
+  > ~0.64–0.68 MB per theme. **Attirus** (the Boss Rush finale, added later):
+  > ACE-Step 1.5 XL Turbo via the local mlx-serve (`/v1/audio/music-generations`,
+  > instrumental, 100 BPM, 60 s), prompt "dark arcane synthwave, final boss
+  > theme, undead necromancer sorcerer, cathedral pipe organ, deep male choir
+  > chanting, tolling funeral bells, heavy pulsing analog bass, driving
+  > four-on-the-floor kick, gated snare, minor key, ominous and grand, retro 80s
+  > neon dark fantasy" — seed 41 of six (steadiest kick, 5 ms jitter), looped
+  > bars 2→22 of the song (the seam picked by matching the spectra around both
+  > ends), −14 LUFS, 96 kbps AAC → 99.994 / 0.0507 / 20, 0.59 MB.
 
   > **Prototype answer (sound effects):** ACE-Step can't make one-shots (every
   > request returns 60 s of music, whatever the duration asked), so foley comes
