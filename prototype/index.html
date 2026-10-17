@@ -183,9 +183,10 @@ const SCHOOLS = {
   stone:  { dun:'stone', bry:'thorn' },
   tide:   { gam:'tide', cyl:'frost' },
   shadow: { mox:'shadow', jex:'hex' },
+  grave:  { mor:'death', oss:'bone' }, // Attirus alone
 };
 // §4 elemental weakness: each school takes double damage from one element's bolts
-const SCHOOL_WEAK = { flame: 'water', storm: 'earth', stone: 'air', tide: 'fire', shadow: 'fire' };
+const SCHOOL_WEAK = { flame: 'water', storm: 'earth', stone: 'air', tide: 'fire', shadow: 'fire', grave: 'earth' }; // the grave: earth buries what he raised
 const plural = g => g + (/[sx]$/.test(g) ? 'es' : 's');
 const SUF2 = { a: g => 'great ' + g, en: plural, is: g => 'of ' + g };                                    // tier 2+
 const SUF3 = { eth: g => 'ancient ' + g, ara: g => 'bright ' + g, ondo: g => 'endless ' + g, ium: g => 'circle of ' + g }; // tier 3+
@@ -321,25 +322,27 @@ function makeRiff(tier, boss) {
 // ================= progression (§7): chapters of short encounters =================
 // dens = max glyphs per 4-beat bar (a spell spans as many bars as it needs, glyphs spread
 // evenly across them); tier = incantation templates; bpm = offset from the start tempo.
+const MINIONS_BOSS = ['archer', 'cavalry', 'boss']; // every chapter: minion 1, minion 2, its boss (a third minion would be a new kind)
 const CHAPTERS = [
-  { name: 'Apprentice',  tier: 1, dens: 5, bpm: 0,  encs: ['archer', 'archer', 'boss'],                     boss: 'Stone Warden', bossId: 'stone-warden', bossColor: '#f0a24a',     bossSchool: 'stone' },
-  { name: 'Adept',       tier: 2, dens: 5, bpm: 4,  encs: ['archer', 'cavalry', 'boss'],                    boss: 'Storm Hierophant', bossId: 'storm-hierophant', bossColor: '#3fd0ff', bossSchool: 'storm' },
-  { name: 'Magus',       tier: 3, dens: 6, bpm: 8,  encs: ['archer', 'cavalry', 'archer', 'boss'],          boss: 'Tide Lich', bossId: 'tide-lich', bossColor: '#39d0c9',        bossSchool: 'tide' },
-  { name: 'Numerist',    tier: 4, dens: 6, bpm: 10, encs: ['archer', 'cavalry', 'boss'],                    boss: 'Counting Wraith', bossId: 'counting-wraith', bossColor: '#9fb4ff',  bossSchool: 'shadow' },
-  { name: 'Glyphwright', tier: 5, dens: 7, bpm: 12, encs: ['archer', 'cavalry', 'archer', 'boss'],          boss: 'Glyph Tyrant', bossId: 'glyph-tyrant', bossColor: '#ff6b3d',     bossSchool: 'flame' },
-  { name: 'Archmage',    tier: 6, dens: 7, bpm: 16, encs: ['archer', 'cavalry', 'boss', 'cavalry', 'boss'], boss: 'Shadow Archon', bossId: 'shadow-archon', bossColor: '#c05cff',    bossSchool: 'shadow' },
+  { name: 'Apprentice',  tier: 1, dens: 5, bpm: 0,  encs: MINIONS_BOSS, boss: 'Stone Warden', bossId: 'stone-warden', bossColor: '#f0a24a',     bossSchool: 'stone' },
+  { name: 'Adept',       tier: 2, dens: 5, bpm: 4,  encs: MINIONS_BOSS, boss: 'Storm Hierophant', bossId: 'storm-hierophant', bossColor: '#3fd0ff', bossSchool: 'storm' },
+  { name: 'Magus',       tier: 3, dens: 6, bpm: 8,  encs: MINIONS_BOSS, boss: 'Tide Lich', bossId: 'tide-lich', bossColor: '#39d0c9',        bossSchool: 'tide' },
+  { name: 'Numerist',    tier: 4, dens: 6, bpm: 10, encs: MINIONS_BOSS, boss: 'Counting Wraith', bossId: 'counting-wraith', bossColor: '#9fb4ff',  bossSchool: 'shadow' },
+  { name: 'Glyphwright', tier: 5, dens: 7, bpm: 12, encs: MINIONS_BOSS, boss: 'Glyph Tyrant', bossId: 'glyph-tyrant', bossColor: '#ff6b3d',     bossSchool: 'flame' },
+  { name: 'Archmage',    tier: 6, dens: 7, bpm: 16, encs: MINIONS_BOSS, boss: 'Shadow Archon', bossId: 'shadow-archon', bossColor: '#c05cff',    bossSchool: 'shadow' },
 ];
+// after chapter 6: one lap of the six bosses Revived (ch 7–12), raised by Attirus, Necromancer Supreme, who waits
+// at the end of the rush (ch 13). Felling him wins the run. ch.boss stays the boss's real name so its music theme is
+// still chosen; reviveName is the display name, and revived draws the aura.
+const FINAL_CI = 2 * CHAPTERS.length;
+const FINAL_CH = { name: 'Necromancer Supreme', tier: 6, dens: 7, bpm: 36, encs: ['boss'], boss: 'Attirus, Necromancer Supreme', bossId: 'attirus', bossColor: '#9dff57', bossSchool: 'grave', final: true };
 function chapterAt(ci) {
   const last = CHAPTERS.length - 1;
   if (ci <= last) return CHAPTERS[ci];
-  // The final boss has fallen: an endless boss rush. Cycle the six bosses forever; a boss earns another
-  // "Re-" only when it comes back around after a full pass (Revived → Re-Revived → ReRe-Revived, …), faster
-  // each boss. ch.boss stays the boss's real name so its music theme is still chosen; reviveName is the display
-  // name, and revived (1-based pass) draws the aura — a second ring once a boss is re-revived.
-  const cycle = ci - last - 1, passes = Math.floor(cycle / (last + 1)), b = CHAPTERS[cycle % (last + 1)];
-  const revive = 'Re-'.repeat(passes) + 'Revived ' + b.boss; // a dash between each Re: Re-Re-Revived
-  return { name: revive, tier: 6, dens: 7, bpm: Math.min(88, 16 + 3 * cycle), encs: ['boss'],
-    boss: b.boss, bossSchool: b.bossSchool, bossId: b.bossId, bossColor: b.bossColor, reviveName: revive, revived: passes + 1 };
+  if (ci >= FINAL_CI) return FINAL_CH;
+  const lap = ci - last - 1, b = CHAPTERS[lap], revive = 'Revived ' + b.boss;
+  return { name: revive, tier: 6, dens: 7, bpm: 16 + 3 * lap, encs: ['boss'],
+    boss: b.boss, bossSchool: b.bossSchool, bossId: b.bossId, bossColor: b.bossColor, reviveName: revive, revived: 1 };
 }
 // archers: steady volleys (learn accuracy) · cavalry: the charge accelerates every spell (speed)
 // · boss: incantations follow rhythm patterns, off-beats included (rhythm) — §5 enemy structures
@@ -537,10 +540,10 @@ function newGame() {
 function startEncounter() {
   const ch = chapterAt(G.ci), kind = ch.encs[G.ei], E = ENEMIES[kind];
   // each encounter speaks one school of words; bosses have their own, others rotate
-  const schools = Object.keys(SCHOOLS).filter(s => s !== G.lastSchool);
+  const schools = Object.keys(SCHOOLS).filter(s => s !== G.lastSchool && s !== 'grave');
   const school = kind === 'boss' ? ch.bossSchool : schools[Math.floor(Math.random() * schools.length)];
   G.lastSchool = school;
-  G.enemy = { kind, name: kind === 'boss' ? (ch.reviveName || ch.boss) : E.label, hp: E.hp(G.ci), max: E.hp(G.ci), dmg: E.dmg, color: (kind === 'boss' && ch.bossColor) || E.color, school, art: kind === 'boss' ? ch.bossId : kind, revived: ch.revived || 0,
+  G.enemy = { kind, name: kind === 'boss' ? (ch.reviveName || ch.boss) : E.label, hp: E.hp(G.ci) * (ch.final ? 1.5 : 1), max: E.hp(G.ci) * (ch.final ? 1.5 : 1), dmg: E.dmg, color: (kind === 'boss' && ch.bossColor) || E.color, school, art: kind === 'boss' ? ch.bossId : kind, revived: ch.revived || 0,
     weak: SCHOOL_WEAK[school], chargeBeats: E.charge, cdmg: E.cdmg, chargeFrom: null, chargeAt: null, chargeLoosed: 0, warned: 0, spells: 0 }; // charge starts with its first spell (frame)
   G.bpm = Math.min(200, G.baseBpm + ch.bpm); // cavalry ramps reset with every new encounter
   const newCh = G.ei === 0;
@@ -560,6 +563,10 @@ function startEncounter() {
 function bossArrive() { // the nameplate drops in: toll, a ring of sparks in the boss's color, a jolt
   G.bossCard.fired = true; bossSnd();
   burst(ARC_X, ARC_AY - 80, G.enemy.color, 44, 300); G.shake = Math.max(G.shake, 6);
+}
+function victory() { // Attirus falls: the dead he raised stay dead, and the run is won
+  G.cleared++; G.won = true; G.over = true; G.foeEnter = Infinity; G.strikes = [];
+  chapterSnd(); scoreEntryStart();
 }
 function nextEncounter() { // the enemy fell: advance the run
   G.cleared++;
@@ -627,6 +634,7 @@ const TRACKS = {
   'Glyph Tyrant':     { src: 'audio/tyrant.m4a',    bpm: 110.002, off: 0.051,  bars: 24 }, // burning fierce lead, war drums; ±3 ms
   'Shadow Archon':    { src: 'audio/archon.m4a',    bpm: 92.044,  off: 0.4642, bars: 21 }, // epic choral final-boss dread; ±9 ms
 };
+TRACKS[FINAL_CH.boss] = TRACKS['Shadow Archon']; // placeholder until Attirus has his own theme
 const trackFor = key => TRACKS[key] || TRACKS.archer; // the enemy's own theme; the archer theme is the fallback
 // a track key is an enemy kind, or a boss's specific name — every named boss has his own theme
 const encKey = (ci, ei) => { const ch = chapterAt(ci); return ch.encs[ei] === 'boss' ? ch.boss : ch.encs[ei]; };
@@ -847,6 +855,7 @@ function applyImpact(b) { // a bolt reached the enemy
       G.score += pts; G.swift += saved;
       popup(`SWIFT ×${saved} · +${pts.toLocaleString()}`, PAL.gold, W/2, 180);
     }
+    if (chapterAt(G.ci).final) { victory(); return; }
     grantRune('mend', G.enemy.kind === 'boss' ? 2 : 1, G.enemy.name + ' defeated');
     nextEncounter();
   }
@@ -1463,7 +1472,7 @@ function drawWizard(t, phase) { // long-haired caster, glyph-trimmed cloak strea
   const P = WIZ_PAL;
   cx.save();
   cx.translate(WIZ_X + (hurt < 0.3 ? -7 * (1 - hurt/0.3) : 0), WIZ_Y + (G.intro ? 0 : Math.sin(t * 2.2) * 2));
-  if (G.over) { cx.translate(-10, 26); cx.rotate(-0.5); } // struck down
+  if (G.over && !G.won) { cx.translate(-10, 26); cx.rotate(-0.5); } // struck down
   const ch = nextCharge(t), castEl = casting ? G.wizCast.el : null;
   const orbC = ELC[castEl] || ELC[ch && ch.el] || PAL.pink;
   const wave = Math.sin(t * 3), wave2 = Math.sin(t * 3 + 1.3);
@@ -1684,6 +1693,7 @@ function drawBoss(t, pull) { // boss: its model + school aura; a school's roots 
   }
   const im = BOSS_ART[G.enemy.art];
   if (im && im.complete && im.naturalWidth) { const fh = 168, fw = fh * im.naturalWidth / im.naturalHeight; cx.drawImage(im, -fw / 2, -fh, fw, fh); }
+  else if (G.enemy.art === 'attirus') attirusBody(t, pull, eye);
   else lichBody(t, pull, eye);
   // the school's roots circle it: the words this boss answers to (drawn over the model too)
   const roots = Object.keys(SCHOOLS[G.enemy.school]);
@@ -1695,6 +1705,48 @@ function drawBoss(t, pull) { // boss: its model + school aura; a school's roots 
   });
   cx.shadowBlur = 0; cx.globalAlpha = 1; cx.lineWidth = 1;
   cx.restore();
+}
+function attirusBody(t, pull, eye) { // Attirus, Necromancer Supreme: a corrupted wizard, eyes blacked out, a staff of bone (procedural placeholder)
+  cx.save(); cx.globalCompositeOperation = 'lighter'; // grave-mist curling at his feet
+  for (let i = 0; i < 6; i++) { const mx = Math.sin(t * 0.8 + i * 1.7) * 40, r = 18 + 6 * Math.sin(t * 1.3 + i), g = cx.createRadialGradient(mx, -6, 2, mx, -6, r);
+    g.addColorStop(0, eye + '33'); g.addColorStop(1, eye + '00'); cx.fillStyle = g; cx.fillRect(mx - r, -6 - r, 2 * r, 2 * r); }
+  cx.restore();
+  cx.fillStyle = '#120a1c'; // the robe: a wizard's, rotted to tatters
+  cx.beginPath(); cx.moveTo(-10, -128); cx.bezierCurveTo(-34, -96, -54, -34, -58, 0);
+  for (let i = 0; i <= 10; i++) cx.lineTo(-58 + i * 11.6, i % 2 ? -14 + Math.sin(t * 3 + i) * 3 : 0);
+  cx.bezierCurveTo(48, -34, 30, -96, 10, -128); cx.closePath(); cx.fill();
+  cx.strokeStyle = eye; cx.globalAlpha = .55; cx.lineWidth = 1.5; cx.shadowColor = eye; cx.shadowBlur = 8; // corrupted sigils seeping down the hem
+  for (let i = 0; i < 5; i++) { const x = -40 + i * 20, y = -18 - (i % 2) * 10; cx.beginPath(); cx.arc(x, y, 4, 0, 7); cx.moveTo(x, y - 7); cx.lineTo(x, y + 7); cx.stroke(); }
+  cx.beginPath(); cx.moveTo(0, -122); cx.lineTo(-6, -40); cx.stroke(); // a sash of veins
+  cx.globalAlpha = 1; cx.shadowBlur = 0;
+  cx.fillStyle = '#1c1030'; // pauldrons: ribbed bone mantle
+  for (const sx of [-1, 1]) { cx.beginPath(); cx.ellipse(sx * 20, -118, 16, 9, sx * 0.3, 0, 7); cx.fill(); }
+  cx.strokeStyle = BONE_SH; cx.lineWidth = 2;
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) { cx.beginPath(); cx.arc(sx * 20, -114 + i * 4, 12 - i * 2, Math.PI * 1.1, Math.PI * 1.9); cx.stroke(); }
+  cx.fillStyle = '#0d0716'; // the tall hood, its peak bent like a wizard's hat
+  cx.beginPath(); cx.moveTo(-18, -122); cx.bezierCurveTo(-26, -150, -14, -176, 6, -196 + Math.sin(t * 1.2) * 2); cx.bezierCurveTo(4, -176, 22, -150, 18, -122); cx.closePath(); cx.fill();
+  cx.fillStyle = '#b9a9cf'; // gaunt grey face
+  cx.beginPath(); cx.ellipse(-3, -140, 9, 12, 0, 0, 7); cx.fill();
+  cx.fillStyle = '#000'; cx.shadowColor = eye; cx.shadowBlur = 6; // eyes blacked out: hollow, rimmed faintly in green
+  for (const ex of [-8, 1]) { cx.beginPath(); cx.ellipse(ex, -143, 3.2, 3.8, 0, 0, 7); cx.fill(); }
+  cx.shadowBlur = 0; cx.strokeStyle = '#000'; cx.lineWidth = 1; cx.globalAlpha = .7; // black tears where the rot ran
+  for (const ex of [-8, 1]) { cx.beginPath(); cx.moveTo(ex, -140); cx.lineTo(ex - 1, -131); cx.stroke(); }
+  cx.globalAlpha = 1; cx.fillStyle = '#3a2d4c'; cx.fillRect(-8, -132, 10, 1.5); // a thin cruel mouth
+  cx.fillStyle = '#d8d0e6'; // the beard: long, lank, wizardly
+  cx.beginPath(); cx.moveTo(-10, -132); cx.quadraticCurveTo(-6, -104 + Math.sin(t * 2) * 2, -2, -96); cx.quadraticCurveTo(2, -110, 4, -132); cx.closePath(); cx.globalAlpha = .7; cx.fill(); cx.globalAlpha = 1;
+  // the staff: a spine of vertebrae topped by a horned skull cradled in finger bones, green fire in its eyes
+  cx.save(); cx.translate(-36, -66); cx.rotate(-0.18 - pull * 0.45);
+  cx.strokeStyle = '#5b4c72'; cx.lineWidth = 5; cx.beginPath(); cx.moveTo(0, 66); cx.lineTo(0, -92); cx.stroke();
+  cx.fillStyle = BONE; for (let i = 0; i < 12; i++) { const y = 58 - i * 13; cx.beginPath(); cx.ellipse(0, y, 5, 3.4, 0, 0, 7); cx.fill(); cx.fillRect(-7, y - 1, 14, 2); }
+  cx.strokeStyle = BONE; cx.lineWidth = 2; // a ribcage collar
+  for (let i = 0; i < 3; i++) { cx.beginPath(); cx.arc(0, -70 + i * 7, 9 + i * 1.5, Math.PI * 0.15, Math.PI * 0.85); cx.stroke(); cx.beginPath(); cx.arc(0, -70 + i * 7, 9 + i * 1.5, Math.PI * 1.15, Math.PI * 1.85); cx.stroke(); }
+  for (const sx of [-1, 1]) { cx.beginPath(); cx.moveTo(sx * 3, -90); cx.quadraticCurveTo(sx * 16, -98, sx * 11, -112); cx.stroke(); } // finger-bone claws
+  cx.fillStyle = eye; cx.shadowColor = eye; cx.shadowBlur = 18 + 22 * pull; cx.globalAlpha = .35 + .2 * Math.sin(t * 5); // grave-fire behind the skull
+  cx.beginPath(); cx.arc(0, -104, 13 + 6 * pull, 0, 7); cx.fill(); cx.globalAlpha = 1;
+  drawSkull(0, -104, 8, eye);
+  cx.strokeStyle = BONE_SH; cx.lineWidth = 2.5; for (const sx of [-1, 1]) { cx.beginPath(); cx.moveTo(sx * 5, -110); cx.quadraticCurveTo(sx * 14, -118, sx * 10, -126); cx.stroke(); } // horns
+  cx.shadowBlur = 0; cx.restore(); cx.lineWidth = 1;
+  cx.fillStyle = '#b9a9cf'; cx.beginPath(); cx.arc(-30, -78, 4, 0, 7); cx.fill(); // the hand on the staff
 }
 function lichBody(t, pull, eye) { // the fallback crowned-lich body, drawn only until the model loads
   cx.fillStyle = '#1a0b33'; // robe, tattered hem
@@ -2137,7 +2189,7 @@ function draw(t) {
     cx.strokeStyle = G.enemy.color; cx.globalAlpha = Math.max(0, a) * .6; rr(W/2 - 330, 250, 660, 84, 12); cx.stroke();
     cx.globalAlpha = Math.max(0, a); cx.textAlign = 'center';
     cx.fillStyle = G.enemy.color; cx.shadowColor = G.enemy.color; cx.shadowBlur = 16;
-    const fit = (txt, base, min, tmpl) => { let fs = base; cx.font = tmpl(fs); if (cx.measureText(txt).width > 610) cx.font = tmpl(Math.max(min, fs * 610 / cx.measureText(txt).width)); }; // a deep-lap "ReRe…-Revived" name shrinks to fit the banner box
+    const fit = (txt, base, min, tmpl) => { let fs = base; cx.font = tmpl(fs); if (cx.measureText(txt).width > 610) cx.font = tmpl(Math.max(min, fs * 610 / cx.measureText(txt).width)); }; // a long name ("Attirus, Necromancer Supreme") shrinks to fit the banner box
     fit(G.banner.title, 30, 13, s => `italic 900 ${s}px "Trebuchet MS", "Arial Black", sans-serif`); cx.fillText(G.banner.title, W/2, 291);
     cx.shadowBlur = 0; cx.fillStyle = PAL.text; fit(G.banner.sub, 14, 9, s => `${s}px ui-monospace, Menlo, monospace`); cx.fillText(G.banner.sub, W/2, 317);
     cx.globalAlpha = 1;
@@ -2178,9 +2230,9 @@ function drawBossCard(t) {
   g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(.5, 'rgba(255,255,255,.22)'); g.addColorStop(1, 'rgba(255,255,255,0)');
   cx.shadowBlur = 0; cx.fillStyle = g; cx.fillRect(0, 0, w, h); cx.restore();
   cx.textAlign = 'center'; cx.shadowBlur = 0;
-  cx.fillStyle = PAL.bad; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(G.enemy.revived ? '☠ BOSS · REVIVED ☠' : '☠ BOSS ☠', w / 2, 15);
+  cx.fillStyle = PAL.bad; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(G.enemy.art === 'attirus' ? '☠ FINAL BOSS ☠' : G.enemy.revived ? '☠ BOSS · REVIVED ☠' : '☠ BOSS ☠', w / 2, 15);
   cx.fillStyle = col; cx.shadowColor = col; cx.shadowBlur = 12; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif';
-  const nw = cx.measureText(B.name).width; if (nw > w - 16) cx.font = `italic 900 ${Math.max(10, 20 * (w - 16) / nw)}px "Trebuchet MS", "Arial Black", sans-serif`; // a deep-lap revived name shrinks to fit
+  const nw = cx.measureText(B.name).width; if (nw > w - 16) cx.font = `italic 900 ${Math.max(10, 20 * (w - 16) / nw)}px "Trebuchet MS", "Arial Black", sans-serif`; // a long name shrinks to fit
   cx.fillText(B.name, w / 2, 38); cx.shadowBlur = 0;
   cx.fillStyle = PAL.text; cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillText(B.sub, w / 2, 55);
   cx.restore(); cx.lineWidth = 1;
@@ -2510,8 +2562,9 @@ function drawIdle() {
 function drawGameOver(t) {
   const s = timingStats(200, false), E = G.entry;
   cx.fillStyle = 'rgba(10,3,22,.88)'; cx.fillRect(0, 0, W, H);
-  cx.textAlign = 'center'; cx.fillStyle = PAL.crimson; cx.shadowColor = PAL.crimson; cx.shadowBlur = 24;
-  cx.font = 'italic 900 48px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText('STRUCK DOWN', W/2, 92); cx.shadowBlur = 0;
+  const tc = G.won ? PAL.gold : PAL.crimson;
+  cx.textAlign = 'center'; cx.fillStyle = tc; cx.shadowColor = tc; cx.shadowBlur = 24;
+  cx.font = 'italic 900 48px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(G.won ? 'VICTORY · ATTIRUS FALLS' : 'STRUCK DOWN', W/2, 92); cx.shadowBlur = 0;
   cx.fillStyle = PAL.dim; cx.font = '14px ui-monospace, Menlo, monospace';
   cx.fillText(`score ${G.score.toLocaleString()}   chapter ${G.ci + 1} (${chapterAt(G.ci).name}) · ${G.cleared} enemies felled   max combo x${G.maxCombo}   P ${G.hits.perfect} / G ${G.hits.good} / M ${G.hits.miss}`, W/2, 128);
   cx.fillText(s ? `timing over ${s.n} hits: avg ${Math.round(Math.abs(s.mean))}ms ${s.mean < 0 ? 'early' : 'late'} · spread ±${Math.round(s.sd)}ms` +

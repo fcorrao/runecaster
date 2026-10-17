@@ -320,34 +320,41 @@ magic words*, not new keys. The lanes never change.
 cavalry (learn speed), as encounter types that coexist rather than eras.
 
 > **Prototype run structure (playtest: "waves go on too long; always an
-> archer"):** a run is a sequence of **chapters of 3–5 short encounters**,
+> archer"):** a run is a sequence of **chapters of 3 short encounters**,
 > each ending in a named boss. Enemy HP is small early (archer 12 = two
 > full-power casts, ~15 s) and grows per chapter; a bar of rest separates
 > encounters and a banner names the next enemy and its school.
 >
 > | ch | name | incantations | glyphs/bar | tempo | encounters |
 > |---|---|---|---|---|---|
-> | 1 | Apprentice | verb + root ("kai vor") | 5 | start | archer, archer, boss |
+> | 1 | Apprentice | verb + root ("kai vor") | 5 | start | archer, cavalry, boss |
 > | 2 | Adept | + suffixes ("kai vora") | 5 | +4 | archer, cavalry, boss |
-> | 3 | Magus | + ancient suffixes, three words | 6 | +8 | archer, cavalry, archer, boss |
+> | 3 | Magus | + ancient suffixes, three words | 6 | +8 | archer, cavalry, boss |
 > | 4 | Numerist | + digits ("kai 3 voren") | 6 | +10 | archer, cavalry, boss |
-> | 5 | Glyphwright | + symbols ("tor! dunen", "sel dun-bry") | 7 | +12 | archer, cavalry, archer, boss |
-> | 6 | Archmage | four-word invocations | 7 | +16 | archer, cavalry, boss, cavalry, boss |
+> | 5 | Glyphwright | + symbols ("tor! dunen", "sel dun-bry") | 7 | +12 | archer, cavalry, boss |
+> | 6 | Archmage | four-word invocations | 7 | +16 | archer, cavalry, boss |
 >
 > 65% of spells use the chapter's newest templates, the rest earlier ones, so
 > difficulty rises without every spell being the hardest.
 >
-> **Decided (user): after the last boss, an endless Revived boss rush.** Once
-> the Shadow Archon falls, the final chapter no longer repeats — the game cycles
-> the six bosses forever, each a solo `boss` encounter, each lap a harder
-> **Revived** re-fight: `Revived`, then `Re-Revived`, `ReRe-Revived`, … one
-> "Re" per full cycle. HP scales with the ever-rising chapter index, tempo climbs
-> +3 per cycle, and every revamp uses chapter-6 (hardest) incantations. Each
-> revived boss still plays **its own theme** — the display name is the Revived
-> string, but the track stays keyed by the boss's real name — and wears a
-> **swirling rainbow aura** (a deeper re-live adds a counter-spinning second
-> ring), so a revived boss reads at a glance; the escalating name auto-shrinks to
-> fit the banner. There is no win condition — the rush only ends when you fall.
+> **Decided (user): every chapter is minion 1, minion 2, boss** — archer,
+> cavalry, its boss. A third minion slot would have to be a new minion kind,
+> not a repeat (the old archer-again chapters and the doubled Shadow Archon in
+> chapter 6 are gone).
+>
+> **Decided (user): after the last boss, one Revived boss rush, then a final
+> boss.** Once the Shadow Archon falls, the six bosses come back once each as
+> solo `boss` encounters named **Revived** (chapters 7–12: chapter-6
+> incantations, HP scaling with the chapter index, tempo +3 per boss, a swirling
+> rainbow aura, and the nameplate reads BOSS · REVIVED). Each still plays **its
+> own theme** — the track stays keyed by the boss's real name. They were raised
+> by **Attirus, Necromancer Supreme** (chapter 13): a corrupted wizard with
+> blacked-out eyes and an elaborate skeletal staff, school of the grave (roots
+> *mor* death, *oss* bone; weak to earth: the grave takes back what he
+> raised), 1.5× boss HP. Felling him **wins the run**: a VICTORY screen with the
+> usual score entry (the run records as chapter 13). Placeholders until real
+> assets land: he is drawn procedurally (`attirusBody`) and borrows the Shadow
+> Archon theme.
 
 ---
 
