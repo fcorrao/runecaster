@@ -342,19 +342,25 @@ cavalry (learn speed), as encounter types that coexist rather than eras.
 > not a repeat (the old archer-again chapters and the doubled Shadow Archon in
 > chapter 6 are gone).
 >
-> **Decided (user): after the last boss, one Revived boss rush, then a final
-> boss.** Once the Shadow Archon falls, the six bosses come back once each as
-> solo `boss` encounters named **Revived** (chapters 7–12: chapter-6
-> incantations, HP scaling with the chapter index, tempo +3 per boss, a swirling
-> rainbow aura, and the nameplate reads BOSS · REVIVED). Each still plays **its
-> own theme** — the track stays keyed by the boss's real name. They were raised
-> by **Attirus, Necromancer Supreme** (chapter 13): a corrupted wizard with
-> blacked-out eyes and an elaborate skeletal staff, school of the grave (roots
-> *mor* death, *oss* bone; weak to earth: the grave takes back what he
-> raised), 1.5× boss HP. Felling him **wins the run**: a VICTORY screen with the
-> usual score entry (the run records as chapter 13). Placeholders until real
-> assets land: he is drawn procedurally (`attirusBody`) and borrows the Shadow
-> Archon theme.
+> **Decided (user): chapter 7 is the Boss Rush, ending in a final boss.**
+> After chapter 6 the six bosses come back once each, back to back, named
+> **Revived** (chapter-6 incantations, HP climbing boss by boss, tempo +3 per
+> boss, a swirling rainbow aura, nameplate BOSS · REVIVED). Each still plays
+> **its own theme** — the track stays keyed by the boss's real name. They were
+> raised by **Attirus, Necromancer Supreme**, the rush's last encounter: a
+> corrupted wizard with blacked-out eyes and an elaborate skeletal staff,
+> school of the grave (roots *mor* death, *oss* bone; weak to earth: the grave
+> takes back what he raised), 1.5× boss HP. His twists:
+> - **He rises again.** The first time he falls he crumples (bolts pass
+>   through) and stands back up at 40% HP, the tempo ×1.12 — ATTIRUS RISES.
+> - **Life drain.** Whatever his charged attack deals you heals him; a ward
+>   counter denies it, so warding matters again on the last fight.
+>
+> Felling him a second time **wins the run**: a VICTORY screen with the usual
+> score entry (the run records as chapter 7). The six chapter bosses have no
+> per-boss mechanic yet — they differ by school, weakness, model and theme.
+> Placeholders until real assets land: Attirus is drawn procedurally
+> (`attirusBody`) and borrows the Shadow Archon theme.
 
 ---
 

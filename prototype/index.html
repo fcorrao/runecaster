@@ -331,19 +331,14 @@ const CHAPTERS = [
   { name: 'Glyphwright', tier: 5, dens: 7, bpm: 12, encs: MINIONS_BOSS, boss: 'Glyph Tyrant', bossId: 'glyph-tyrant', bossColor: '#ff6b3d',     bossSchool: 'flame' },
   { name: 'Archmage',    tier: 6, dens: 7, bpm: 16, encs: MINIONS_BOSS, boss: 'Shadow Archon', bossId: 'shadow-archon', bossColor: '#c05cff',    bossSchool: 'shadow' },
 ];
-// after chapter 6: one lap of the six bosses Revived (ch 7–12), raised by Attirus, Necromancer Supreme, who waits
-// at the end of the rush (ch 13). Felling him wins the run. ch.boss stays the boss's real name so its music theme is
-// still chosen; reviveName is the display name, and revived draws the aura.
-const FINAL_CI = 2 * CHAPTERS.length;
-const FINAL_CH = { name: 'Necromancer Supreme', tier: 6, dens: 7, bpm: 36, encs: ['boss'], boss: 'Attirus, Necromancer Supreme', bossId: 'attirus', bossColor: '#9dff57', bossSchool: 'grave', final: true };
-function chapterAt(ci) {
-  const last = CHAPTERS.length - 1;
-  if (ci <= last) return CHAPTERS[ci];
-  if (ci >= FINAL_CI) return FINAL_CH;
-  const lap = ci - last - 1, b = CHAPTERS[lap], revive = 'Revived ' + b.boss;
-  return { name: revive, tier: 6, dens: 7, bpm: 16 + 3 * lap, encs: ['boss'],
-    boss: b.boss, bossSchool: b.bossSchool, bossId: b.bossId, bossColor: b.bossColor, reviveName: revive, revived: 1 };
-}
+// chapter 7, the Boss Rush: the six bosses again, Revived, back to back — raised by Attirus, Necromancer Supreme, who
+// waits at its end. Felling him wins the run. A rush boss's .boss stays its real name so its music theme is still
+// chosen; reviveName is the display name, and revived draws the aura.
+const ATTIRUS = { boss: 'Attirus, Necromancer Supreme', bossId: 'attirus', bossColor: '#9dff57', bossSchool: 'grave', final: true };
+const RUSH_CH = { name: 'Boss Rush', tier: 6, dens: 7, bpm: 16, encs: Array(CHAPTERS.length + 1).fill('boss'),
+  rush: CHAPTERS.map(c => ({ boss: c.boss, bossId: c.bossId, bossColor: c.bossColor, bossSchool: c.bossSchool, reviveName: 'Revived ' + c.boss, revived: 1 })).concat(ATTIRUS) };
+const chapterAt = ci => ci < CHAPTERS.length ? CHAPTERS[ci] : RUSH_CH;
+const bossAt = (ci, ei) => { const ch = chapterAt(ci); return ch.rush ? ch.rush[ei] : ch; }; // who the boss of encounter ei is
 // archers: steady volleys (learn accuracy) · cavalry: the charge accelerates every spell (speed)
 // · boss: incantations follow rhythm patterns, off-beats included (rhythm) — §5 enemy structures
 // dmg = a fully missed spell's strike; charge = beats to fill its charged attack, cdmg = what that attack deals
@@ -538,14 +533,15 @@ function newGame() {
   };
 }
 function startEncounter() {
-  const ch = chapterAt(G.ci), kind = ch.encs[G.ei], E = ENEMIES[kind];
+  const ch = chapterAt(G.ci), kind = ch.encs[G.ei], E = ENEMIES[kind], B = bossAt(G.ci, G.ei);
   // each encounter speaks one school of words; bosses have their own, others rotate
   const schools = Object.keys(SCHOOLS).filter(s => s !== G.lastSchool && s !== 'grave');
-  const school = kind === 'boss' ? ch.bossSchool : schools[Math.floor(Math.random() * schools.length)];
+  const school = kind === 'boss' ? B.bossSchool : schools[Math.floor(Math.random() * schools.length)];
   G.lastSchool = school;
-  G.enemy = { kind, name: kind === 'boss' ? (ch.reviveName || ch.boss) : E.label, hp: E.hp(G.ci) * (ch.final ? 1.5 : 1), max: E.hp(G.ci) * (ch.final ? 1.5 : 1), dmg: E.dmg, color: (kind === 'boss' && ch.bossColor) || E.color, school, art: kind === 'boss' ? ch.bossId : kind, revived: ch.revived || 0,
+  const hp = E.hp(G.ci + (ch.rush ? G.ei : 0)) * (B.final ? 1.5 : 1); // rush bosses toughen one by one; Attirus half again
+  G.enemy = { kind, name: kind === 'boss' ? (B.reviveName || B.boss) : E.label, hp, max: hp, dmg: E.dmg, color: (kind === 'boss' && B.bossColor) || E.color, school, art: kind === 'boss' ? B.bossId : kind, revived: B.revived || 0, final: !!B.final, risen: false,
     weak: SCHOOL_WEAK[school], chargeBeats: E.charge, cdmg: E.cdmg, chargeFrom: null, chargeAt: null, chargeLoosed: 0, warned: 0, spells: 0 }; // charge starts with its first spell (frame)
-  G.bpm = Math.min(200, G.baseBpm + ch.bpm); // cavalry ramps reset with every new encounter
+  G.bpm = Math.min(200, G.baseBpm + ch.bpm + (ch.rush ? 3 * G.ei : 0)); // cavalry ramps reset with every new encounter; the rush quickens boss by boss
   const newCh = G.ei === 0;
   if (newCh && !G.intro) chapterSnd(); // the intro re-issues the chapter horn at handoff
   G.banner = {
@@ -557,12 +553,22 @@ function startEncounter() {
   if (newCh && G.intro) G.banner = null; // the start cinematic shows the chapter banner at handoff, not now
   // a boss gets its own nameplate over its head as it lands (bossArrive); it carries the encounter banner's news
   G.bossCard = kind === 'boss' ? { at: Math.max(now(), G.foeEnter) + 0.35, fired: false, name: G.enemy.name.toUpperCase(),
-    sub: `school of ${school} · weak to ${SCHOOL_WEAK[school]}` } : null;
+    sub: B.final ? `drains life · ward to deny · weak to ${SCHOOL_WEAK[school]}` : `school of ${school} · weak to ${SCHOOL_WEAK[school]}` } : null;
   if (kind === 'boss' && !newCh) G.banner = null;
 }
 function bossArrive() { // the nameplate drops in: toll, a ring of sparks in the boss's color, a jolt
   G.bossCard.fired = true; bossSnd();
   burst(ARC_X, ARC_AY - 80, G.enemy.color, 44, 300); G.shake = Math.max(G.shake, 6);
+}
+// Attirus's twists: the first time he falls he collapses and rises again at 40% HP, quicker; and his charged attack
+// drains — what it deals you heals him, unless a ward counters it (applyStrike)
+const RISE_HP = 0.4, RISE_TEMPO = 1.12;
+function attirusRises() {
+  const E = G.enemy; E.risen = true; E.hp = Math.round(E.max * RISE_HP);
+  defeatSnd(); burst(ARC_X, ARC_AY - 40, E.color, 50, 300); G.shake = 10;
+  G.foeDead = now(); G.foeEnter = now() + 1.4; G.strikes = []; // he crumples, then stands again
+  G.bpm = Math.min(200, G.bpm * RISE_TEMPO);
+  G.bossCard = { at: G.foeEnter + 0.35, fired: false, name: 'ATTIRUS RISES', sub: 'death cannot hold him · faster now' };
 }
 function victory() { // Attirus falls: the dead he raised stay dead, and the run is won
   G.cleared++; G.won = true; G.over = true; G.foeEnter = Infinity; G.strikes = [];
@@ -634,10 +640,10 @@ const TRACKS = {
   'Glyph Tyrant':     { src: 'audio/tyrant.m4a',    bpm: 110.002, off: 0.051,  bars: 24 }, // burning fierce lead, war drums; ±3 ms
   'Shadow Archon':    { src: 'audio/archon.m4a',    bpm: 92.044,  off: 0.4642, bars: 21 }, // epic choral final-boss dread; ±9 ms
 };
-TRACKS[FINAL_CH.boss] = TRACKS['Shadow Archon']; // placeholder until Attirus has his own theme
+TRACKS[ATTIRUS.boss] = TRACKS['Shadow Archon']; // placeholder until Attirus has his own theme
 const trackFor = key => TRACKS[key] || TRACKS.archer; // the enemy's own theme; the archer theme is the fallback
 // a track key is an enemy kind, or a boss's specific name — every named boss has his own theme
-const encKey = (ci, ei) => { const ch = chapterAt(ci); return ch.encs[ei] === 'boss' ? ch.boss : ch.encs[ei]; };
+const encKey = (ci, ei) => { const ch = chapterAt(ci); return ch.encs[ei] === 'boss' ? bossAt(ci, ei).boss : ch.encs[ei]; };
 const curEncKey = () => encKey(G.ci, G.ei); // the current enemy's theme key
 function nextEncKey() { const ch = chapterAt(G.ci), ni = G.ei + 1; return ni < ch.encs.length ? encKey(G.ci, ni) : encKey(G.ci + 1, 0); } // prefetch target
 const musicBufs = {}; // src -> Promise<AudioBuffer|null>
@@ -835,11 +841,13 @@ function resolveCast(sp) {
 }
 function applyImpact(b) { // a bolt reached the enemy
   if (G.enemy.hp <= 0) return; // already falling: the next enemy isn't on stage yet
+  if (G.enemy.risen && now() < G.foeEnter) return; // Attirus is down, rising: bolts pass through the empty air
   G.enemy.hp -= b.dmg;
   impactSnd(b.power);
   G.foeFlash = now();
   burst(ARC_X, ARC_AY - 44, b.color, 14 + Math.round(22*b.power), 180 + 240*b.power, b.el || 'fire');
   popup('-' + b.dmg + (b.tag ? ' · ' + b.tag : ''), b.color, ARC_X - 20, ARC_AY - 170);
+  if (G.enemy.hp <= 0 && G.enemy.final && !G.enemy.risen) { attirusRises(); return; }
   if (G.enemy.hp <= 0) { // encounter cleared: the enemy falls, the run advances (§7)
     popup(G.enemy.name.toUpperCase() + ' DEFEATED', PAL.gold, W/2, 150);
     defeatSnd();
@@ -855,7 +863,7 @@ function applyImpact(b) { // a bolt reached the enemy
       G.score += pts; G.swift += saved;
       popup(`SWIFT ×${saved} · +${pts.toLocaleString()}`, PAL.gold, W/2, 180);
     }
-    if (chapterAt(G.ci).final) { victory(); return; }
+    if (G.enemy.final) { victory(); return; }
     grantRune('mend', G.enemy.kind === 'boss' ? 2 : 1, G.enemy.name + ' defeated');
     nextEncounter();
   }
@@ -877,6 +885,10 @@ function applyStrike(s) { // an enemy strike reached the caster
     return;
   }
   hurt(s.dmg, s.why);
+  if (s.charged && G.enemy.final && G.enemy.hp > 0) { // Attirus drinks what his charged attack takes
+    const heal = Math.min(s.dmg, G.enemy.max - G.enemy.hp);
+    if (heal > 0) { G.enemy.hp += heal; popup('+' + heal + ' · LIFE DRAIN', G.enemy.color, ARC_X - 20, ARC_AY - 190); burst(ARC_X, ARC_AY - 80, G.enemy.color, 20, 160); }
+  }
 }
 function hurt(dmg, why) { // the caster takes damage: an enemy strike, or his own backfire
   G.hp -= dmg; G.redFlash = now();
@@ -2230,7 +2242,7 @@ function drawBossCard(t) {
   g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(.5, 'rgba(255,255,255,.22)'); g.addColorStop(1, 'rgba(255,255,255,0)');
   cx.shadowBlur = 0; cx.fillStyle = g; cx.fillRect(0, 0, w, h); cx.restore();
   cx.textAlign = 'center'; cx.shadowBlur = 0;
-  cx.fillStyle = PAL.bad; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(G.enemy.art === 'attirus' ? '☠ FINAL BOSS ☠' : G.enemy.revived ? '☠ BOSS · REVIVED ☠' : '☠ BOSS ☠', w / 2, 15);
+  cx.fillStyle = PAL.bad; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(G.enemy.final ? '☠ FINAL BOSS ☠' : G.enemy.revived ? '☠ BOSS · REVIVED ☠' : '☠ BOSS ☠', w / 2, 15);
   cx.fillStyle = col; cx.shadowColor = col; cx.shadowBlur = 12; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif';
   const nw = cx.measureText(B.name).width; if (nw > w - 16) cx.font = `italic 900 ${Math.max(10, 20 * (w - 16) / nw)}px "Trebuchet MS", "Arial Black", sans-serif`; // a long name shrinks to fit
   cx.fillText(B.name, w / 2, 38); cx.shadowBlur = 0;
