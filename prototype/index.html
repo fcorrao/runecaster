@@ -30,13 +30,21 @@
   #help li { margin:2px 0; }
 </style>
 <!-- 3D view: three.js from the CDN, pinned. The game script is classic, so a module bridges it onto window and
-     says so with 'three-ready'. If the import fails the game never hears it and stays in its 2D view. ?3d=0 forces 2D
-     (r3Init also stays 2D without hardware WebGL; ?3d=1 forces 3D there). -->
+     says so with 'three-ready'. If the import fails the game never hears it and stays in its 2D view. ?3d=0 forces 2D.
+     Software WebGL (no GPU, or a blocklisted one) runs the 3D view at a few frames a second, too slow to play to, so
+     without hardware WebGL2 the game stays 2D and three.js is never fetched; ?3d=1 skips that check (headless tests). -->
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }</script>
 <script type="module">
-if (new URLSearchParams(location.search).get('3d') !== '0')
-  import('three').then(T => { window.THREE = T; window.dispatchEvent(new Event('three-ready')); })
-    .catch(e => console.warn('Runecaster: 3D view unavailable, staying 2D —', e && e.message));
+const q3d = new URLSearchParams(location.search).get('3d');
+const hardwareGL = () => { // a throwaway WebGL2 context that refuses software rendering, released at once
+  const g = document.createElement('canvas').getContext('webgl2', { failIfMajorPerformanceCaveat: true });
+  if (g) { const x = g.getExtension('WEBGL_lose_context'); if (x) x.loseContext(); }
+  return !!g;
+};
+if (q3d === '0') {} // forced 2D
+else if (q3d !== '1' && !hardwareGL()) console.warn('Runecaster: no hardware WebGL, staying 2D');
+else import('three').then(T => { window.THREE = T; window.dispatchEvent(new Event('three-ready')); })
+  .catch(e => console.warn('Runecaster: 3D view unavailable, staying 2D —', e && e.message));
 </script>
 </head>
 <body>
@@ -159,7 +167,7 @@ const BASE_OF = { '!':'1','@':'2','#':'3','$':'4','%':'5','^':'6','&':'7','*':'8
 for (const [sh, base] of Object.entries(BASE_OF)) if (KEYDIR[base]) KEYDIR[sh] = KEYDIR[base];
 
 // ================= geometry =================
-const cv = document.getElementById('game'); let cx = cv.getContext('2d'); // let: the 3D view points it at offscreen canvases to texture the enemy and rune panel
+const cv = document.getElementById('game'); let cx = cv.getContext('2d'); // let: the 3D view points it at offscreen canvases while it paints textures (the rune panel)
 const W = 1120, H = 840; // logical resolution: all drawing uses these; the canvas is scaled to fit the window
 let VIEW = 1; // backing-store pixels per logical pixel (window fit × device pixel ratio)
 function fitCanvas() {
@@ -2248,7 +2256,7 @@ function draw(t) {
         cx.globalAlpha = a * .85;
         cx.strokeStyle = r.status === 'miss' ? PAL.crimson : l.color;
         cx.lineWidth = 3; cx.shadowColor = cx.strokeStyle; cx.shadowBlur = 12;
-        cx.beginPath(); cx.arc(gx(r), y, 25 + 14 * (1 - a), 0, 7); cx.stroke(); cx.shadowBlur = 0;
+        cx.beginPath(); cx.arc(gx(r), y, Math.max(0, 25 + 14 * (1 - a)), 0, 7); cx.stroke(); cx.shadowBlur = 0; // ≥ 0: after a main-thread stall t can trail the stamp (a negative radius throws)
         cx.globalAlpha = 1; cx.lineWidth = 1;
       }
     }
@@ -2330,7 +2338,7 @@ function draw(t) {
   for (const f of G.fx) {
     const p = (t - f.t0) / f.dur;
     cx.globalAlpha = (1 - p) * (f.dim ? .35 : 1); cx.strokeStyle = f.color; cx.lineWidth = 3; // dim: a cracked seal
-    cx.beginPath(); cx.arc(f.x, f.y, (f.big ? 40 : 20) + p * (f.big ? 120 : 50), 0, 7); cx.stroke();
+    cx.beginPath(); cx.arc(f.x, f.y, Math.max(0, (f.big ? 40 : 20) + p * (f.big ? 120 : 50)), 0, 7); cx.stroke(); // ≥ 0, as above
     cx.globalAlpha = 1; cx.lineWidth = 1;
   }
   // rune bolts in flight: the rune's name dives from the spell hand onto the duel line and runs the floor to the enemy
@@ -2664,7 +2672,7 @@ function drawWard(t) {
   } else if (t - G.guardBreak < 0.4) { // released: the oval flares outward and fades
     const k = (t - G.guardBreak) / 0.4;
     cx.save(); cx.globalAlpha = 1 - k; cx.strokeStyle = w; cx.shadowColor = w; cx.shadowBlur = 16; cx.lineWidth = 3;
-    cx.beginPath(); cx.ellipse(ox + 20 * k, y, 22 + 30 * k, 60 + 30 * k, 0, 0, 7); cx.stroke(); cx.restore();
+    cx.beginPath(); cx.ellipse(ox + 20 * k, y, Math.max(0, 22 + 30 * k), Math.max(0, 60 + 30 * k), 0, 0, 7); cx.stroke(); cx.restore(); // ≥ 0: t can trail the stamp
   }
 }
 // the spellbook: cast mode's view of the rune panel, readable because time stands still. Every rune: icon, the
@@ -2725,7 +2733,7 @@ const RUNE_ART = Object.fromEntries(Object.keys(RUNES).map(k => { const im = new
 const SB = { x: X0 - 12, y: TOP_Y - 30, w: LANES_W + 24, h: HIT_Y + 72 - (TOP_Y - 30) }; // the spellbook covers the lane field
 const CARD = { w: 262, h: 186, gap: 10 };
 function drawSpellbook(t) {
-  const keys = Object.keys(RUNES), buf = G.cast.buf, open = Math.min(1, (t - G.cast.at) / 0.2);
+  const keys = Object.keys(RUNES), buf = G.cast.buf, open = Math.max(0, Math.min(1, (t - G.cast.at) / 0.2)); // ≥ 0: a negative alpha is ignored (the book would flash in at full)
   cx.save(); cx.globalAlpha = open;
   cx.fillStyle = 'rgba(10,4,24,.97)'; rr(SB.x, SB.y, SB.w, SB.h, 14); cx.fill();
   cx.strokeStyle = PAL.pink; cx.shadowColor = PAL.magenta; cx.shadowBlur = 12; rr(SB.x, SB.y, SB.w, SB.h, 14); cx.stroke(); cx.shadowBlur = 0;
@@ -2877,7 +2885,7 @@ function drawRunes(t) {
       cx.strokeStyle = PAL.pink; cx.lineWidth = 2; cx.globalAlpha = 1 - k;
       for (let i = 0; i < 14; i++) { const a = i * Math.PI / 7 + 0.2, d = R.r + 70 * k;
         cx.beginPath(); cx.moveTo(R.x + Math.cos(a) * d, R.y + Math.sin(a) * d); cx.lineTo(R.x + Math.cos(a + 0.18) * (d + 10), R.y + Math.sin(a + 0.18) * (d + 10)); cx.stroke(); }
-      cx.fillStyle = 'rgba(60,40,80,.5)'; cx.beginPath(); cx.arc(R.x, R.y - 20 * k, 20 + 40 * k, 0, 7); cx.fill();
+      cx.fillStyle = 'rgba(60,40,80,.5)'; cx.beginPath(); cx.arc(R.x, R.y - 20 * k, Math.max(0, 20 + 40 * k), 0, 7); cx.fill(); // ≥ 0: t can trail the stamp
       cx.globalAlpha = Math.min(1, (1.2 - age) / 0.3); cx.textAlign = 'center';
       cx.fillStyle = PAL.bad; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif'; cx.fillText(F.backfire ? 'BACKFIRE' : 'FIZZLE', R.x, R.y - 6);
       cx.fillStyle = PAL.text; cx.font = '11px ui-monospace, Menlo, monospace';
@@ -3046,7 +3054,8 @@ function r3Cached(key, make) { let tx = R3.gtex.get(key); if (!tx) R3.gtex.set(k
 // flag and tally badge are their own sprites, sized as tilt sizes them (marks shrink half as fast as the glyph, the
 // flag never shrinks), so none of them is minified into a smear. veil = cast mode (letters hidden while time stands still)
 function r3DiscTex(ch, laneId, veil) {
-  return r3Cached('disc|' + ch + '|' + laneId + '|' + (veil ? 1 : 0), () => { const l = LANE[laneId]; return r3Tex(96, 96, (c, w, h, sc) => {
+  // a veiled disc has no letter, so one per lane
+  return r3Cached('disc|' + (veil ? '' : ch) + '|' + laneId + '|' + (veil ? 1 : 0), () => { const l = LANE[laneId]; return r3Tex(96, 96, (c, w, h, sc) => {
     c.translate(48, 48);
     c.fillStyle = PAL.ink; c.beginPath(); c.arc(0, 0, 25, 0, 7); c.fill();
     c.shadowColor = l.color; c.shadowBlur = 16 * sc;
@@ -3090,13 +3099,13 @@ function r3Init() {
   if (R3.on || !window.THREE || R3Q.get('3d') === '0') return;
   const T = window.THREE, gl = document.createElement('canvas');
   let renderer;
-  // ?aa=0: no MSAA (cheaper fill on weak GPUs). Software WebGL (no GPU, or a blocklisted one) runs this view at a few
-  // frames a second, too slow to play to, so the game stays 2D there unless ?3d=1 forces it (the headless test browsers)
+  // ?aa=0: no MSAA (cheaper fill on weak GPUs). No software WebGL (see the module at the top), unless ?3d=1 forces it
   try { renderer = new T.WebGLRenderer({ canvas: gl, antialias: R3Q.get('aa') !== '0', failIfMajorPerformanceCaveat: R3Q.get('3d') !== '1' }); }
   catch (e) { console.warn('Runecaster: no hardware WebGL, staying 2D —', e && e.message); return; }
-  // ---- camera: from the preset, solve the pitch that puts the hit line at HIT_Y 1:1, and the highway length for u = 1
-  const name = R3CAMS[R3Q.get('cam')] ? R3Q.get('cam') : 'tilt', P = Object.assign({}, R3CAMS[name]);
-  for (const k of Object.keys(P)) if (R3Q.has(k) && isFinite(parseFloat(R3Q.get(k)))) P[k] = parseFloat(R3Q.get(k));
+  // ---- camera: from the preset, solve the pitch that puts the hit line at HIT_Y 1:1, and the highway length for u = 1.
+  // The presets and their overrides are dev knobs (?dev): unchecked values (?fov=0) can break the view
+  const name = DEV && R3CAMS[R3Q.get('cam')] ? R3Q.get('cam') : 'tilt', P = Object.assign({}, R3CAMS[name]);
+  if (DEV) for (const k of Object.keys(P)) if (R3Q.has(k) && isFinite(parseFloat(R3Q.get(k)))) P[k] = parseFloat(R3Q.get(k));
   P.rho = Math.max(1.05, P.rho);
   const F = (H / 2) / Math.tan(P.fov * Math.PI / 360);             // focal length in logical px
   const yhz = (P.rho * P.far - HIT_Y) / (P.rho - 1);               // the floor's horizon: floor depth ∝ 1 / (screen y − yhz)
@@ -3219,35 +3228,61 @@ function r3Init() {
   // ---- the enemy stands on the floor beyond the highway's right edge, top right (?foex = its screen x if it stood on the
   // hit line, ?foeu = its depth). The 2D overlay draws the figure there (drawStage); the scene gives it ground: a dark
   // disc on the floor with a ring in its color. Its size follows its depth: P.foe at the default depth
-  const num = (k, d) => R3Q.has(k) && isFinite(parseFloat(R3Q.get(k))) ? parseFloat(R3Q.get(k)) : d;
+  const num = (k, d) => DEV && R3Q.has(k) && isFinite(parseFloat(R3Q.get(k))) ? parseFloat(R3Q.get(k)) : d; // dev knobs, as the camera's
   const foeu = num('foeu', R3_FOEU), fx = num('foex', R3_FOEX) - W / 2, fz = r3Z(foeu), fp = r3Proj(fx, 0, fz), k0 = P.foe * fp.k / r3Proj(0, 0, r3Z(R3_FOEU)).k, RD = 80;
   const dtex = r3Tex(64, 64, x => { const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(10,1,10,.92)'); gr.addColorStop(.72, 'rgba(10,1,10,.8)'); gr.addColorStop(1, 'rgba(10,1,10,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); }, 1);
   const disc = add(new T.Mesh(r3Quad(), r3Mat({ map: dtex })), 4); disc.scale.set(2 * RD, 1, 2 * RD); disc.position.set(fx, 0, fz);
   const ring = []; for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2; ring.push(new T.Vector3(fx + Math.cos(a) * RD * .78, 0, fz + Math.sin(a) * RD * .78)); }
   R3.foeRing = add(new T.LineLoop(new T.BufferGeometry().setFromPoints(ring), lineMat(PAL.magenta, .55)), 4.1);
   R3.foe = { x: fx, z: fz, u: foeu, k: k0, k0 };
-  ARC_X = fp.x; ARC_AY = fp.y; ARC_Y = ARC_AY - STAGE_TOP; // the anchor every burst, popup, bolt and the nameplate aims at
-  // ---- ?beatlines=1: variant B's beat lines, running down the floor with the glyphs (off: they were the moving world)
+  // ---- ?beatlines=1: beat lines running down the floor with the glyphs (off by default: they read as a moving world)
   if (R3Q.get('beatlines') === '1') {
     const BMAX = 48, bpos = new Float32Array(BMAX * 6), bgeo = new T.BufferGeometry();
     bgeo.setAttribute('position', new T.BufferAttribute(bpos, 3).setUsage(T.DynamicDrawUsage));
     add(new T.LineSegments(bgeo, lineMat(PAL.magenta, .45)), 2).frustumCulled = false;
     R3.beat = { pos: bpos, geo: bgeo, max: BMAX };
   }
-  // ---- the WebGL canvas goes exactly under the game canvas (same CSS box); the game canvas turns transparent
+  // ---- the WebGL canvas goes exactly under the game canvas (same CSS box); the game canvas turns transparent. Every
+  // change to the page goes on R3.undo, so r3Off can put the 2D game back as it was
   const box = document.createElement('div'); box.style.cssText = 'position:relative;flex:none';
+  const st = cv.style, was = { position: st.position, background: st.background, boxShadow: st.boxShadow };
   cv.before(box); box.append(gl, cv);
   gl.style.position = 'absolute'; gl.style.left = '0'; gl.style.top = '0'; gl.style.pointerEvents = 'none';
-  cv.style.position = 'relative'; cv.style.background = 'transparent'; cv.style.boxShadow = 'none';
+  st.position = 'relative'; st.background = 'transparent'; st.boxShadow = 'none';
+  R3.undo = [() => { box.replaceWith(cv); Object.assign(st, was); }];
   R3.on = true; r3Resize();
+  ARC_X = fp.x; ARC_AY = fp.y; ARC_Y = ARC_AY - STAGE_TOP; // the anchor every burst, popup, bolt and the nameplate aims at (r3Off puts 2D's back)
   addEventListener('resize', r3Resize);
-  const hint = document.querySelector('header .hint'); if (hint && DEV) hint.textContent += ` · 3D view (cam ${name}: ?cam=tilt|steep|3q|deep, ?3d=0 for 2D)`;
-  // the copy follows the 3D HUD: the charge is a fuse down the channel, its countdown under the line (2D keeps today's words)
-  for (const li of document.querySelectorAll('#help li')) li.innerHTML = li.innerHTML.replace('the ring over its head fills; in the last bar it counts down the beats',
-    'a fuse burns down from it toward the end of the hit line; in the last bar the beats count down under the line');
+  // a lost WebGL context (a GPU reset, a laptop switching GPUs) would blank the field while the glyphs keep coming: play
+  // on in 2D instead, for the rest of the visit
+  gl.addEventListener('webglcontextlost', () => r3Off('the WebGL context was lost'));
+  const hint = document.querySelector('header .hint');
+  if (hint && DEV) { const h = hint.textContent; hint.textContent += ` · 3D cam ${name} · ?3d=0 for 2D`; R3.undo.push(() => { hint.textContent = h; }); }
+  // the copy follows the 3D HUD: the charge is a fuse down the channel, its countdown under the line, and a curse is named
+  // on the card under the enemy (2D keeps today's words)
+  for (const li of document.querySelectorAll('#help li')) {
+    const h = li.innerHTML;
+    li.innerHTML = h.replace('the ring over its head fills; in the last bar it counts down the beats',
+      'a fuse burns down from it toward the end of the hit line; in the last bar the beats count down under the line')
+      .replace('named on its nameplate', 'named on the card under it');
+    if (li.innerHTML !== h) R3.undo.push(() => { li.innerHTML = h; });
+  }
   const lesson = DEMO.find(S => S.title === 'The enemy charges a big attack');
-  if (lesson) lesson.text = lesson.text.replace('Its ring fills (a low thrum each bar)', 'Its fuse burns down toward the line (a low thrum each bar)')
-    .replace(', and the counter opens your EMPOWERED window.', ' and opens your EMPOWERED window.'); // the longer opening would push the caption to a 4th line, which it cuts
+  if (lesson) {
+    const tx = lesson.text;
+    lesson.text = tx.replace('Its ring fills (a low thrum each bar)', 'Its fuse burns down toward the line (a low thrum each bar)')
+      .replace(', and the counter opens your EMPOWERED window.', ' and opens your EMPOWERED window.'); // the longer opening would push the caption to a 4th line, which it cuts
+    R3.undo.push(() => { lesson.text = tx; });
+  }
+}
+function r3Off(why) { // back to the flat 2D view for good: the enemy's 2D anchor, the page and the copy as they were before r3Init
+  if (!R3.on) return;
+  R3.on = false;
+  ARC_X = FOE_HUD.x; ARC_Y = FOE_HUD.y; ARC_AY = STAGE_TOP + ARC_Y;
+  removeEventListener('resize', r3Resize);
+  for (const f of R3.undo.reverse()) f();
+  try { R3.renderer.dispose(); } catch (e) {} // free what the GPU still holds; a lost context has little left to free
+  console.warn('Runecaster: 3D view off, back to 2D —', why);
 }
 function r3Resize() { // same backing store as the game canvas (fitCanvas's DPR handling), same CSS box
   if (!R3.on) return;

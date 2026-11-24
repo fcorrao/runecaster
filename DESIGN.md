@@ -279,8 +279,8 @@ encounter, so the model must support intra-encounter tempo curves.
    beyond the highway, so its block (name, HP, LETHAL, the charge bar, "weak
    to X", the curse chip, and the boss and curse cards as they land) sits under
    its feet up there; what must reach the eyes at the line comes to the line
-   instead (§5, the countdown). Score and combo move to a dim footer bottom
-   left, bpm and chapter bottom right. Chosen in playtest ("the duel on the
+   instead (the countdown, §8). Score and combo move to the bottom left, bpm
+   and chapter to a dim footer bottom right. Chosen in playtest ("the duel on the
    diagonal") over the same enemy block with score kept top left and no fuse.
    **[OPEN]** more iteration expected — among it, whether enemy HP read that far
    above the line is enough.
@@ -446,8 +446,12 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > caster are untouched: a glyph's centre is on the line at its time. The
   > enemy stands top right beyond the highway; shots between the fighters run
   > along the duel line and up a gutter beside the field's right edge, never
-  > across the lanes. The flat 2D view remains the fallback when three.js
-  > cannot load or WebGL is software-only; `?3d=0` forces it, `?3d=1` forces 3D.
+  > across the lanes. The flat 2D view remains the fallback: when three.js
+  > cannot load, when WebGL is software-only (too slow to play to; three.js is
+  > then not even fetched), and for the rest of the visit if the GPU context is
+  > lost mid-run. `?3d=0` forces 2D; `?3d=1` skips the software-WebGL check.
+  > The camera presets and enemy-spot knobs (`?cam=`, `?fov=`, `?foex=`, …) are
+  > dev-only (`?dev`).
 - **Audio** — the "beat" of the enemy's attack; how is it conveyed (SFX, music,
   screen pulse)?
 
@@ -651,12 +655,14 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   the periphery: a **doom pulse** each countdown beat (detuned saw stack through
   a closing low-pass, a step higher each beat, the first doubled), the **hit
   line turns red** and beats with it, and the **enemy's screen edge flashes
-  red** on each beat (until you ward). **In the 3D view** the enemy is far from
-  the line, so the charge also travels to it: a **fuse** burns down the channel
-  that joins the fighters (the enemy's color, red only in the last bar; gold
-  once you ward), and the countdown digit with the ward prompt (`ward: warcen`,
-  WARDED, or LETHAL) sits in a small box under the hit line, between the index
-  keycaps.
+  red** on each beat (until you ward). **In the 3D view** the hit line turns red
+  but holds still (the world holds still), and the enemy is far from the line,
+  so the charge also travels to it: a **fuse** burns down the channel that joins
+  the fighters (the enemy's color, red only in the last bar; gold once you
+  ward), and a small box under the hit line, between the index keycaps, shows
+  the countdown digit with the ward prompt — `ward: warcen` against a minion,
+  `warcen 3.6s` against a boss (the seconds it will grant) — or WARDED, or
+  LETHAL.
 
   **Empowered window — the caster's mirror of the charge.** A ring over the
   caster fills on a **timer** (20 beats, from the first spell; decided in
