@@ -29,6 +29,15 @@
   #help b { color:#f3a5e6; }
   #help li { margin:2px 0; }
 </style>
+<!-- 3D view: three.js from the CDN, pinned. The game script is classic, so a module bridges it onto window and
+     says so with 'three-ready'. If the import fails the game never hears it and stays in its 2D view. ?3d=0 forces 2D
+     (r3Init also stays 2D without hardware WebGL; ?3d=1 forces 3D there). -->
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }</script>
+<script type="module">
+if (new URLSearchParams(location.search).get('3d') !== '0')
+  import('three').then(T => { window.THREE = T; window.dispatchEvent(new Event('three-ready')); })
+    .catch(e => console.warn('Runecaster: 3D view unavailable, staying 2D —', e && e.message));
+</script>
 </head>
 <body>
 <div id="wrap">
@@ -150,7 +159,7 @@ const BASE_OF = { '!':'1','@':'2','#':'3','$':'4','%':'5','^':'6','&':'7','*':'8
 for (const [sh, base] of Object.entries(BASE_OF)) if (KEYDIR[base]) KEYDIR[sh] = KEYDIR[base];
 
 // ================= geometry =================
-const cv = document.getElementById('game'), cx = cv.getContext('2d');
+const cv = document.getElementById('game'); let cx = cv.getContext('2d'); // let: the 3D view points it at offscreen canvases to texture the enemy and rune panel
 const W = 1120, H = 840; // logical resolution: all drawing uses these; the canvas is scaled to fit the window
 let VIEW = 1; // backing-store pixels per logical pixel (window fit × device pixel ratio)
 function fitCanvas() {
@@ -170,13 +179,20 @@ const HIT_Y = 640, TOP_Y = 138, LOOK = 2.6, PXS = (HIT_Y - TOP_Y) / LOOK; // tal
 // the battle ground IS the hit line: the vista's horizon sits on the glyph circles, the fighters stand in the
 // side margins with their feet on it, and bolts/strikes run along the floor below — the fight happens where you look
 const GROUND_Y = 178, STAGE_TOP = HIT_Y - GROUND_Y, STAGE_H = H - STAGE_TOP;
-const WIZ_X = 96, WIZ_Y = GROUND_Y, ARC_X = 1030, ARC_Y = GROUND_Y, CAST_X = WIZ_X + 64, CAST_Y = WIZ_Y - 88;
-const WIZ_AY = STAGE_TOP + WIZ_Y, ARC_AY = STAGE_TOP + ARC_Y, CAST_AY = STAGE_TOP + CAST_Y; // absolute anchors (CAST = the caster's spell hand)
+const WIZ_X = 96, WIZ_Y = GROUND_Y, CAST_X = WIZ_X + 64, CAST_Y = WIZ_Y - 88;
+let ARC_X = 1030, ARC_Y = GROUND_Y; // let: the 3D view re-points the enemy anchor at its figure, top right (bursts, popups, nameplate follow)
+const FOE_HUD = { x: 1030, y: GROUND_Y }; // 3D: where 2D has the enemy — the volley's start and the duel line's end (the channel runs on from there up the gutter to the enemy)
+const WIZ_AY = STAGE_TOP + WIZ_Y, CAST_AY = STAGE_TOP + CAST_Y; // absolute anchors (CAST = the caster's spell hand)
+let ARC_AY = STAGE_TOP + ARC_Y;
 const FLOOR_Y = HIT_Y + 96; // the duel line on the floor: under the keycap row, above the error meter
 const PW = 0.055, GW = 0.14, DMG = 18, REST = 1.2;
 const LAPSE_GRACE = 0.05; // frame lapse waits this long past the window so a queued in-window keypress is graded by its own timestamp first
 const EARLY_SHOW = 0.6;   // correct key up to this far before the window says EARLY (with ms); earlier presses are strays
 const BOLT_F = 0.38, ARROW_F = 0.45; // casting feel: bolt flight, enemy-arrow flight
+const R3 = { on: false }; // the 3D view (render3d, at the end): on once three.js has loaded and a WebGL renderer exists
+const foeUp = d => ARC_AY - d * (R3.on ? R3.foe.k : 1); // a point d enemy-px above the enemy's feet (the 3D figure is drawn at scale R3.foe.k)
+const POP_TOP = 44; // 3D: a popup over the top-right enemy is held this far down, so its pill stays on the canvas as it rises 26 px
+const foePop = d => R3.on ? Math.max(foeUp(d), POP_TOP + (190 - d) * R3.foe.k) : foeUp(d); // the enemy's popups (d ≤ 190 over its feet), held on the canvas in their 2D order and spacing
 
 // ================= content: the runic tongue (§8 spell content) =================
 // Incantations are phrases in one small invented language, not random letters:
@@ -629,14 +645,14 @@ function startEncounter() {
 function bossArrive() { // the nameplate drops in: toll, a ring of sparks in the boss's color, a jolt
   G.bossCard.fired = true;
   if (!(G.bossCard.entrance && G.enemy.final && sfx('attirus_stinger'))) bossSnd(); // Attirus enters on his own stinger: his theme's organ-and-choir climax over a boom
-  burst(ARC_X, ARC_AY - 80, G.enemy.color, 44, 300); G.shake = Math.max(G.shake, 6);
+  burst(ARC_X, foeUp(80), G.enemy.color, 44, 300); G.shake = Math.max(G.shake, 6);
 }
 // Attirus's twists: the first time he falls he collapses and rises again at 40% HP, quicker; and his charged attack
 // drains — what it deals you heals him, unless a ward counters it (applyStrike)
 const RISE_HP = 0.4, RISE_TEMPO = 1.12;
 function attirusRises() {
   const E = G.enemy; E.risen = true; E.hp = E.max = Math.round(E.max * RISE_HP); E.markIdx = 0; G.curse = null; // a new life, a fresh bar: the curse marks run again
-  defeatSnd(); burst(ARC_X, ARC_AY - 40, E.color, 50, 300); G.shake = 10;
+  defeatSnd(); burst(ARC_X, foeUp(40), E.color, 50, 300); G.shake = 10;
   G.foeDead = now(); G.foeEnter = now() + 1.4; G.strikes = []; // he crumples, then stands again
   G.bpm = Math.min(200, G.bpm * RISE_TEMPO);
   G.bossCard = { at: G.foeEnter + 0.35, fired: false, name: 'ATTIRUS RISES', sub: 'death cannot hold him · faster now' };
@@ -812,7 +828,7 @@ function makeSpell(t0) {
 }
 
 // ================= grading / resolution =================
-function popup(text, color, x, y) { G.pops.push({ text, color, x, y, until: now() + 0.8 }); }
+function popup(text, color, x, y) { if (R3.on) y = Math.max(y, POP_TOP); G.pops.push({ text, color, x, y, until: now() + 0.8 }); }
 // judgment readout: sits in the lane's keycap box (where the tile lands), never over incoming tiles;
 // one per lane — a newer judgment replaces the old one instead of stacking
 const JUDGE_Y = HIT_Y + 54, JUDGE_DUR = 0.6;
@@ -835,6 +851,7 @@ function showCalib() {
 }
 function teachFlash(r) { const l = LANE[r.lane]; G.flash = { text: `'${r.ch}' → ${l.name}`, color: l.color, until: now() + 1.0 }; }
 function burst(x, y, color, n, spd, kind) {
+  if (R3.on) [x, y] = r3PanelPt(x, y); // 3D: a spark aimed at a rune's 2D panel slot lands on its card in the gap
   for (let i = 0; i < n; i++) {
     let a = Math.random() * Math.PI * 2, v = spd * (0.3 + Math.random() * 0.7);
     let vx = Math.cos(a)*v, vy = Math.sin(a)*v, ttl = 0.35 + Math.random()*0.4;
@@ -918,13 +935,13 @@ function applyImpact(b) { // a bolt reached the enemy
   checkCurse();
   impactSnd(b.power);
   G.foeFlash = now();
-  burst(ARC_X, ARC_AY - 44, b.color, 14 + Math.round(22*b.power), 180 + 240*b.power, b.el || 'fire');
-  popup('-' + b.dmg + (b.tag ? ' · ' + b.tag : ''), b.color, ARC_X - 20, ARC_AY - 170);
+  burst(ARC_X, foeUp(44), b.color, 14 + Math.round(22*b.power), 180 + 240*b.power, b.el || 'fire');
+  popup('-' + b.dmg + (b.tag ? ' · ' + b.tag : ''), b.color, ARC_X - 20, foePop(170));
   if (G.enemy.hp <= 0 && G.enemy.final && !G.enemy.risen) { attirusRises(); return; }
   if (G.enemy.hp <= 0) { // encounter cleared: the enemy falls, the run advances (§7)
     popup(G.enemy.name.toUpperCase() + ' DEFEATED', PAL.gold, W/2, 150);
     defeatSnd();
-    burst(ARC_X, ARC_AY - 40, PAL.gold, 60, 340);
+    burst(ARC_X, foeUp(40), PAL.gold, 60, 340);
     G.shake = 12;
     G.foeDead = now(); G.foeEnter = now() + 0.9;
     G.strikes = []; // a fallen enemy's strikes never land
@@ -953,14 +970,14 @@ function applyStrike(s) { // an enemy strike reached the caster
     popup(bul ? 'COUNTERED! · BULWARK ×2' : 'COUNTERED!', RUNES.ward.color, WIZ_X + 40, WIZ_AY - 120);
     G.shake = Math.max(G.shake, 6);
     G.bolts.push({ word: 'COUNTER', el: null, color: RUNES.ward.color, dmg: COUNTER_DMG * (bul ? 2 : 1), power: 1.3, tag: bul ? 'COUNTER · BULWARK ×2' : 'COUNTER',
-      t0: now(), at: now() + BOLT_F, x0: WIZ_X + 52, y0: WIZ_AY - 56, x1: ARC_X, y1: ARC_AY - 44 });
+      t0: now(), at: now() + BOLT_F, x0: WIZ_X + 52, y0: WIZ_AY - 56, x1: ARC_X, y1: foeUp(44) });
     if (!G.empower) openEmpower(tg); // riposte: a counter opens the caster's empowered window at once
     return;
   }
   hurt(s.dmg, s.why);
   if (s.charged && G.enemy.final && G.enemy.hp > 0) { // Attirus drinks what his charged attack takes
     const heal = Math.min(s.dmg, G.enemy.max - G.enemy.hp);
-    if (heal > 0) { G.enemy.hp += heal; popup('+' + heal + ' · LIFE DRAIN', G.enemy.color, ARC_X - 20, ARC_AY - 190); burst(ARC_X, ARC_AY - 80, G.enemy.color, 20, 160); }
+    if (heal > 0) { G.enemy.hp += heal; popup('+' + heal + ' · LIFE DRAIN', G.enemy.color, ARC_X - 20, foePop(190)); burst(ARC_X, foeUp(80), G.enemy.color, 20, 160); }
   }
 }
 function hurt(dmg, why) { // the caster takes damage: an enemy strike, or his own backfire
@@ -1052,6 +1069,7 @@ function grantRune(key, n, why, cracked = false) {
   runeSnd();
 }
 function wakeBoon(key) {
+  if (!BOON_EFFECT[key]) return; // a school with no boon (Attirus's grave) wakes nothing
   BOON_EFFECT[key]();
   popup(`FLAWLESS · ${BOONS[key].label}`, BOONS[key].color, W/2, HIT_Y - 112);
   castRuneSnd();
@@ -1140,7 +1158,7 @@ function castRune(key, power = 1, cracked = false) {
     G.wizCast = { el: S.el, until: now() + 0.5 }; // caster raises his staff
     G.bolts.push({ word: S.name, el: S.el, color: S.color, dmg, power: Math.min(1.5, dmg / 12),
       tag: [power !== 1 && `×${power}`, cracked && 'CRACKED', weak && (veiled ? 'VEIL · WEAK' : 'WEAK'), kindled && 'KINDLED', emp && 'EMPOWERED'].filter(Boolean).join(' · '),
-      t0: now(), at: now() + BOLT_F, x0: CAST_X, y0: CAST_AY, x1: ARC_X, y1: ARC_AY - 44 });
+      t0: now(), at: now() + BOLT_F, x0: CAST_X, y0: CAST_AY, x1: ARC_X, y1: foeUp(44) });
     castSnd(S.el, 1);
   } else if (key === 'mend') {
     const still = !!G.still; G.still = null; // Stillwater doubles this mend
@@ -1534,13 +1552,47 @@ function floorPath(x0, y0, x1, y1, dy, p) {
   if (p > 0.85) { const k = (p - 0.85) / 0.15; return [q(b, x1, x1, k), q(fy, fy, y1, k)]; }    // rise into the target
   return [a + (b - a) * (p - 0.15) / 0.7, fy];                                                  // run the floor
 }
-function noteY(r, t) { // Gale's shift eases in over 0.35 s (grading already uses the new time)
+// ---- 3D HUD, regrouped by owner ("the duel on the diagonal"): the enemy's things under its feet, top right; yours
+// at your caster, bottom left; run meta in a dim footer, bottom right. One channel joins the fighters: along the floor under
+// the keycaps, round the knee, up a gutter parallel to the field's right edge. Its geometry (3D only, constant while the
+// camera holds still): railX = the field's right edge at screen y; gutX = the gutter, 56 px outside it (gutX(HIT_Y) = routeX)
+const FBW = 148; // the enemy block's width
+function railX(y) { return W / 2 + (LANES_W / 2) * (y - R3.g.yhz) / (HIT_Y - R3.g.yhz); }
+function gutX(y) { return railX(y) + 56; }
+function foeBlk() { // the enemy block: x clear of the spellbook (it ends at x 958), its top anchored to the floor disc's near edge
+  const top = Math.round(r3Proj(R3.foe.x, 0, R3.foe.z + 80).y + 4);
+  return { x: Math.max(962, Math.min(W - 10 - FBW, ARC_X - 22)), top, nb: top + 10 };
+}
+// 3D: the enemy stands top right, beyond the highway, so a shot between the fighters must never cross the lanes (nor touch
+// a glyph near the line, late ones included): at the enemy's end it runs down the gutter, at the caster's end down
+// the left margin, and between them along the duel line under the keycaps, as in 2D
+function duelPath(x0, y0, x1, y1, dy, p) {
+  const fy = FLOOR_Y + dy, rev = x1 > x0, E = rev ? [x1, y1] : [x0, y0], C = rev ? [x0, y0] : [x1, y1]; // E: the enemy's end
+  if (!R3.on || E[1] > fy - 150) return floorPath(x0, y0, x1, y1, dy, p);
+  const key = E.concat(C, fy).map(v => v.toFixed(1)).join();
+  let P = R3.routes.get(key);
+  if (!P) { // enemy → gutter → down → corner → along the duel line → rise into the caster, sampled and measured once
+    const RX = R3.routeX, LX = Math.min(C[0], R3.routeXL), pts = [], q = (a, c, b) => { for (let i = 1; i <= 12; i++) { const k = i / 12, m = 1 - k; pts.push([m * m * a[0] + 2 * m * k * c[0] + k * k * b[0], m * m * a[1] + 2 * m * k * c[1] + k * k * b[1]]); } };
+    const y1 = E[1] + 70, g1 = gutX(y1); // the gutter is linear in screen y and meets the old margin (RX) at the hit line
+    pts.push(E); q(E, [g1, E[1]], [g1, y1]); pts.push([RX, HIT_Y]); pts.push([RX, fy - 30]); q([RX, fy - 30], [RX, fy], [RX - 30, fy]); // tight corners: a bolt's word clears the corner lanes' late glyphs
+    pts.push([LX + 30, fy]); q([LX + 30, fy], [LX, fy], [LX, fy - 30]); pts.push([LX, C[1] + 40]); q([LX, C[1] + 40], [LX, C[1]], C);
+    const L = [0]; for (let i = 1; i < pts.length; i++) L.push(L[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    if (R3.routes.size > 32) R3.routes.clear();
+    R3.routes.set(key, P = { pts, L });
+  }
+  const d = Math.max(0, Math.min(1, rev ? 1 - p : p)) * P.L[P.L.length - 1];
+  let i = 1; while (i < P.L.length - 1 && P.L[i] < d) i++;
+  const k = (d - P.L[i - 1]) / ((P.L[i] - P.L[i - 1]) || 1), A = P.pts[i - 1], B = P.pts[i];
+  return [A[0] + (B[0] - A[0]) * k, A[1] + (B[1] - A[1]) * k];
+}
+function noteU(r, t) { // how far up the field a glyph is: 1 at the top, 0 on the line. Gale's shift eases in over 0.35 s (grading already uses the new time)
   let time = r.time;
   if (r.shiftAt && t - r.shiftAt < 0.35) { const k = (t - r.shiftAt) / 0.35, e = 1 - (1 - k) ** 3; time = r.fromTime + (r.time - r.fromTime) * e; }
-  let u = (time - t) / LOOK; // 1 at the top of the field, 0 on the line
+  let u = (time - t) / LOOK;
   if (r.curse === 'landslide' && u > 0 && u < 1) u += 0.8 * u * (1 - u); // boulders: they hang up top, then drop hard (same hit time)
-  return HIT_Y - u * LOOK * PXS;
+  return u;
 }
+function noteY(r, t) { return HIT_Y - noteU(r, t) * LOOK * PXS; } // the 2D field; the 3D highway puts the same u at distance u·LEN
 const gx = r => LNX[r.shown || r.lane]; // where a glyph is drawn: Mirror shows it in the other hand's lane
 const TIDE_Y = HIT_Y - (HIT_Y - TOP_Y) / 3; // Rising Tide: the water line
 
@@ -1667,8 +1719,9 @@ function chargeState(t) {
   return { k: Math.max(0, Math.min(1, (tg - E.chargeFrom) / (E.chargeAt - E.chargeFrom))), left, warn: left >= 1 && left <= WARN_BEATS };
 }
 // enemies face left (toward the caster); all poses are timestamp-driven
-function drawEnemy(t) {
+function drawEnemy(t, part) { // part (3D): 'body' = the figure, its charge aura and impact flash; 'hud' = the charge gauge; neither = both (2D)
   if (t >= G.foeDead && t < G.foeEnter) return; // fell; the next one is on its way
+  const body = part !== 'hud', hud = part !== 'body';
   const enter = t - G.foeEnter;
   const dx = (enter >= 0 && enter < 0.5) ? (1 - enter / 0.5) * 170 : 0;
   const fl = t - G.foeFlash;
@@ -1676,18 +1729,19 @@ function drawEnemy(t) {
   const wind = G.strikes.length ? G.strikes[0].t0 - t : 9;
   const pull = (wind < 0.24 && wind > -0.05) ? 1 - Math.max(0, wind) / 0.24 : 0;
   cx.save();
-  cx.translate(ARC_X + dx - (fl < 0.25 ? 10 * (1 - fl/0.25) : 0), ARC_Y - (fl < 0.25 ? 3 : 0));
+  if (body) cx.translate(ARC_X + dx - (fl < 0.25 ? 10 * (1 - fl/0.25) : 0), ARC_Y - (fl < 0.25 ? 3 : 0));
+  else cx.translate(FOE_HUD.x, FOE_HUD.y); // 3D: the gauge stays at the hit line, bottom right, where 2D has it
   const kind = G.enemy.kind;
   const ck = chargeState(t), hy = { archer: -122, cavalry: -128, boss: -168 }[kind];
-  if (ck && ck.k > 0.5) { // the charge gathers around the body, pulsing red in the last bar
+  if (body && ck && ck.k > 0.5) { // the charge gathers around the body, pulsing red in the last bar
     const c = ck.warn ? PAL.bad : G.enemy.color, g = cx.createRadialGradient(0, hy / 2, 4, 0, hy / 2, -hy * 0.75);
     g.addColorStop(0, c + '66'); g.addColorStop(1, c + '00');
     cx.globalAlpha = (ck.k - 0.5) * 2 * (ck.warn ? .7 + .3 * Math.sin(t * 20) : .6); cx.fillStyle = g;
     cx.beginPath(); cx.ellipse(0, hy / 2, -hy * 0.6, -hy * 0.75, 0, 0, 7); cx.fill(); cx.globalAlpha = 1;
   }
   const pull2 = t - G.foeCharge < 0.3 ? 1 : pull; // the charged attack is loosed with the same wind-up
-  if (kind === 'cavalry') drawRider(t, pull2); else if (kind === 'boss') { cx.save(); cx.scale(0.88, 0.88); drawBoss(t, pull2); cx.restore(); } else drawArcher(pull2);
-  if (ck) { // gauge: a ring that fills with the charge; the last bar counts down its beats and asks for the ward
+  if (body) { if (kind === 'cavalry') drawRider(t, pull2); else if (kind === 'boss') { cx.save(); cx.scale(0.88, 0.88); drawBoss(t, pull2); cx.restore(); } else drawArcher(pull2); }
+  if (hud && ck) { // gauge: a ring that fills with the charge; the last bar counts down its beats and asks for the ward
     const c = ck.warn ? PAL.bad : G.enemy.color;
     cx.fillStyle = 'rgba(10,4,24,.85)'; cx.beginPath(); cx.arc(0, hy, 15, 0, 7); cx.fill();
     cx.strokeStyle = '#3a1a5e'; cx.lineWidth = 3; cx.beginPath(); cx.arc(0, hy, 13, 0, 7); cx.stroke();
@@ -1703,7 +1757,7 @@ function drawEnemy(t) {
       if (!warded) { const wd = wardDur(), wc = wd < WARD_S - 0.05 ? (wd <= WARD_MIN + 0.05 ? PAL.bad : '#ff9a3d') : RUNES.ward.color; cx.fillStyle = wc; cx.globalAlpha = .75 + .25 * Math.sin(t * 8); cx.fillText(G.enemy.kind === 'boss' ? `ward: warcen ${wd.toFixed(1)}s` : 'ward: warcen', 0, hy - 38); cx.globalAlpha = 1; }
     }
   }
-  if (fl < 0.25) { // bolt impact flash, sized to the body
+  if (body && fl < 0.25) { // bolt impact flash, sized to the body
     const [rx, ry, cy] = { archer: [26, 46, -42], cavalry: [52, 42, -44], boss: [48, 78, -80] }[kind];
     cx.globalAlpha = .85 * (1 - fl/0.25); cx.fillStyle = '#ffffff';
     cx.beginPath(); cx.ellipse(0, cy, rx, ry, 0, 0, 7); cx.fill();
@@ -1946,6 +2000,7 @@ function paintBackdrops() {
 }
 function drawStage(t, beat, phase) {
   cx.save(); cx.translate(0, STAGE_TOP);
+  if (!R3.on) { // 3D: the vista and its horizon are the scene's static backdrop, and nothing drifts (the world holds still); the fighters stay here
   cx.drawImage(STAGE_BG, 0, 0, W, STAGE_H);
   cx.strokeStyle = PAL.pink; cx.globalAlpha = .25 + .5 * (1 - phase); cx.lineWidth = 2; // horizon pulses on the beat
   cx.shadowColor = PAL.magenta; cx.shadowBlur = 10;
@@ -1956,27 +2011,112 @@ function drawStage(t, beat, phase) {
     const x = (i * 131 + 40) % W, y = GROUND_Y - ((t * (6 + i % 4 * 3) + i * 37) % 170), r = 3 + (i % 3) * 2, a = t * (0.5 + i * 0.1);
     cx.save(); cx.translate(x, y); cx.rotate(a); cx.fillRect(-r, -r * 0.7, r * 2, r * 1.4); cx.restore();
   }
+  }
+  if (R3.on) drawChannel(); // 3D: the duel line runs on round the knee and up the gutter to the enemy (one channel)
+  else {
   // the duel line: the floor lane bolts and strikes travel, lit in the enemy's color while a spell is live
   const fy = FLOOR_Y - STAGE_TOP, live = activeSpell() && !G.over;
   cx.strokeStyle = live ? G.enemy.color : '#3a1a5e'; cx.globalAlpha = live ? .3 : .5; cx.lineWidth = 2; cx.setLineDash([4, 10]);
-  cx.beginPath(); cx.moveTo(WIZ_X + 60, fy); cx.lineTo(ARC_X - 60, fy); cx.stroke();
+  cx.beginPath(); cx.moveTo(WIZ_X + 60, fy); cx.lineTo((R3.on ? FOE_HUD.x : ARC_X) - 60, fy); cx.stroke();
   cx.setLineDash([]); cx.globalAlpha = 1; cx.lineWidth = 1;
+  }
   if (G.intro) { const ia = Math.min(1, Math.max(0, (t - G.intro.at - IN.casterAt) / IN.casterFade)); if (ia > 0) { cx.save(); cx.translate(0, 16 * (1 - ia)); cx.globalAlpha = ia; drawWizard(t, phase); cx.restore(); cx.globalAlpha = 1; } } // arrives in the left margin: fades up and settles, never crossing into the lanes
   else drawWizard(t, phase);
   drawWard(t);
   drawFocus(t);
-  drawEnemy(t);
+  if (!R3.on) drawEnemy(t);
+  else { // 3D: the figure stands on the floor beyond the highway, top right (its feet on the projected floor point, scaled
+    // like a billboard there: the camera never moves, so this is the same picture with no texture upload). No charge ring:
+    // the charge is the fuse down the channel (drawFuse) and the bar in the enemy block under its feet (drawFoeBlock)
+    cx.save(); cx.translate(ARC_X, ARC_Y); cx.scale(R3.foe.k, R3.foe.k); cx.translate(-ARC_X, -ARC_Y); drawEnemy(t, 'body'); cx.restore();
+  }
   cx.restore();
+}
+// a fighter's health: name / neon gauge with the HP in it / detail line. y0 = the name's baseline; lines = the name already
+// wrapped (the 3D enemy block), each 13 px under the last, pushing the gauge down; otherwise it is cut to the width with '…'
+function hudPanel(x, y0, w, frac, c1, c2, name, hp, sub, subC, lines) {
+  const BAR_H = 14, BAR_Y = y0 + (lines ? 13 * (lines.length - 1) : 0) + 8;
+  cx.textAlign = 'left'; cx.shadowColor = '#000'; cx.shadowBlur = 4;
+  cx.fillStyle = PAL.text; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
+  if (lines) lines.forEach((ln, i) => cx.fillText(ln, x, y0 + 13 * i));
+  else {
+    let n = name; while (n.length > 4 && cx.measureText(n).width > w) n = n.slice(0, -1);
+    cx.fillText(n === name ? n : n.slice(0, -1) + '…', x, y0);
+  }
+  cx.shadowBlur = 0;
+  cx.fillStyle = '#14082c'; rr(x, BAR_Y, w, BAR_H, 6); cx.fill();
+  const g = cx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, c1); g.addColorStop(1, c2);
+  cx.fillStyle = g; cx.shadowColor = c2; cx.shadowBlur = 10; rr(x, BAR_Y, w * Math.max(0, frac), BAR_H, 6); cx.fill(); cx.shadowBlur = 0;
+  cx.strokeStyle = '#3a1a5e'; rr(x, BAR_Y, w, BAR_H, 6); cx.stroke();
+  cx.fillStyle = '#fff'; cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.shadowColor = '#000'; cx.shadowBlur = 4;
+  cx.fillText(hp, x + 7, BAR_Y + 11);
+  if (sub) { cx.fillStyle = subC; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.fillText(sub, x, BAR_Y + BAR_H + 30); }
+  cx.shadowBlur = 0;
+}
+// in the enemy's gauge (x .. x + w at BAR_Y): the lethal preview — held bolts as a pale ghost eaten out of the bar, the
+// pending counter as a gold notch beyond it, LETHAL when they kill — and under it the charged attack filling
+function foeGauge(t, x, BAR_Y, w) {
+  const BAR_H = 14, ck = chargeState(t);
+  if (G.enemy.hp > 0) {
+    const L = lethalPreview(ck && ck.warn), hp = G.enemy.hp, mx = G.enemy.max, px = v => x + w * Math.max(0, v) / mx;
+    const b0 = hp - L.bolts, c0 = b0 - L.counter;
+    if (L.bolts) { cx.fillStyle = '#ffffff'; cx.globalAlpha = .38 + .12 * Math.sin(t * 5); cx.fillRect(px(b0), BAR_Y + 2, px(hp) - px(b0), BAR_H - 4); }
+    if (L.counter && b0 > 0) { cx.fillStyle = PAL.gold; cx.globalAlpha = .85; cx.fillRect(px(c0), BAR_Y + 2, px(b0) - px(c0), BAR_H - 4); }
+    cx.globalAlpha = 1;
+    if (L.bolts || L.counter) { // the HP stays readable over the overlay
+      cx.fillStyle = '#fff'; cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.shadowColor = '#000'; cx.shadowBlur = 4;
+      cx.fillText(hp + ' / ' + mx, x + 7, BAR_Y + 11); cx.shadowBlur = 0;
+    }
+    if (L.bolts + L.counter >= hp) {
+      cx.textAlign = 'right'; cx.fillStyle = PAL.gold; cx.shadowColor = PAL.gold; cx.shadowBlur = 10; cx.globalAlpha = .75 + .25 * Math.sin(t * 8);
+      cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.fillText('LETHAL', x + w - 6, BAR_Y + 11);
+      cx.globalAlpha = 1; cx.shadowBlur = 0; cx.textAlign = 'left';
+    }
+  }
+  if (ck) {
+    cx.fillStyle = '#14082c'; rr(x, BAR_Y + BAR_H + 4, w, 5, 2.5); cx.fill();
+    cx.fillStyle = ck.warn ? PAL.bad : G.enemy.color; cx.globalAlpha = ck.warn ? .7 + .3 * Math.sin(t * 20) : .8;
+    rr(x, BAR_Y + BAR_H + 4, w * ck.k, 5, 2.5); cx.fill(); cx.globalAlpha = 1;
+  }
+}
+// 3D: the channel, one dashed track between the fighters: from the strike's origin an elbow into the gutter, down it
+// (parallel to the field's right edge, fainter than a lane edge so it never reads as a ninth lane), round the knee under the
+// line, then along the floor under the keycaps where 2D's duel line runs. Shots ride it (duelPath); grading never reads it
+function drawChannel() {
+  const live = activeSpell() && !G.over, k = R3.foe.k, ce = [ARC_X - 56 * k, foeUp(48)], y1 = ce[1] + 70, s0 = [gutX(y1), y1], RX = R3.routeX, fy = FLOOR_Y;
+  const quad = (P, a, c, b) => { for (let i = 1; i <= 12; i++) { const q = i / 12, m = 1 - q; P.push([m * m * a[0] + 2 * m * q * c[0] + q * q * b[0], m * m * a[1] + 2 * m * q * c[1] + q * q * b[1]]); } return P; };
+  const up = quad([ce], ce, [s0[0], ce[1]], s0); up.push([RX, HIT_Y]); // the elbow and the gutter (gutX(HIT_Y) = RX)
+  const low = quad([[RX, HIT_Y], [RX, fy - 30]], [RX, fy - 30], [RX, fy], [RX - 30, fy]); low.push([WIZ_X + 60, fy]); // the knee, the floor
+  const len = P => P.reduce((s, p, i) => i ? s + Math.hypot(p[0] - P[i - 1][0], p[1] - P[i - 1][1]) : 0, 0);
+  const stroke = (P, a, off) => { cx.globalAlpha = a; cx.lineDashOffset = off; cx.beginPath(); P.forEach((p, i) => i ? cx.lineTo(p[0], p[1]) : cx.moveTo(p[0], p[1])); cx.stroke(); };
+  cx.save(); cx.translate(0, -STAGE_TOP); // drawStage is stage-translated: back to screen px
+  cx.strokeStyle = live ? G.enemy.color : '#3a1a5e'; cx.lineWidth = 2; cx.setLineDash([4, 10]);
+  stroke(up, live ? .22 : .35, 0); stroke(low, live ? .3 : .5, len(up)); // the dashes run on unbroken round the line
+  cx.restore();
+}
+// 3D: your score and combo under your caster, bottom left; the run's tempo and chapter, dim, bottom right
+function drawFooters(t) {
+  cx.textAlign = 'left'; cx.fillStyle = PAL.text; cx.font = 'bold 16px ui-monospace, Menlo, monospace';
+  cx.shadowColor = PAL.magenta; cx.shadowBlur = 8;
+  cx.fillText(G.score.toLocaleString(), 16, 786);
+  if (G.combo > 1) { cx.fillStyle = PAL.gold; cx.shadowColor = PAL.gold; cx.font = 'bold 15px ui-monospace, Menlo, monospace'; cx.fillText('combo x' + G.combo, 16, 806); }
+  cx.shadowBlur = 0;
+  cx.textAlign = 'right'; cx.fillStyle = PAL.dim; cx.font = '11px ui-monospace, Menlo, monospace';
+  const playing = Math.round(60 / segAt(t).beat), queued = Math.round(G.bpm), chh = chapterAt(G.ci);
+  cx.fillText(playing + ' bpm' + (queued !== playing ? ' → ' + queued : ''), W - 12, 786);
+  cx.fillStyle = PAL.blush; cx.fillText(`ch.${G.ci + 1} ${chh.name} · ${G.ei + 1}/${chh.encs.length}${OPT.dev ? ' · DEV' : ''}${OPT.inf ? ' ∞hp' : ''}`, W - 12, 804);
+  cx.textAlign = 'left';
 }
 
 function draw(t) {
-  if (!BG) paintBackdrops();
-  cx.drawImage(BG, 0, 0, W, H);
+  const shaking = G.shake > 0.2, shk = shaking ? [(Math.random()-.5)*2*G.shake, (Math.random()-.5)*2*G.shake] : null; // one jolt for both layers
+  if (R3.on) { cx.clearRect(0, 0, W, H); render3d(t, shk); } // 3D: the WebGL scene renders under this canvas, which becomes the HUD overlay
+  else { if (!BG) paintBackdrops(); cx.drawImage(BG, 0, 0, W, H); }
   const beat = segAt(t).beat, phase = beatPhase(t); // pulse peaks on the clicks (tempo map), not on t % beat
-  const shaking = G.shake > 0.2;
-  if (shaking) { cx.save(); cx.translate((Math.random()-.5)*2*G.shake, (Math.random()-.5)*2*G.shake); }
+  if (shaking) { cx.save(); cx.translate(shk[0], shk[1]); }
   drawStage(t, beat, phase);
 
+  if (!R3.on) { // 3D: lanes and receptor rings are meshes on the highway
   // lane columns
   for (const l of LANES) {
     const w = LW, x = LNX[l.id] - w/2;
@@ -2003,6 +2143,7 @@ function draw(t) {
     cx.globalAlpha = .12; cx.beginPath(); cx.arc(LNX[l.id], HIT_Y, 21, 0, 7); cx.stroke();
   }
   cx.globalAlpha = 1; cx.lineWidth = 1;
+  }
 
   // keycap strip (finger teaching legend)
   for (const l of LANES) {
@@ -2017,52 +2158,21 @@ function draw(t) {
     cx.fillText((chapterAt(G.ci).tier >= 4 ? l.sym : l.keys).replace(/ /g, ''), LNX[l.id], HIT_Y + 64);
   }
 
-  // health under each fighter's feet, in the side margins beside the hit line — where the eyes already are
-  const PNL_W = 150, PNL_Y = HIT_Y + 30, BAR_H = 14, BAR_Y = PNL_Y + 8;
-  const panel = (x, frac, c1, c2, name, hp, sub, subC) => { // name / neon gauge with the HP in it / detail line
-    cx.textAlign = 'left'; cx.shadowColor = '#000'; cx.shadowBlur = 4;
-    cx.fillStyle = PAL.text; cx.font = 'bold 11px ui-monospace, Menlo, monospace';
-    let n = name; while (n.length > 4 && cx.measureText(n).width > PNL_W) n = n.slice(0, -1);
-    cx.fillText(n === name ? n : n.slice(0, -1) + '…', x, PNL_Y); cx.shadowBlur = 0;
-    cx.fillStyle = '#14082c'; rr(x, BAR_Y, PNL_W, BAR_H, 6); cx.fill();
-    const g = cx.createLinearGradient(x, 0, x + PNL_W, 0); g.addColorStop(0, c1); g.addColorStop(1, c2);
-    cx.fillStyle = g; cx.shadowColor = c2; cx.shadowBlur = 10; rr(x, BAR_Y, PNL_W * Math.max(0, frac), BAR_H, 6); cx.fill(); cx.shadowBlur = 0;
-    cx.strokeStyle = '#3a1a5e'; rr(x, BAR_Y, PNL_W, BAR_H, 6); cx.stroke();
-    cx.fillStyle = '#fff'; cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.shadowColor = '#000'; cx.shadowBlur = 4;
-    cx.fillText(hp, x + 7, BAR_Y + 11);
-    if (sub) { cx.fillStyle = subC; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.fillText(sub, x, BAR_Y + BAR_H + 30); }
-    cx.shadowBlur = 0;
-  };
+  // health under each fighter's feet, in the side margins beside the hit line — where the eyes already are (3D: the
+  // enemy's own block stands under its feet, top right — drawFoeBlock; the CASTER panel stays here)
+  const PNL_W = 150, PNL_Y = HIT_Y + 30;
   const LPX = 12, RPX = W - 12 - PNL_W;
-  panel(LPX, G.hp / 100, G.hp > 40 ? PAL.cyan : PAL.crimson, G.hp > 40 ? '#3cf0a0' : PAL.pink, 'CASTER', G.hp + ' / 100');
-  panel(RPX, G.enemy.hp / G.enemy.max, PAL.wine, G.enemy.color, G.enemy.name.toUpperCase(), Math.max(0, G.enemy.hp) + ' / ' + G.enemy.max,
-    'weak to ' + G.enemy.weak.toUpperCase(), ELC[G.enemy.weak]);
-  const ck = chargeState(t); // the charged attack filling, under the enemy's health
-  if (G.enemy.hp > 0) { // lethal preview: held bolts as a pale ghost eaten out of the bar, the pending counter as a gold notch beyond it
-    const L = lethalPreview(ck && ck.warn), hp = G.enemy.hp, mx = G.enemy.max, px = v => RPX + PNL_W * Math.max(0, v) / mx;
-    const b0 = hp - L.bolts, c0 = b0 - L.counter;
-    if (L.bolts) { cx.fillStyle = '#ffffff'; cx.globalAlpha = .38 + .12 * Math.sin(t * 5); cx.fillRect(px(b0), BAR_Y + 2, px(hp) - px(b0), BAR_H - 4); }
-    if (L.counter && b0 > 0) { cx.fillStyle = PAL.gold; cx.globalAlpha = .85; cx.fillRect(px(c0), BAR_Y + 2, px(b0) - px(c0), BAR_H - 4); }
-    cx.globalAlpha = 1;
-    if (L.bolts || L.counter) { // the HP stays readable over the overlay
-      cx.fillStyle = '#fff'; cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.shadowColor = '#000'; cx.shadowBlur = 4;
-      cx.fillText(hp + ' / ' + mx, RPX + 7, BAR_Y + 11); cx.shadowBlur = 0;
-    }
-    if (L.bolts + L.counter >= hp) {
-      cx.textAlign = 'right'; cx.fillStyle = PAL.gold; cx.shadowColor = PAL.gold; cx.shadowBlur = 10; cx.globalAlpha = .75 + .25 * Math.sin(t * 8);
-      cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.fillText('LETHAL', RPX + PNL_W - 6, BAR_Y + 11);
-      cx.globalAlpha = 1; cx.shadowBlur = 0; cx.textAlign = 'left';
-    }
-  }
-  if (ck) {
-    cx.fillStyle = '#14082c'; rr(RPX, BAR_Y + BAR_H + 4, PNL_W, 5, 2.5); cx.fill();
-    cx.fillStyle = ck.warn ? PAL.bad : G.enemy.color; cx.globalAlpha = ck.warn ? .7 + .3 * Math.sin(t * 20) : .8;
-    rr(RPX, BAR_Y + BAR_H + 4, PNL_W * ck.k, 5, 2.5); cx.fill(); cx.globalAlpha = 1;
+  hudPanel(LPX, PNL_Y, PNL_W, G.hp / 100, G.hp > 40 ? PAL.cyan : PAL.crimson, G.hp > 40 ? '#3cf0a0' : PAL.pink, 'CASTER', G.hp + ' / 100');
+  if (!R3.on) {
+    hudPanel(RPX, PNL_Y, PNL_W, G.enemy.hp / G.enemy.max, PAL.wine, G.enemy.color, G.enemy.name.toUpperCase(), Math.max(0, G.enemy.hp) + ' / ' + G.enemy.max,
+      'weak to ' + G.enemy.weak.toUpperCase(), ELC[G.enemy.weak]);
+    foeGauge(t, RPX, PNL_Y + 8, PNL_W);
   }
 
-  if (!G.cast) drawRunePanel(t); // behind the spells: sigil threads and rests cross the gap over it
+  if (!G.cast && !R3.on) drawRunePanel(t); // behind the spells: sigil threads and rests cross the gap over it (3D: cards standing in the gap)
   // spells: connectors + glyphs
   for (const s of G.spells) {
+    if (!R3.on) { // 3D: threads, rests and glyphs are in the scene; only the volley marker is drawn here
     // a sigil's strokes glow in its rune's color (a clean one flares white as it is sealed); its inscription
     // and word spells keep the plain thread
     const sealed = s.sealedAt && t - s.sealedAt < 0.5;
@@ -2142,18 +2252,19 @@ function draw(t) {
         cx.globalAlpha = 1; cx.lineWidth = 1;
       }
     }
+    }
     // arrow: the volley closing in — a target reticle descending from the stage
     if (!s.fizzled) {
-      // the volley advances along the floor from the enemy toward the caster
-      const p = Math.max(0, Math.min(1, (t - s.arrow.from) / (s.arrow.to - s.arrow.from)));
-      const ax = (ARC_X - 60) - p * (ARC_X - 60 - (WIZ_X + 70));
+      // the volley advances along the floor from the enemy toward the caster (3D: from the enemy's HUD, at the hit line)
+      const p = Math.max(0, Math.min(1, (t - s.arrow.from) / (s.arrow.to - s.arrow.from))), vx = R3.on ? FOE_HUD.x : ARC_X;
+      const ax = (vx - 60) - p * (vx - 60 - (WIZ_X + 70));
       cx.fillStyle = G.enemy.color; cx.globalAlpha = .8;
       cx.beginPath(); cx.moveTo(ax - 10, FLOOR_Y); cx.lineTo(ax + 2, FLOOR_Y - 6); cx.lineTo(ax + 2, FLOOR_Y + 6); cx.fill(); cx.globalAlpha = 1;
       cx.lineWidth = 1;
     }
   }
 
-  if (G.spells.some(s => s.curse === 'tide' && !s.done && s.t0 - t < LOOK)) { // Rising Tide: water over the bottom third of both hands' lanes
+  if (!R3.on && G.spells.some(s => s.curse === 'tide' && !s.done && s.t0 - t < LOOK)) { // Rising Tide: water over the bottom third of both hands' lanes (3D: a water mesh)
     const g = cx.createLinearGradient(0, TIDE_Y, 0, HIT_Y + 30); g.addColorStop(0, 'rgba(57,208,201,.55)'); g.addColorStop(.15, 'rgba(12,60,80,.92)'); g.addColorStop(1, 'rgba(6,30,48,.97)');
     for (const x0 of [X0, X0 + 4 * LW + SPLIT]) {
       cx.fillStyle = g; cx.beginPath(); cx.moveTo(x0, HIT_Y + 30);
@@ -2163,6 +2274,7 @@ function draw(t) {
   }
   // timing overlay drawn OVER the tiles, so it is visible at the moment of judgment:
   // dashed gold lines = PERFECT window (±PW), white line = the beat (pulses on the clicks)
+  if (!R3.on) { // 3D: the band and the hit line lie on the highway floor
   const LX0 = X0 - 12, LX1 = X0 + LANES_W + 12, band = PW * PXS;
   cx.fillStyle = 'rgba(255,207,107,.07)'; cx.fillRect(LX0, HIT_Y - band, LX1 - LX0, 2 * band);
   cx.strokeStyle = PAL.gold; cx.globalAlpha = .6; cx.setLineDash([6, 5]);
@@ -2176,10 +2288,13 @@ function draw(t) {
   cx.shadowBlur = 0; cx.strokeStyle = '#ffffff'; cx.globalAlpha = 0.95; cx.lineWidth = 1.5;
   cx.beginPath(); cx.moveTo(LX0, HIT_Y); cx.lineTo(LX1, HIT_Y); cx.stroke();
   cx.globalAlpha = 1; cx.lineWidth = 1;
+  }
   if (!G.demo) drawErrorBar();
   drawRunes(t);
 
-  // HUD: score / combo / bpm
+  // HUD: score / combo / bpm (3D: footers — yours bottom left under the caster, the run's bottom right; the top left stays sky)
+  if (R3.on) { if (!G.demo) drawFooters(t); }
+  else {
   cx.textAlign = 'left'; cx.fillStyle = PAL.text; cx.font = 'bold 16px ui-monospace, Menlo, monospace';
   cx.shadowColor = PAL.magenta; cx.shadowBlur = 8;
   cx.fillText(G.score.toLocaleString(), 16, 62);
@@ -2190,6 +2305,7 @@ function draw(t) {
   cx.fillText(playing + ' bpm' + (queued !== playing ? ' → ' + queued : ''), 16, 102);
   const chh = chapterAt(G.ci);
   cx.fillStyle = PAL.blush; cx.fillText(`ch.${G.ci + 1} ${chh.name} · ${G.ei + 1}/${chh.encs.length}${OPT.dev ? ' · DEV' : ''}${OPT.inf ? ' ∞hp' : ''}`, 16, 120);
+  }
 
   // current word, graded
   const sp = activeSpell();
@@ -2218,12 +2334,12 @@ function draw(t) {
     cx.globalAlpha = 1; cx.lineWidth = 1;
   }
   // rune bolts in flight: the rune's name dives from the spell hand onto the duel line and runs the floor to the enemy
-  for (const b of G.bolts) {
+  for (const b of G.bolts) { // (3D: duelPath keeps it off the highway — along the duel line, then up the right margin)
     const p = (t - b.t0) / (b.at - b.t0), e = b.color;
-    const [bx, by] = floorPath(b.x0, b.y0, b.x1, b.y1, 0, p);
+    const dl = R3.on ? 18 : 0, [bx, by] = duelPath(b.x0, b.y0, b.x1, b.y1, dl, p); // 3D: a little under the duel line, so the word over it clears a late glyph
     cx.strokeStyle = e; cx.globalAlpha = .45; cx.lineWidth = 3; // comet trail along the path
     cx.beginPath();
-    for (let k = 0; k <= 8; k++) { const [qx, qy] = floorPath(b.x0, b.y0, b.x1, b.y1, 0, Math.max(0, p - k * 0.05)); k ? cx.lineTo(qx, qy) : cx.moveTo(qx, qy); }
+    for (let k = 0; k <= 8; k++) { const [qx, qy] = duelPath(b.x0, b.y0, b.x1, b.y1, dl, Math.max(0, p - k * 0.05)); k ? cx.lineTo(qx, qy) : cx.moveTo(qx, qy); }
     cx.stroke(); cx.globalAlpha = 1; cx.lineWidth = 1;
     cx.shadowColor = e; cx.shadowBlur = 18;
     cx.fillStyle = e;
@@ -2233,9 +2349,9 @@ function draw(t) {
     cx.shadowBlur = 0;
   }
   // enemy strikes in flight, accelerating at the caster: arrows/lances in the enemy's color, a boss hurls an orb
-  for (const s of G.strikes) {
-    const p = Math.min(1, (t - s.t0) / (s.at - s.t0)), e = p * p, c = G.enemy.color;
-    const pt = floorPath(ARC_X - 56, ARC_AY - 48, WIZ_X + 26, WIZ_AY - 56, 10, e), pn = floorPath(ARC_X - 56, ARC_AY - 48, WIZ_X + 26, WIZ_AY - 56, 10, Math.min(1, e + 0.01));
+  for (const s of G.strikes) { // (3D: down the right margin from the figure, then along the duel line)
+    const p = Math.min(1, (t - s.t0) / (s.at - s.t0)), e = p * p, c = G.enemy.color, sx0 = ARC_X - 56 * (R3.on ? R3.foe.k : 1), sy0 = foeUp(48);
+    const pt = duelPath(sx0, sy0, WIZ_X + 26, WIZ_AY - 56, 10, e), pn = duelPath(sx0, sy0, WIZ_X + 26, WIZ_AY - 56, 10, Math.min(1, e + 0.01));
     const ax = pt[0], ay = pt[1], ang = Math.atan2(pn[1] - ay, pn[0] - ax);
     cx.save(); cx.translate(ax, ay); cx.rotate(ang);
     if (s.charged) cx.scale(1.9, 1.9); // the charged attack: the same weapon, twice the size
@@ -2306,7 +2422,7 @@ function draw(t) {
     cx.shadowBlur = 0; cx.fillStyle = PAL.text; fit(G.banner.sub, 14, 9, s => `${s}px ui-monospace, Menlo, monospace`); cx.fillText(G.banner.sub, W/2, 317);
     cx.globalAlpha = 1;
   }
-  drawBossCard(t);
+  const plateAlpha = drawBossCard(t); // 3D: an arrival plate stands where the enemy block will be; the block fades in as it goes
   // peripheral cues — you watch the glyphs, so the edges speak: the enemy's side pulses red on each countdown beat,
   // the caster's side glows cyan while the empowered window is open
   const edge = (fromRight, color, a) => {
@@ -2320,6 +2436,11 @@ function draw(t) {
   const cs = !G.over && chargeState(t);
   if (cs && cs.warn && !G.guard) edge(true, PAL.bad, .55 * (1 - beatPhase(t)) + .12);
   if (G.empower && !G.over) edge(false, EMPOWER_C, .22 + .1 * Math.sin(t * 6));
+  if (R3.on) { // 3D: the enemy's fuse, its block and the well under the line draw over the edge cues, so they keep their contrast in a countdown
+    if (shaking) { cx.save(); cx.translate(shk[0], shk[1]); }
+    drawFuse(t); drawFoeBlock(t, plateAlpha || 0); drawWell(t);
+    if (shaking) cx.restore();
+  }
   // red damage flash
   if (t - G.redFlash < 0.25) { cx.globalAlpha = .28 * (1 - (t - G.redFlash)/0.25); cx.fillStyle = PAL.crimson; cx.fillRect(0, 0, W, H); cx.globalAlpha = 1; }
 
@@ -2328,17 +2449,64 @@ function draw(t) {
 }
 // Bulwark (flawless stone): a hex shield before the caster that shatters into the next counter (×2). Ward (rune): a gold
 // glyph oval held for its bar, flickering as it runs out, bursting when it turns a charged attack (stage-local coordinates)
+// 3D: a boss card is classified once, the first frame it is seen (fired or not), in a draw-side map — not in game state:
+// an arrival (the boss's entrance, ATTIRUS RISES) comes with a full bar; any other is a curse cast mid-fight
+const BOSS_CARD_KIND = new WeakMap();
+function bossCardKind(B) { let k = BOSS_CARD_KIND.get(B); if (!k) BOSS_CARD_KIND.set(B, k = G.enemy.hp >= G.enemy.max ? 'arrival' : 'curse'); return k; }
+// greedy wrap at ' · ' separators (a part still too wide breaks at its spaces), at the current font, to at most max lines
+function wrapDots(text, maxW, max) {
+  const out = [];
+  for (const part of text.split(' · ')) {
+    const j = out.length ? out[out.length - 1] + ' · ' + part : null;
+    if (j !== null && cx.measureText(j).width <= maxW) out[out.length - 1] = j;
+    else if (cx.measureText(part).width <= maxW) out.push(part);
+    else out.push(...wrapText(part, maxW));
+  }
+  return out.slice(0, max);
+}
 // boss nameplate: drops in over the boss's head with a little overshoot, a sheen sweeps it, a pointer marks the boss
 function drawBossCard(t) {
+  if (R3.on) { // 3D: an arrival plate stands top right, where the enemy block will be, and returns its alpha: the block draws at
+    // 1 − it (hidden while the boss is still on its way, fading in as the plate goes). A curse card draws no plate — the
+    // block's HP and LETHAL stay readable mid-fight; its curse chip expands instead (drawFoeBlock)
+    const B = G.bossCard; if (!B) return 0;
+    if (bossCardKind(B) !== 'arrival' || G.cast || G.over) return 0;
+    if (!B.fired) return 1;
+    const e = t - B.at, HOLD = 3.2; if (e < 0) return 1; if (e > HOLD) return 0;
+    const col = G.enemy.color, w = 194, h = 78, x = Math.max(916, Math.min(W - 10 - w, ARC_X - 97)), y = ARC_AY + 16; // ≥ 17 px right of the gutter
+    const k = Math.min(1, e / 0.28), pop = 1 + 1.7 * (k - 1) ** 3 + 0.7 * (k - 1) ** 2; // ease-out-back
+    const a = Math.max(0, Math.min(1, e / 0.12, (HOLD - e) / 0.45));
+    cx.save(); cx.globalAlpha = a;
+    cx.translate(x + w / 2, y + h / 2 - 18 * (1 - k)); cx.scale(pop, pop); cx.translate(-w / 2, -h / 2);
+    cx.fillStyle = 'rgba(10,4,24,.94)'; rr(0, 0, w, h, 10); cx.fill();
+    const px = ARC_X - x; cx.beginPath(); cx.moveTo(px - 8, 0); cx.lineTo(px, -9); cx.lineTo(px + 8, 0); cx.fill(); // pointer up to the boss's feet
+    cx.strokeStyle = col; cx.shadowColor = col; cx.shadowBlur = 14 + 8 * Math.sin(t * 6); cx.lineWidth = 2; rr(0, 0, w, h, 10); cx.stroke();
+    cx.save(); rr(0, 0, w, h, 10); cx.clip(); // a sheen crosses once as it lands
+    const sx = -60 + (w + 120) * Math.min(1, Math.max(0, (e - 0.15) / 0.6)), g = cx.createLinearGradient(sx - 40, 0, sx + 40, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(.5, 'rgba(255,255,255,.22)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    cx.shadowBlur = 0; cx.fillStyle = g; cx.fillRect(0, 0, w, h); cx.restore();
+    cx.textAlign = 'center'; cx.shadowBlur = 0;
+    cx.fillStyle = PAL.bad; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(G.enemy.final ? '☠ FINAL BOSS ☠' : G.enemy.revived ? '☠ BOSS · REVIVED ☠' : '☠ BOSS ☠', w / 2, 15);
+    cx.fillStyle = col; cx.shadowColor = col; cx.shadowBlur = 12; cx.font = 'italic 900 20px "Trebuchet MS", "Arial Black", sans-serif';
+    const nw = cx.measureText(B.name).width; if (nw > w - 16) cx.font = `italic 900 ${Math.max(10, 20 * (w - 16) / nw)}px "Trebuchet MS", "Arial Black", sans-serif`; // a long name shrinks to fit
+    cx.fillText(B.name, w / 2, 38); cx.shadowBlur = 0;
+    cx.fillStyle = PAL.text; cx.font = '10px ui-monospace, Menlo, monospace';
+    wrapDots(B.sub, w - 16, 2).forEach((ln, i) => cx.fillText(ln, w / 2, 55 + 14 * i)); // 'drains life · ward to deny' / 'weak to earth'
+    cx.restore(); cx.lineWidth = 1;
+    return a;
+  }
   const B = G.bossCard; if (!B || !B.fired || G.cast || G.over) return;
   const e = t - B.at, HOLD = 3.2; if (e < 0 || e > HOLD) return;
-  const col = G.enemy.color, w = 214, h = 64, cxp = Math.min(ARC_X, W - 8 - w / 2), y = ARC_AY - 252;
+  const col = G.enemy.color, w = 214, h = 64;
+  const cxp = R3.on ? Math.max(8 + w / 2, Math.min(W - 8 - w / 2, ARC_X)) : Math.min(ARC_X, W - 8 - w / 2);
+  const y = R3.on ? ARC_AY + 16 : ARC_AY - 252; // 3D: the boss stands top right, no room over its head: the plate hangs under its feet
   const k = Math.min(1, e / 0.28), pop = 1 + 1.7 * (k - 1) ** 3 + 0.7 * (k - 1) ** 2; // ease-out-back
   const a = Math.min(1, e / 0.12, (HOLD - e) / 0.45);
   cx.save(); cx.globalAlpha = Math.max(0, a);
   cx.translate(cxp, y + h / 2 - 18 * (1 - k)); cx.scale(pop, pop); cx.translate(-w / 2, -h / 2);
   cx.fillStyle = 'rgba(10,4,24,.94)'; rr(0, 0, w, h, 10); cx.fill();
-  cx.beginPath(); cx.moveTo(ARC_X - cxp + w / 2 - 8, h); cx.lineTo(ARC_X - cxp + w / 2, h + 9); cx.lineTo(ARC_X - cxp + w / 2 + 8, h); cx.fill(); // pointer to the boss
+  if (R3.on) { const px = ARC_X - cxp + w / 2; cx.beginPath(); cx.moveTo(px - 8, 0); cx.lineTo(px, -9); cx.lineTo(px + 8, 0); cx.fill(); } // pointer up to the boss's feet
+  else { cx.beginPath(); cx.moveTo(ARC_X - cxp + w / 2 - 8, h); cx.lineTo(ARC_X - cxp + w / 2, h + 9); cx.lineTo(ARC_X - cxp + w / 2 + 8, h); cx.fill(); } // pointer to the boss
   cx.strokeStyle = col; cx.shadowColor = col; cx.shadowBlur = 14 + 8 * Math.sin(t * 6); cx.lineWidth = 2; rr(0, 0, w, h, 10); cx.stroke();
   cx.save(); rr(0, 0, w, h, 10); cx.clip(); // a sheen crosses once as it lands
   const sx = -60 + (w + 120) * Math.min(1, Math.max(0, (e - 0.15) / 0.6)), g = cx.createLinearGradient(sx - 40, 0, sx + 40, 0);
@@ -2351,6 +2519,121 @@ function drawBossCard(t) {
   cx.fillText(B.name, w / 2, 38); cx.shadowBlur = 0;
   cx.fillStyle = PAL.text; cx.font = '10px ui-monospace, Menlo, monospace'; cx.fillText(B.sub, w / 2, 55);
   cx.restore(); cx.lineWidth = 1;
+}
+// 3D: the enemy's name in its block, split once per name (bold 11px): one line if it fits; else at ', ' when both halves fit
+// (the first keeps the comma); else at the last space line 1 fits, line 2 cut with '…'
+const FOE_NAMES = new Map();
+function foeNameLines(name) {
+  let L = FOE_NAMES.get(name); if (L) return L;
+  cx.font = 'bold 11px ui-monospace, Menlo, monospace';
+  const fits = s => cx.measureText(s).width <= FBW, c = name.indexOf(', ');
+  const cut = s => { let n = s; while (n.length > 4 && !fits(n)) n = n.slice(0, -1); return n === s ? n : n.slice(0, -1) + '…'; };
+  if (fits(name)) L = [name];
+  else if (c > 0 && fits(name.slice(0, c + 1)) && fits(name.slice(c + 2))) L = [name.slice(0, c + 1), name.slice(c + 2)];
+  else { let i = name.lastIndexOf(' '); while (i > 0 && !fits(name.slice(0, i))) i = name.lastIndexOf(' ', i - 1); L = i > 0 ? [name.slice(0, i), cut(name.slice(i + 1))] : [cut(name)]; }
+  FOE_NAMES.set(name, L); return L;
+}
+// 3D: the enemy's block, under its feet at the top right: name, HP gauge (lethal ghost, counter notch and LETHAL in it),
+// its charge bar, its weakness and the curse it has up. Clear of the spellbook (x ≥ 962), so HP and LETHAL stay readable
+// while you pick a bolt. Drawn at 1 − the arrival plate's alpha; while they crossfade it is painted whole on its own layer
+let fbLayer = null;
+function drawFoeBlock(t, plateAlpha, layered) {
+  if (G.over) return;
+  const A = layered ? 1 : 1 - plateAlpha; if (A <= 0) return;
+  if (A < 1) {
+    if (!fbLayer || fbLayer.canvas.width !== cv.width || fbLayer.canvas.height !== cv.height) { const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height; fbLayer = c.getContext('2d'); }
+    r3Paint(fbLayer, VIEW, () => drawFoeBlock(t, 0, true));
+    cx.save(); cx.globalAlpha = A; cx.drawImage(fbLayer.canvas, 0, 0, W, H); cx.restore();
+    return;
+  }
+  const { x, top, nb } = foeBlk(), E = G.enemy, col = E.color, lines = foeNameLines(E.name.toUpperCase()), dy = 13 * (lines.length - 1);
+  cx.fillStyle = 'rgba(10,4,24,.72)'; rr(x - 3, top - 2, FBW + 6, nb + dy + 70 - top, 8); cx.fill(); // the backing card: legible over the figure's glow and the edge flash
+  cx.strokeStyle = col; cx.globalAlpha = .5; cx.lineWidth = 1; rr(x - 3, top - 2, FBW + 6, nb + dy + 70 - top, 8); cx.stroke(); cx.globalAlpha = 1;
+  hudPanel(x, nb, FBW, E.hp / E.max, PAL.wine, col, null, Math.max(0, E.hp) + ' / ' + E.max, 'weak to ' + E.weak.toUpperCase(), ELC[E.weak], lines);
+  foeGauge(t, x, nb + dy + 8, FBW);
+  // the curse it has up (the chip that was in the top-left column). As a curse is cast, it lands here expanded — the card's
+  // news, dropping in with the plate's overshoot and sheen — for the card's 3.2 s, then settles to its 30-px form
+  const B = G.bossCard, HOLD = 3.2, ce = B && B.fired && !G.cast && bossCardKind(B) === 'curse' ? t - B.at : -1, big = ce >= 0 && ce <= HOLD;
+  const cl = cursedLeft(); if (!cl && !big) return;
+  const cy = nb + dy + 70, id = curseOf(), name = big ? B.name : `☠ ${CURSES[id] ? CURSES[id].name : ''}`;
+  cx.font = '9.5px ui-monospace, Menlo, monospace';
+  const sub = big ? wrapDots(B.sub, 132, 4) : [], s = big ? Math.max(0, Math.min(1, (HOLD - ce) / 0.3)) : 0; // s: 1 while it holds, 0 settled
+  const h = 30 + (18 + 12 * sub.length + 6 - 30) * s, k = big ? Math.min(1, ce / 0.28) : 1, pop = 1 + 1.7 * (k - 1) ** 3 + 0.7 * (k - 1) ** 2;
+  cx.save();
+  cx.translate(x + FBW / 2, cy + h / 2 - 18 * (1 - k)); cx.scale(pop, pop); cx.translate(-FBW / 2, -h / 2);
+  cx.fillStyle = 'rgba(10,4,24,.85)'; rr(0, 0, FBW, h, 7); cx.fill();
+  cx.strokeStyle = col; cx.shadowColor = col; cx.shadowBlur = 8; rr(0, 0, FBW, h, 7); cx.stroke(); cx.shadowBlur = 0;
+  rr(0, 0, FBW, h, 7); cx.clip();
+  if (big) { // a sheen crosses once as it lands
+    const sx = -60 + (FBW + 120) * Math.min(1, Math.max(0, (ce - 0.15) / 0.6)), g = cx.createLinearGradient(sx - 40, 0, sx + 40, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(.5, 'rgba(255,255,255,.22)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    cx.fillStyle = g; cx.fillRect(0, 0, FBW, h);
+  }
+  cx.textAlign = 'left'; cx.fillStyle = col; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(name, 8, 12);
+  cx.fillStyle = PAL.text; cx.font = '9.5px ui-monospace, Menlo, monospace';
+  if (s > 0) { cx.globalAlpha = s; sub.forEach((ln, i) => cx.fillText(ln, 8, 26 + 12 * i)); }
+  if (s < 1 && cl) { cx.globalAlpha = 1 - s; cx.fillText(`${cl} cursed spell${cl > 1 ? 's' : ''}`, 8, 24); }
+  cx.restore(); cx.globalAlpha = 1;
+}
+// 3D: the enemy's charged attack as a fuse burning down the gutter toward the end of the hit line: dim, in its color, one
+// step per beat while it charges (never red before the last bar); in the last bar it lights red notch by notch, beating
+// with the doom pulse (gold once warded). Its digit and the ward prompt are in the well under the line (drawWell)
+function drawFuse(t) {
+  if (G.over || G.cast) return; // the spellbook covers the field; the block's charge bar still shows the charge
+  const ck = chargeState(t); if (!ck) return;
+  const E = G.enemy, y0 = foeUp(48) + 70, S0 = [gutX(y0), y0], S1 = [gutX(470), 470], S2 = [gutX(626), 626];
+  const at = (P, Q, f) => [P[0] + (Q[0] - P[0]) * f, P[1] + (Q[1] - P[1]) * f];
+  const seg = (P, Q, w, c, a, glow) => { cx.globalAlpha = a; cx.strokeStyle = c; cx.lineWidth = w; cx.shadowColor = c; cx.shadowBlur = glow; cx.beginPath(); cx.moveTo(P[0], P[1]); cx.lineTo(Q[0], Q[1]); cx.stroke(); cx.shadowBlur = 0; };
+  const tip = (P, c, ch, chc) => {
+    cx.globalAlpha = 1; cx.fillStyle = 'rgba(10,4,24,.85)'; cx.beginPath(); cx.arc(P[0], P[1], 9, 0, 7); cx.fill();
+    cx.strokeStyle = c; cx.lineWidth = 1.5; cx.beginPath(); cx.arc(P[0], P[1], 8, 0, 7); cx.stroke();
+    cx.fillStyle = chc; cx.font = 'bold 9px ui-monospace, Menlo, monospace'; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(ch, P[0], P[1] + .5);
+  };
+  cx.save(); cx.lineCap = 'round';
+  if (!ck.warn) { // charging: the burnt part S0 → T, T stepping a beat at a time
+    const f = Math.max(0, Math.min(1, (E.chargeBeats - ck.left) / Math.max(1, E.chargeBeats - WARN_BEATS))), T = at(S0, S1, f);
+    if (f > 0) seg(S0, T, 3, E.color, .5, 0);
+    tip(T, E.color, '⚡', E.color);
+  } else { // the last bar: S1 → N_j lit, one notch per beat; the tip reaches the end of the line on the last beat
+    const warded = !!G.guard, c = warded ? RUNES.ward.color : PAL.bad, j = Math.max(1, Math.min(WARN_BEATS, WARN_BEATS - ck.left + 1)), N = i => at(S1, S2, i / WARN_BEATS);
+    seg(S0, S1, 3, E.color, .5, 0);
+    seg(S1, N(j), 4, c, .7 + .3 * (1 - beatPhase(t)), 12);
+    const L = Math.hypot(S2[0] - S1[0], S2[1] - S1[1]), nx = -(S2[1] - S1[1]) / L * 4, ny = (S2[0] - S1[0]) / L * 4; // 8-px ticks across the gutter
+    cx.lineWidth = 2;
+    for (let i = 1; i <= WARN_BEATS; i++) { const P = N(i), lit = i <= j; cx.globalAlpha = lit ? 1 : .35; cx.strokeStyle = lit ? c : PAL.bad; cx.beginPath(); cx.moveTo(P[0] - nx, P[1] - ny); cx.lineTo(P[0] + nx, P[1] + ny); cx.stroke(); }
+    tip(N(j), c, warded ? '◎' : '⚡', warded ? c : '#fff');
+  }
+  cx.restore();
+}
+// 3D: the thumb well, under the hit line between the index keycaps (only judged glyphs pass there): the charged attack's
+// countdown and the ward prompt in its last bar, else LETHAL. One at a time; nothing while the spellbook is open
+function drawWell(t) {
+  if (G.cast || G.over) return;
+  const ck = chargeState(t), E = G.enemy, warn = !!(ck && ck.warn);
+  let lethal = false;
+  if (!warn && E.hp > 0) { const L = lethalPreview(false); lethal = L.bolts + L.counter >= E.hp; }
+  if (!warn && !lethal) return;
+  const warded = warn && !!G.guard, col = lethal ? PAL.gold : warded ? RUNES.ward.color : PAL.bad, X = 560, F = 'px ui-monospace, Menlo, monospace';
+  cx.save(); cx.textAlign = 'center';
+  cx.fillStyle = 'rgba(10,4,24,.85)'; rr(518, 650, 84, 58, 10); cx.fill();
+  cx.strokeStyle = col; cx.lineWidth = 1.5; rr(518, 650, 84, 58, 10); cx.stroke();
+  if (warn) {
+    cx.fillStyle = 'rgba(10,4,24,.85)'; cx.beginPath(); cx.arc(X, 670, 16, 0, 7); cx.fill();
+    cx.strokeStyle = col; cx.lineWidth = 3; cx.shadowColor = col; cx.shadowBlur = 14; cx.beginPath(); cx.arc(X, 670, 14, 0, 7); cx.stroke(); cx.shadowBlur = 0;
+    if (warded) { cx.fillStyle = col; cx.font = 'bold 15' + F; cx.fillText('◎', X, 676); }
+    else { cx.fillStyle = '#fff'; cx.font = 'bold 16' + F; cx.fillText(String(ck.left), X, 676); }
+    cx.font = 'bold 11' + F;
+    if (warded) { cx.fillStyle = col; cx.fillText('WARDED', X, 700); }
+    else { // the boss's ward shortens with each charge it has loosed: gold, orange once shortened, red at the minimum
+      const wd = wardDur(), wc = wd < WARD_S - 0.05 ? (wd <= WARD_MIN + 0.05 ? PAL.bad : '#ff9a3d') : RUNES.ward.color;
+      cx.fillStyle = wc; cx.globalAlpha = .75 + .25 * Math.sin(t * 8); cx.fillText(E.kind === 'boss' ? `warcen ${wd.toFixed(1)}s` : 'ward: warcen', X, 700);
+    }
+  } else {
+    cx.fillStyle = PAL.gold; cx.shadowColor = PAL.gold; cx.shadowBlur = 10; cx.globalAlpha = .75 + .25 * Math.sin(t * 8);
+    cx.font = 'bold 15' + F; cx.fillText('LETHAL', X, 676); cx.shadowBlur = 0; cx.globalAlpha = 1;
+    cx.fillStyle = PAL.dim; cx.font = '10' + F; cx.fillText('Space · bolt', X, 696);
+  }
+  cx.restore();
 }
 function drawWard(t) {
   const x = WIZ_X + 52, y = WIZ_Y - 56, c = BOONS.bulwark.color;
@@ -2371,7 +2654,7 @@ function drawWard(t) {
   }
   const w = RUNES.ward.color, ox = x + 18;
   if (G.guard) {
-    const up = Math.min(1, (t - G.guard.at) / 0.25), left = G.guard.until - (t - OPT.inOff / 1000);
+    const up = Math.max(0, Math.min(1, (t - G.guard.at) / 0.25)), left = G.guard.until - (t - OPT.inOff / 1000); // ≥ 0: the heard clock can step back a few ms past a just-raised ward (a negative radius throws)
     cx.save(); cx.globalAlpha = up * (left < 0.8 ? 0.55 + 0.45 * Math.sin(t * 30) : 1);
     cx.fillStyle = w + '1a'; cx.beginPath(); cx.ellipse(ox, y, 22 * up, 60 * up, 0, 0, 7); cx.fill();
     cx.strokeStyle = w; cx.shadowColor = w; cx.shadowBlur = 16; cx.lineWidth = 3; cx.stroke();
@@ -2398,14 +2681,16 @@ function runePip(x, y, r, color, j, n, cr) {
 const RP = { x: W/2 - LANES_W / 2 + 4 * LW + 3, w: SPLIT - 6, y: TOP_Y - 30, h: HIT_Y - 26 - (TOP_Y - 30) };
 function drawRunePanel(t) {
   const keys = Object.keys(RUNES), RH = (RP.h - 24) / keys.length, px = RP.x;
-  cx.fillStyle = 'rgba(10,4,24,.82)'; rr(px, RP.y, RP.w, RP.h, 10); cx.fill();
-  cx.strokeStyle = '#3a1a5e'; rr(px, RP.y, RP.w, RP.h, 10); cx.stroke();
+  const bake = R3.on && R3.baking; // 3D: painting the cards' texture, which changes only with the runes' state — no backdrop (a floor
+  // mesh), no flash or drop-in (render3d animates those on the cards), and the NEW badge holds still (the world doesn't pulse)
+  if (!bake) { cx.fillStyle = 'rgba(10,4,24,.82)'; rr(px, RP.y, RP.w, RP.h, 10); cx.fill();
+    cx.strokeStyle = '#3a1a5e'; rr(px, RP.y, RP.w, RP.h, 10); cx.stroke(); }
   cx.textAlign = 'center'; cx.fillStyle = PAL.dim; cx.font = 'bold 11px ui-monospace, Menlo, monospace'; cx.fillText('RUNES · Space', W/2, RP.y + 16);
   keys.forEach((key, i) => {
     const S = RUNES[key], n = G.runes[key] || 0, y = RP.y + 24 + i * RH, owned = owns(key), weak = S.el && S.el === G.enemy.weak;
-    const flash = G.runeFlash && G.runeFlash.key === key && t - G.runeFlash.at < 0.9 ? 1 - (t - G.runeFlash.at) / 0.9 : 0;
+    const flash = !bake && G.runeFlash && G.runeFlash.key === key && t - G.runeFlash.at < 0.9 ? 1 - (t - G.runeFlash.at) / 0.9 : 0;
     let dy = 0; // the start cinematic: the card drops from just above the panel into its slot
-    if (G.intro) { const lt = (t - G.intro.at) - (IN.runeAt + i * IN.runeStep); if (lt < 0) return; dy = (90 - (y + 2)) * Math.pow(1 - Math.min(1, lt / IN.runeFall), 2.4); }
+    if (G.intro && !bake) { const lt = (t - G.intro.at) - (IN.runeAt + i * IN.runeStep); if (lt < 0) return; dy = (90 - (y + 2)) * Math.pow(1 - Math.min(1, lt / IN.runeFall), 2.4); }
     cx.save(); cx.translate(0, dy);
     if (flash) { cx.fillStyle = S.color; cx.globalAlpha = .3 * flash; rr(px + 3, y, RP.w - 6, RH - 4, 8); cx.fill(); cx.globalAlpha = 1; }
     // one centred column: the name on top, the art, the charges under it
@@ -2427,7 +2712,7 @@ function drawRunePanel(t) {
     const badge = G.unseen.has(key) ? ['NEW', PAL.gold] : weak ? ['×2', PAL.bad] : null;
     if (badge) {
       cx.font = 'bold 10px ui-monospace, Menlo, monospace'; const bw = cx.measureText(badge[0]).width + 8;
-      cx.globalAlpha = badge[0] === 'NEW' ? .8 + .2 * Math.sin(t * 6) : 1;
+      cx.globalAlpha = badge[0] === 'NEW' && !bake ? .8 + .2 * Math.sin(t * 6) : 1;
       cx.fillStyle = 'rgba(10,4,24,.9)'; rr(ax + 2, ay + as - 16, bw, 14, 4); cx.fill();
       cx.fillStyle = badge[1]; cx.textAlign = 'left'; cx.fillText(badge[0], ax + 6, ay + as - 5); cx.globalAlpha = 1;
     }
@@ -2500,9 +2785,9 @@ function drawRuneStatus(t) {
   if (G.still) lines.push([BOONS.still, 'next mend ×2']);
   if (G.kindle) lines.push([BOONS.kindle, 'next bolt ×2']);
   if (t - G.galeFx < 1.5) lines.push([BOONS.gale, 'blown back · ring +1 bar']);
-  const cl = !G.over && cursedLeft(); if (cl) lines.push([{ color: G.enemy.color, icon: '☠', label: CURSES[curseOf()].name }, `${cl} cursed spell${cl > 1 ? 's' : ''}`]);
+  const cl = !R3.on && !G.over && cursedLeft(); if (cl) lines.push([{ color: G.enemy.color, icon: '☠', label: CURSES[curseOf()].name }, `${cl} cursed spell${cl > 1 ? 's' : ''}`]); // 3D: the curse is in the enemy's block
   lines.forEach(([P, text], i) => {
-    const y = 146 + i * 36;
+    const y = R3.on ? 398 - i * 36 : 146 + i * 36; // 3D: your chips stack upward over your caster; the top left stays sky
     cx.fillStyle = 'rgba(10,4,24,.85)'; rr(12, y, 156, 30, 7); cx.fill();
     cx.strokeStyle = P.color; cx.shadowColor = P.color; cx.shadowBlur = 8; rr(12, y, 156, 30, 7); cx.stroke(); cx.shadowBlur = 0;
     cx.textAlign = 'left'; cx.fillStyle = P.color; cx.font = 'bold 10px ui-monospace, Menlo, monospace'; cx.fillText(`${P.icon} ${P.label}`, 20, y + 12);
@@ -2518,8 +2803,8 @@ function drawRunes(t) {
     const k = (t - G.galeFx) / 0.7, c = BOONS.gale.color;
     cx.strokeStyle = c; cx.lineWidth = 2; cx.shadowColor = c; cx.shadowBlur = 8;
     for (const l of LANES) for (let j = 0; j < 3; j++) {
-      const x = LNX[l.id] - 24 + j * 24, y = HIT_Y - ((k * 1.6 + j * 0.23) % 1) * (HIT_Y - TOP_Y);
-      cx.globalAlpha = (1 - k) * .8; cx.beginPath(); cx.moveTo(x, y); cx.lineTo(x, y - 46); cx.stroke();
+      const x = LNX[l.id] - 24 + j * 24, y = HIT_Y - ((k * 1.6 + j * 0.23) % 1) * (HIT_Y - TOP_Y), a = R3.on ? r3Fl(x, y) : { x, y }, b = R3.on ? r3Fl(x, y - 46) : { x, y: y - 46 }; // 3D: up the floor
+      cx.globalAlpha = (1 - k) * .8; cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
     }
     cx.globalAlpha = 1; cx.shadowBlur = 0; cx.lineWidth = 1;
   }
@@ -2540,7 +2825,7 @@ function drawRunes(t) {
   // cast mode: lanes dim, a glyph ring turns, the typed name glows at its heart
   const R = CAST_RING;
   if (G.cast) {
-    const open = Math.min(1, (t - G.cast.at) / 0.2);
+    const open = Math.max(0, Math.min(1, (t - G.cast.at) / 0.2)); // ≥ 0: likewise a cast opened a few ms "after" this frame's t
     cx.save(); cx.translate(R.x, R.y); cx.globalAlpha = open;
     cx.fillStyle = 'rgba(10,4,24,.9)'; cx.beginPath(); cx.arc(0, 0, R.r + 14, 0, 7); cx.fill();
     cx.strokeStyle = PAL.pink; cx.lineWidth = 2; cx.shadowColor = PAL.magenta; cx.shadowBlur = 14;
@@ -2702,6 +2987,385 @@ function drawGameOver(t) {
   cx.textAlign = 'center'; cx.fillStyle = PAL.blush; cx.font = 'bold 16px ui-monospace, Menlo, monospace'; cx.shadowColor = PAL.magenta; cx.shadowBlur = 10;
   cx.fillText('click to retry', W/2, 236 + 46 + BOARD_N * 24 + 34); cx.shadowBlur = 0;
 }
+// ================= 3D view: the highway in WebGL under the 2D canvas, which becomes its HUD =================
+// The camera is pinned to the 2D layout: world units are logical px, a lane sits at x = LNX − W/2, the hit line is the
+// floor line z = 0, and that line projects 1:1 onto the 2D canvas (lane centres land on LNX at HIT_Y). So whatever the
+// 2D game draws at or under the hit line (keycaps, the caster's panel, judgments, hit bursts, the caster, the error bar)
+// still lines up and stays in the overlay. A glyph sits at distance noteU(r, t)·LEN down the highway — the same u as the
+// 2D field, Landslide and Gale included — so it crosses the hit line exactly at r.time.
+// "tilt" below is the 2D field tilted into perspective (TILT 0.6, the prototype this view was drawn from): the default
+// camera is its one-point projection, so the highway, its glyphs and the far end land where tilt drew them. The world
+// holds still: a static backdrop painted once (tilt's sky
+// and vista, in screen space), lanes, receptors, the rune panel; only glyphs (and the fighters, hits and shots) move.
+const R3Q = new URLSearchParams(location.search);
+// camera presets (?cam=tilt|steep|3q|deep). far = screen y where glyphs enter (u = 1); rho = how many times deeper u = 1 is
+// than the hit line (the far lanes are 1/rho as wide); alpha = how much a glyph grows with depth to stay readable
+// (0 = true perspective, 1 = never shrinks); foe = the enemy's on-screen scale at its default spot. Each can be
+// overridden: ?cam=3q&rho=2.2. The enemy's spot: ?foex=<its screen x if it stood on the hit line>&foeu=<its depth u>
+const R3CAMS = {
+  tilt:  { far: 138, rho: 1.6, alpha: 0,    foe: 0.8,  fov: 50 }, // tilt's: u = 1 at TOP_Y, 1 / (1 + 0.6u) scale, true perspective
+  steep: { far: 262, rho: 2.0, alpha: 0.5,  foe: 0.95, fov: 50 },
+  '3q':  { far: 282, rho: 2.5, alpha: 0.55, foe: 0.9,  fov: 50 },
+  deep:  { far: 300, rho: 3.2, alpha: 0.6,  foe: 0.85, fov: 50 },
+};
+const R3_UV = 1.25, R3_FOEX = 1200, R3_FOEU = 0.85; // glyphs surface between u = 1.25 and 1.05 (tilt's fog); the enemy's default spot
+const r3Fog = u => Math.max(0, Math.min(1, (R3_UV - u) / 0.2));
+const r3Z = u => -u * R3.g.LEN; // distance down the highway
+const r3D = u => 1 + (R3.g.rho - 1) * u; // depth at u over the hit line's: there, a world unit is 1 / r3D(u) screen px
+const r3Grow = u => Math.pow(Math.max(0.5, r3D(u)), R3.g.alpha); // world-size factor that keeps far glyphs legible
+const r3U = y => (HIT_Y - y) / (LOOK * PXS); // a flat-field y → its depth u
+function r3Proj(x, y, z) { // world → logical screen px (unshaken), and k = screen px per world unit there
+  const g = R3.g, dy = y - g.camY, dz = z - g.camZ, depth = -dy * g.s - dz * g.c, k = g.F / depth;
+  return { x: W / 2 + x * k, y: H / 2 - (dy * g.c - dz * g.s) * k, k };
+}
+function r3Fl(x, y) { const p = r3Proj(x - W / 2, 0, r3Z(r3U(y))); return { x: p.x, y: p.y, s: p.k }; } // a point of the flat field, on the floor (tilt's fl)
+function r3Unfloor(sx, sy) { // the floor point [x, z] under screen point (sx, sy)
+  const g = R3.g, s = (sy - g.yhz) / (HIT_Y - g.yhz); return [(sx - W / 2) / s, r3Z((1 / s - 1) / (g.rho - 1))];
+}
+const r3Flat = (x, y) => y <= HIT_Y ? [x - W / 2, r3Z(r3U(y))] : r3Unfloor(x, y); // a flat-field point on the floor: in perspective up to the line, square-on under it (tilt's lay)
+function r3Tex(w, h, paint, scale = 2, crisp = false) { // a CanvasTexture painted in logical px (crisp: drawn 1:1 on screen — no mipmaps)
+  const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * scale)); c.height = Math.max(1, Math.round(h * scale));
+  const x = c.getContext('2d'); x.scale(scale, scale); paint(x, w, h, scale);
+  const t = new R3.T.CanvasTexture(c); t.colorSpace = R3.T.SRGBColorSpace;
+  if (crisp) { t.generateMipmaps = false; t.minFilter = R3.T.LinearFilter; }
+  return t;
+}
+function r3Sprite(order, map) {
+  const T = R3.T, s = new T.Sprite(new T.SpriteMaterial({ map: map || null, transparent: true, depthTest: false, depthWrite: false, fog: false }));
+  s.renderOrder = order; return s;
+}
+function r3Mat(o) { return new R3.T.MeshBasicMaterial(Object.assign({ transparent: true, depthTest: false, depthWrite: false, fog: false, side: R3.T.DoubleSide }, o)); }
+function r3Quad() { const g = new R3.T.PlaneGeometry(1, 1); g.rotateX(-Math.PI / 2); return g; } // a 1×1 floor quad: scale.x = width, scale.z = length; uv v = 1 at the far end
+function r3Take(kind, make) { // per-frame object pools: take what this frame draws, the rest hide
+  const P = R3.pools[kind] || (R3.pools[kind] = { list: [], n: 0 });
+  let o = P.list[P.n]; if (!o) { o = make(); P.list.push(o); R3.scene.add(o); }
+  P.n++; o.visible = true; return o;
+}
+function r3Cached(key, make) { let tx = R3.gtex.get(key); if (!tx) R3.gtex.set(key, tx = make()); return tx; } // every texture is painted (and uploaded) once
+// a glyph disc, painted once per look: dark core, glowing ring in the lane's color, serif letter. Its cue marks, Shift
+// flag and tally badge are their own sprites, sized as tilt sizes them (marks shrink half as fast as the glyph, the
+// flag never shrinks), so none of them is minified into a smear. veil = cast mode (letters hidden while time stands still)
+function r3DiscTex(ch, laneId, veil) {
+  return r3Cached('disc|' + ch + '|' + laneId + '|' + (veil ? 1 : 0), () => { const l = LANE[laneId]; return r3Tex(96, 96, (c, w, h, sc) => {
+    c.translate(48, 48);
+    c.fillStyle = PAL.ink; c.beginPath(); c.arc(0, 0, 25, 0, 7); c.fill();
+    c.shadowColor = l.color; c.shadowBlur = 16 * sc;
+    c.strokeStyle = l.color; c.lineWidth = 3; c.beginPath(); c.arc(0, 0, 24, 0, 7); c.stroke();
+    c.lineWidth = 1; c.globalAlpha = .55; c.beginPath(); c.arc(0, 0, 19, 0, 7); c.stroke(); c.globalAlpha = 1;
+    c.fillStyle = '#ffffff'; c.font = 'bold 25px Georgia, "Times New Roman", serif'; c.textAlign = 'center';
+    if (!veil) c.fillText(ch, 0, 8);
+  }); });
+}
+const r3CueTex = color => r3Cached('cue|' + color, () => r3Tex(16, 16, c => { // the travel cue: a notch on the ring with a triangle pointing +x
+  c.translate(8, 8); c.fillStyle = PAL.ink; c.beginPath(); c.arc(0, 0, 6, 0, 7); c.fill();
+  c.fillStyle = color; c.beginPath(); c.moveTo(5, 0); c.lineTo(-3, -4.5); c.lineTo(-3, 4.5); c.closePath(); c.fill();
+}, 3));
+const r3TallyTex = (n, color) => r3Cached('tally|' + n + '|' + color, () => r3Tex(24, 24, c => {
+  c.fillStyle = PAL.ink; c.beginPath(); c.arc(12, 12, 11, 0, 7); c.fill();
+  c.fillStyle = color; c.font = 'bold 12px ui-monospace, Menlo, monospace'; c.textAlign = 'center'; c.fillText(n + '×', 12, 16);
+}, 3));
+function r3Text(text, color, font, glow) { // a label that keeps its screen size: painted 1:1 at the view's resolution. Anchor: its baseline centre
+  return r3Cached('txt|' + text + '|' + color + '|' + font, () => {
+    const m = document.createElement('canvas').getContext('2d'); m.font = font;
+    const w = Math.ceil(m.measureText(text).width) + 2 * glow + 4, h = 2 * glow + 16, base = glow + 12;
+    const tx = r3Tex(w, h, c => { c.font = font; c.textAlign = 'center'; c.fillStyle = color; c.shadowColor = color; c.shadowBlur = glow; c.fillText(text, w / 2, base); }, Math.max(1, VIEW), true);
+    tx.userData = { w, h, base }; return tx;
+  });
+}
+// the static backdrop: tilt's night sky (BG) and stage vista (STAGE_BG) composited once into the scene's background, in
+// screen space — the sky has nothing to do with the floor, so it neither moves nor foreshortens. The horizon line along
+// the hit line is baked in at its mid-pulse, and the drifting debris is gone: the world holds still
+function r3Backdrop() {
+  paintBackdrops();
+  const c = document.createElement('canvas'); c.width = Math.round(W * VIEW); c.height = Math.round(H * VIEW);
+  const x = c.getContext('2d'); x.scale(VIEW, VIEW);
+  x.drawImage(BG, 0, 0, W, H); x.drawImage(STAGE_BG, 0, STAGE_TOP, W, STAGE_H);
+  x.strokeStyle = PAL.pink; x.globalAlpha = .5; x.lineWidth = 2; x.shadowColor = PAL.magenta; x.shadowBlur = 10;
+  x.beginPath(); x.moveTo(0, HIT_Y); x.lineTo(W, HIT_Y); x.stroke();
+  if (R3.bgTex) R3.bgTex.dispose();
+  const t = new R3.T.CanvasTexture(c); t.colorSpace = R3.T.SRGBColorSpace; t.generateMipmaps = false; t.minFilter = R3.T.LinearFilter;
+  R3.scene.background = R3.bgTex = t; R3.bgView = VIEW;
+}
+function r3Init() {
+  if (R3.on || !window.THREE || R3Q.get('3d') === '0') return;
+  const T = window.THREE, gl = document.createElement('canvas');
+  let renderer;
+  // ?aa=0: no MSAA (cheaper fill on weak GPUs). Software WebGL (no GPU, or a blocklisted one) runs this view at a few
+  // frames a second, too slow to play to, so the game stays 2D there unless ?3d=1 forces it (the headless test browsers)
+  try { renderer = new T.WebGLRenderer({ canvas: gl, antialias: R3Q.get('aa') !== '0', failIfMajorPerformanceCaveat: R3Q.get('3d') !== '1' }); }
+  catch (e) { console.warn('Runecaster: no hardware WebGL, staying 2D —', e && e.message); return; }
+  // ---- camera: from the preset, solve the pitch that puts the hit line at HIT_Y 1:1, and the highway length for u = 1
+  const name = R3CAMS[R3Q.get('cam')] ? R3Q.get('cam') : 'tilt', P = Object.assign({}, R3CAMS[name]);
+  for (const k of Object.keys(P)) if (R3Q.has(k) && isFinite(parseFloat(R3Q.get(k)))) P[k] = parseFloat(R3Q.get(k));
+  P.rho = Math.max(1.05, P.rho);
+  const F = (H / 2) / Math.tan(P.fov * Math.PI / 360);             // focal length in logical px
+  const yhz = (P.rho * P.far - HIT_Y) / (P.rho - 1);               // the floor's horizon: floor depth ∝ 1 / (screen y − yhz)
+  const th = Math.atan((H / 2 - yhz) / F), s = Math.sin(th), c = Math.cos(th), A = HIT_Y - H / 2;
+  const g = Object.assign(P, { name, F, yhz, th, s, c, camY: F * s + A * c, camZ: F * c - A * s, LEN: (P.rho - 1) * F / c }); // hit line at depth F: 1 world unit = 1 px there
+  Object.assign(R3, { T, g, renderer, gl, gtex: new Map(), pools: {}, cards: [], routes: new Map(),
+    pulse: R3Q.get('pulse') === '1',              // ?pulse=1: the hit line and receptors beat with the clicks (as in 2D); off, they hold still
+    routeX: X0 + LANES_W + 12 + 44, routeXL: X0 - 12 - 44 }); // shots run down the right / left margin here, clear of the lanes and a late glyph's glow (bolt labels too)
+  const cam = new T.PerspectiveCamera(P.fov, W / H, 5, 30000);
+  cam.position.set(0, g.camY, g.camZ); cam.rotation.x = -th; cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+  const up = new T.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
+  const scene = new T.Scene();
+  Object.assign(R3, { cam, up, scene, zpx: (HIT_Y - yhz) * c / F, // zpx: screen px per world unit of floor depth at the hit line
+    uMin: ((HIT_Y - yhz) / (HIT_Y + 80 - yhz) - 1) / (P.rho - 1) }); // past the line, glyphs go as far down the screen as in 2D (HIT_Y + 80), not further
+  const add = (o, order) => { o.renderOrder = order; scene.add(o); return o; };
+  r3Backdrop();
+  // ---- floor furniture, laid out in flat-field px as tilt lays it (quad / trap / rail): r3Flat puts each vertex on the floor
+  const floorGeo = (pts, uvOf) => { // a flat polygon (canvas x, y) on the floor
+    const geo = new T.ShapeGeometry(new T.Shape(pts.map(([x, y]) => new T.Vector2(x, y)))), pos = geo.attributes.position, uv = geo.attributes.uv;
+    for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), y = pos.getY(i), [X, Z] = r3Flat(x, y); if (uvOf) uv.setXY(i, ...uvOf(x, y)); pos.setXYZ(i, X, 0, Z); }
+    geo.computeBoundingSphere(); return geo;
+  };
+  const floorLine = (pts, mat, loop) => { const geo = new T.BufferGeometry().setFromPoints(pts.map(([x, y]) => { const [X, Z] = r3Flat(x, y); return new T.Vector3(X, 0, Z); })); const o = loop ? new T.LineLoop(geo, mat) : new T.Line(geo, mat); o.frustumCulled = false; return o; };
+  const lineMat = (color, opacity, Mat = T.LineBasicMaterial, o) => new Mat(Object.assign({ color, transparent: true, opacity, depthTest: false, depthWrite: false }, o));
+  const rect = (x, y, w, h) => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+  const rrPts = (x, y, w, h, r) => { // a rounded rect's outline, with a vertex where its sides cross the hit line (where the floor bends square-on)
+    const o = [], cross = y + r < HIT_Y && y + h - r > HIT_Y, arc = (ax, ay, a0) => { for (let i = 0; i <= 6; i++) { const a = a0 + i / 6 * Math.PI / 2; o.push([ax + r * Math.cos(a), ay + r * Math.sin(a)]); } };
+    arc(x + w - r, y + r, -Math.PI / 2); if (cross) o.push([x + w, HIT_Y]); arc(x + w - r, y + h - r, 0); arc(x + r, y + h - r, Math.PI / 2); if (cross) o.push([x, HIT_Y]); arc(x + r, y + r, Math.PI);
+    return o;
+  };
+  // ---- the highway (tilt's lane pass): scrim to the line, a rounded lane tint to 30 px under it, neon rails, and each
+  // lane's element at its far end in type that keeps its size
+  const uh = r3U(TOP_Y - 42), sh = 1 / r3D(uh);
+  R3.lanes = LANES.map(l => {
+    const x = LNX[l.id] - LW / 2;
+    add(new T.Mesh(floorGeo(rect(x, TOP_Y - 30, LW, HIT_Y - (TOP_Y - 30))), r3Mat({ color: '#07030f', opacity: .6 })), 3);
+    const tint = add(new T.Mesh(floorGeo(rrPts(x, TOP_Y - 30, LW, HIT_Y + 30 - (TOP_Y - 30), 8)), r3Mat({ color: l.color, opacity: .035 })), 3.1);
+    const edge = lineMat(l.color, .14);
+    for (const xx of [x + .5, x + LW - .5]) add(floorLine([[xx, TOP_Y - 24], [xx, HIT_Y], [xx, HIT_Y + 24]], edge), 3.2);
+    const tx = r3Text(l.el.toUpperCase(), l.color, 'bold 11px ui-monospace, Menlo, monospace', 8), hd = add(r3Sprite(3.3, tx), 3.3);
+    hd.center.set(0.5, 1 - tx.userData.base / tx.userData.h); hd.position.set(LNX[l.id] - W / 2, 0, r3Z(uh)); hd.scale.set(tx.userData.w / sh, tx.userData.h / sh, 1);
+    return { id: l.id, tint, edge };
+  });
+  { // far haze: the end of the road dissolves into the night (tilt's gradient runs linearly down the screen; the texture is warped to match)
+    const y0 = TOP_Y - 30, y1 = TOP_Y + 170, sy0 = r3Fl(0, y0).y, sy1 = r3Fl(0, y1).y, N = 64;
+    const tx = r3Tex(1, N, x => { for (let i = 0; i < N; i++) { const k = (r3Fl(0, y0 + (i + .5) / N * (y1 - y0)).y - sy0) / (sy1 - sy0); x.fillStyle = `rgba(28,18,74,${.55 * 0.6 * (1 - k)})`; x.fillRect(0, i, 1, 1); } }, 1, true);
+    add(new T.Mesh(floorGeo(rect(X0, y0, LANES_W, y1 - y0), (x, y) => [(x - X0) / LANES_W, 1 - (y - y0) / (y1 - y0)]), r3Mat({ map: tx })), 3.5);
+  }
+  // ---- shared sprite textures
+  R3.tex = {
+    ring: r3Tex(68, 68, (x, w, h, sc) => { x.strokeStyle = '#fff'; x.lineWidth = 3; x.shadowColor = '#fff'; x.shadowBlur = 12 * sc; x.beginPath(); x.arc(34, 34, 27, 0, 7); x.stroke(); }),
+    receptor: r3Tex(64, 64, x => { x.strokeStyle = '#fff'; x.lineWidth = 2; x.beginPath(); x.arc(32, 32, 27, 0, 7); x.stroke(); x.globalAlpha = .27; x.beginPath(); x.arc(32, 32, 21, 0, 7); x.stroke(); }),
+    dot: r3Tex(24, 24, (x, w, h, sc) => { x.fillStyle = '#fff'; x.shadowColor = '#fff'; x.shadowBlur = 8 * sc; x.beginPath(); x.arc(12, 12, 6, 0, 7); x.fill(); }),
+    cdot: r3Tex(10, 10, x => { x.fillStyle = '#fff'; x.beginPath(); x.arc(5, 5, 5, 0, 7); x.fill(); }, 4),
+    shift: r3Tex(16, 16, x => { x.fillStyle = PAL.blush; x.font = 'bold 13px ui-monospace, Menlo, monospace'; x.textAlign = 'center'; x.fillText('⇧', 8, 13); }, Math.max(1, VIEW), true),
+    diamond: r3Tex(16, 16, x => { x.fillStyle = PAL.blush; x.beginPath(); x.moveTo(8, 2); x.lineTo(14, 8); x.lineTo(8, 14); x.lineTo(2, 8); x.fill(); }),
+    trail: r3Tex(8, 64, x => { const gr = x.createLinearGradient(0, 0, 0, 64); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(255,255,255,1)'); x.fillStyle = gr; x.fillRect(0, 0, 8, 64); }, 1),
+    card: r3Tex(32, 32, x => { x.fillStyle = '#fff'; x.beginPath(); x.roundRect(0, 0, 32, 32, 8); x.fill(); }),
+  };
+  R3.receptors = LANES.map(l => { const sp = add(r3Sprite(9, R3.tex.receptor), 9); sp.material.color.set(l.color); sp.position.set(LNX[l.id] - W / 2, 0, 0); sp.scale.set(64, 64, 1); return sp; });
+  // ---- the PERFECT band (tilt's: on the floor to the line, square-on under it) and the hit line, drawn over the glyphs
+  const LX0 = X0 - 12, LX1 = X0 + LANES_W + 12, hitW = LX1 - LX0, band = PW * PXS;
+  add(new T.Mesh(floorGeo([[LX0, HIT_Y - band], [LX1, HIT_Y - band], [LX1, HIT_Y], [LX1, HIT_Y + band], [LX0, HIT_Y + band], [LX0, HIT_Y]]), r3Mat({ color: PAL.gold, opacity: .07 })), 12);
+  for (const yy of [HIT_Y - band, HIT_Y + band]) add(floorLine([[LX0, yy], [LX1, yy]], lineMat(PAL.gold, .6, T.LineDashedMaterial, { dashSize: 6, gapSize: 5 })), 12.1).computeLineDistances();
+  R3.hit = ['glow', 'main', 'core'].map((k, i) => { const m = add(new T.Mesh(r3Quad(), r3Mat({ color: k === 'core' ? '#ffffff' : PAL.magenta })), 12.2 + i * .1); m.scale.x = hitW; return m; });
+  // ---- sigil threads: ribbons on the floor whose width is constant on screen (tilt strokes 2–5 px lines): each corner is
+  // the floor point under the screen-space ribbon's corner. A wide faint glow pass under a core pass
+  const ribbon = (order, max) => {
+    const pos = new Float32Array(max * 12), col = new Float32Array(max * 16), idx = [];
+    for (let i = 0; i < max; i++) { const b = i * 4; idx.push(b, b + 2, b + 1, b + 1, b + 2, b + 3); }
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.BufferAttribute(pos, 3).setUsage(T.DynamicDrawUsage));
+    geo.setAttribute('color', new T.BufferAttribute(col, 4).setUsage(T.DynamicDrawUsage)); geo.setIndex(idx);
+    const mesh = add(new T.Mesh(geo, r3Mat({ vertexColors: true })), order); mesh.frustumCulled = false;
+    const tmp = new T.Color();
+    return { n: 0, seg(ax, ay, bx, by, w, color, a0, a1) { // screen points a → b, w screen px wide, alpha a0 → a1
+      if (this.n >= max) return;
+      const L = Math.hypot(bx - ax, by - ay) || 1, nx = -(by - ay) / L * w / 2, ny = (bx - ax) / L * w / 2, o = this.n * 12, q = this.n * 16;
+      const p = [r3Unfloor(ax + nx, ay + ny), r3Unfloor(ax - nx, ay - ny), r3Unfloor(bx + nx, by + ny), r3Unfloor(bx - nx, by - ny)];
+      for (let v = 0; v < 4; v++) pos.set([p[v][0], .5, p[v][1]], o + v * 3);
+      tmp.set(color); for (let v = 0; v < 4; v++) col.set([tmp.r, tmp.g, tmp.b, v < 2 ? a0 : a1], q + v * 4);
+      this.n++;
+    }, flush() { geo.setDrawRange(0, this.n * 6); geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true; this.n = 0; } };
+  };
+  R3.thrGlow = ribbon(7.9, 256); R3.thrCore = ribbon(8, 256);
+  // ---- the rune panel (tilt's): its backdrop a rounded trapezoid on the floor between the hands; the header and each
+  // card stand at their spot on it, scaled by depth. One texture holds the cards, repainted only when a rune's state
+  // changes (charges, ownership, NEW / ×2, art arriving); the earn flash and the start drop-in move the cards, not the paint
+  const keys = Object.keys(RUNES), RH = (RP.h - 24) / keys.length, ps = Math.min(2.5, Math.max(1.5, VIEW * 1.25));
+  const pc = document.createElement('canvas'); pc.width = Math.round(RP.w * ps); pc.height = Math.round(RP.h * ps);
+  const ptex = new T.CanvasTexture(pc); ptex.colorSpace = T.SRGBColorSpace;
+  const pmat = r3Mat({ map: ptex });
+  R3.panelBg = add(new T.Mesh(floorGeo(rrPts(RP.x, RP.y, RP.w, RP.h, 10)), r3Mat({ color: '#0a0418', opacity: .82 })), 5.5);
+  R3.panelLine = add(floorLine(rrPts(RP.x, RP.y, RP.w, RP.h, 10), lineMat('#3a1a5e', 1), true), 5.6);
+  [[0, 24, -1, null]].concat(keys.map((k, i) => [24 + i * RH, 24 + (i + 1) * RH, i, k])).forEach(([y0, y1, i, key]) => {
+    const geo = new T.PlaneGeometry(RP.w, y1 - y0), uv = geo.attributes.uv;
+    for (let j = 0; j < uv.count; j++) uv.setY(j, uv.getY(j) > .5 ? 1 - y0 / RP.h : 1 - y1 / RP.h);
+    const u = r3U(RP.y + (y0 + y1) / 2), pos = new T.Vector3(0, 0, r3Z(u));
+    const mesh = add(new T.Mesh(geo, pmat), 6); mesh.quaternion.copy(cam.quaternion); mesh.position.copy(pos);
+    let flash = null;
+    if (key) { flash = add(new T.Mesh(new T.PlaneGeometry(RP.w - 6, RH - 4), r3Mat({ map: R3.tex.card, color: RUNES[key].color, opacity: 0 })), 5.9); flash.quaternion.copy(cam.quaternion); flash.visible = false; }
+    R3.cards.push({ mesh, flash, y0, y1, i, key, pos, s: 1 / r3D(u), yTop: RP.y + y0 });
+  });
+  Object.assign(R3, { panCx: pc.getContext('2d'), panTex: ptex, panS: ps, panSig: null });
+  // ---- Rising Tide: water over the near third of each hand's lanes (tilt's: its far edge wavy, the near shore square-on
+  // 30 px under the line). Static: the edge holds its shape (the world doesn't ripple)
+  const WC = 42, tc = new T.Color(), wrows = [[57, 208, 201, .55], [12, 60, 80, .92], [7, 34, 52, .96], [6, 30, 48, .97]], NR = wrows.length;
+  const wpos = new Float32Array(2 * (WC + 1) * NR * 3), wcol = new Float32Array(2 * (WC + 1) * NR * 4), widx = [];
+  for (let b = 0; b < 2; b++) for (let i = 0; i <= WC; i++) {
+    const xl = i * 4 * LW / WC, xs = X0 + b * (4 * LW + SPLIT) + xl, yf = TIDE_Y + 4 * Math.sin(xl / 22), ys = [yf, yf + .15 * (HIT_Y + 30 - yf), HIT_Y, HIT_Y + 30];
+    for (let r = 0; r < NR; r++) {
+      const v = (b * (WC + 1) + i) * NR + r, [R, Gc, B, a] = wrows[r], [X, Z] = r3Flat(xs, ys[r]);
+      tc.setRGB(R / 255, Gc / 255, B / 255, T.SRGBColorSpace); wcol.set([tc.r, tc.g, tc.b, a], v * 4); wpos.set([X, 1, Z], v * 3);
+      if (i < WC && r < NR - 1) { const n = v + NR; widx.push(v, v + 1, n, n, v + 1, n + 1); }
+    }
+  }
+  const wgeo = new T.BufferGeometry(); wgeo.setAttribute('position', new T.BufferAttribute(wpos, 3));
+  wgeo.setAttribute('color', new T.BufferAttribute(wcol, 4)); wgeo.setIndex(widx);
+  R3.water = add(new T.Mesh(wgeo, r3Mat({ vertexColors: true })), 11); R3.water.frustumCulled = false; R3.water.visible = false;
+  // ---- the enemy stands on the floor beyond the highway's right edge, top right (?foex = its screen x if it stood on the
+  // hit line, ?foeu = its depth). The 2D overlay draws the figure there (drawStage); the scene gives it ground: a dark
+  // disc on the floor with a ring in its color. Its size follows its depth: P.foe at the default depth
+  const num = (k, d) => R3Q.has(k) && isFinite(parseFloat(R3Q.get(k))) ? parseFloat(R3Q.get(k)) : d;
+  const foeu = num('foeu', R3_FOEU), fx = num('foex', R3_FOEX) - W / 2, fz = r3Z(foeu), fp = r3Proj(fx, 0, fz), k0 = P.foe * fp.k / r3Proj(0, 0, r3Z(R3_FOEU)).k, RD = 80;
+  const dtex = r3Tex(64, 64, x => { const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(10,1,10,.92)'); gr.addColorStop(.72, 'rgba(10,1,10,.8)'); gr.addColorStop(1, 'rgba(10,1,10,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); }, 1);
+  const disc = add(new T.Mesh(r3Quad(), r3Mat({ map: dtex })), 4); disc.scale.set(2 * RD, 1, 2 * RD); disc.position.set(fx, 0, fz);
+  const ring = []; for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2; ring.push(new T.Vector3(fx + Math.cos(a) * RD * .78, 0, fz + Math.sin(a) * RD * .78)); }
+  R3.foeRing = add(new T.LineLoop(new T.BufferGeometry().setFromPoints(ring), lineMat(PAL.magenta, .55)), 4.1);
+  R3.foe = { x: fx, z: fz, u: foeu, k: k0, k0 };
+  ARC_X = fp.x; ARC_AY = fp.y; ARC_Y = ARC_AY - STAGE_TOP; // the anchor every burst, popup, bolt and the nameplate aims at
+  // ---- ?beatlines=1: variant B's beat lines, running down the floor with the glyphs (off: they were the moving world)
+  if (R3Q.get('beatlines') === '1') {
+    const BMAX = 48, bpos = new Float32Array(BMAX * 6), bgeo = new T.BufferGeometry();
+    bgeo.setAttribute('position', new T.BufferAttribute(bpos, 3).setUsage(T.DynamicDrawUsage));
+    add(new T.LineSegments(bgeo, lineMat(PAL.magenta, .45)), 2).frustumCulled = false;
+    R3.beat = { pos: bpos, geo: bgeo, max: BMAX };
+  }
+  // ---- the WebGL canvas goes exactly under the game canvas (same CSS box); the game canvas turns transparent
+  const box = document.createElement('div'); box.style.cssText = 'position:relative;flex:none';
+  cv.before(box); box.append(gl, cv);
+  gl.style.position = 'absolute'; gl.style.left = '0'; gl.style.top = '0'; gl.style.pointerEvents = 'none';
+  cv.style.position = 'relative'; cv.style.background = 'transparent'; cv.style.boxShadow = 'none';
+  R3.on = true; r3Resize();
+  addEventListener('resize', r3Resize);
+  const hint = document.querySelector('header .hint'); if (hint && DEV) hint.textContent += ` · 3D view (cam ${name}: ?cam=tilt|steep|3q|deep, ?3d=0 for 2D)`;
+  // the copy follows the 3D HUD: the charge is a fuse down the channel, its countdown under the line (2D keeps today's words)
+  for (const li of document.querySelectorAll('#help li')) li.innerHTML = li.innerHTML.replace('the ring over its head fills; in the last bar it counts down the beats',
+    'a fuse burns down from it toward the end of the hit line; in the last bar the beats count down under the line');
+  const lesson = DEMO.find(S => S.title === 'The enemy charges a big attack');
+  if (lesson) lesson.text = lesson.text.replace('Its ring fills (a low thrum each bar)', 'Its fuse burns down toward the line (a low thrum each bar)')
+    .replace(', and the counter opens your EMPOWERED window.', ' and opens your EMPOWERED window.'); // the longer opening would push the caption to a 4th line, which it cuts
+}
+function r3Resize() { // same backing store as the game canvas (fitCanvas's DPR handling), same CSS box
+  if (!R3.on) return;
+  R3.gl.style.width = cv.style.width; R3.gl.style.height = cv.style.height;
+  R3.renderer.setPixelRatio(1); R3.renderer.setSize(cv.width, cv.height, false);
+  if (R3.bgView !== VIEW) r3Backdrop(); // the backdrop is painted at the canvas's resolution
+}
+function r3PanelPt(x, y) { // a 2D point on the rune panel → the same spot on its card, which stands at its floor spot scaled by depth
+  if (x < RP.x || x > RP.x + RP.w || y < RP.y || y > RP.y + RP.h) return [x, y];
+  const ly = y - RP.y, S = R3.cards.find(k => ly >= k.y0 && ly <= k.y1) || R3.cards[R3.cards.length - 1], yc = RP.y + (S.y0 + S.y1) / 2, p = r3Fl(W / 2, yc);
+  return [p.x + (x - W / 2) * p.s, p.y + (y - yc) * p.s];
+}
+function r3Paint(cv2d, s, paint) { // run a 2D draw* function into an offscreen context (cx is restored even if it throws)
+  const main = cx; cv2d.setTransform(1, 0, 0, 1, 0, 0); cv2d.clearRect(0, 0, cv2d.canvas.width, cv2d.canvas.height);
+  cx = cv2d;
+  try { cx.setTransform(s, 0, 0, s, 0, 0); paint(); } finally { cx = main; }
+}
+const r3PanelSig = () => Object.keys(RUNES).map(k => [G.runes[k] || 0, owns(k) ? 1 : 0, G.cracked[k] || 0, G.unseen.has(k) ? 1 : 0,
+  RUNES[k].el && RUNES[k].el === G.enemy.weak ? 1 : 0, RUNE_ART[k].complete && RUNE_ART[k].naturalWidth ? 1 : 0].join('.')).join('|');
+function render3d(t, shk) {
+  const g = R3.g, phase = R3.pulse ? beatPhase(t) : 0.5, cam = R3.cam, up = R3.up; // without ?pulse=1 the beat-pulsing pieces hold their mid-pulse
+  if (shk) cam.setViewOffset(W, H, -shk[0], -shk[1], W, H); // the overlay's jolt, the same way
+  else if (cam.view && cam.view.enabled) cam.clearViewOffset();
+  for (const P of Object.values(R3.pools)) P.n = 0;
+  if (R3.beat) { // ?beatlines=1: one crosses the hit line on every click
+    const ub = segAt(t).beat / LOOK, ph = beatPhase(t), B = R3.beat; let n = 0;
+    for (let u = (1 - ph) * ub - 4 * ub; u < R3_UV && n < B.max; u += ub) { if (u < -0.45) continue; const z = r3Z(u); B.pos.set([-20000, 0, z, 20000, 0, z], n * 6); n++; }
+    B.geo.setDrawRange(0, n * 2); B.geo.attributes.position.needsUpdate = true;
+  }
+  // lanes: the next glyph's lane lights (coach)
+  const sp = activeSpell(), guide = OPT.guide && sp && sp.glyphs.find(r => r.status === 'pending');
+  for (const L of R3.lanes) { const lit = guide && (guide.shown || guide.lane) === L.id; L.tint.material.opacity = lit ? .12 : .035; L.edge.opacity = lit ? .45 : .14; }
+  for (const R of R3.receptors) R.material.opacity = .3 + .3 * (1 - phase);
+  // the hit line: magenta, red while the charged attack counts down (thickness in screen px)
+  const cs = chargeState(t), warn = cs && cs.warn, lc = warn ? PAL.bad : PAL.magenta, lw = (warn ? 5 : 3) + 5 * (1 - phase), la = .35 + .45 * (1 - phase);
+  const [hg, hm, hc] = R3.hit;
+  hg.material.color.set(lc); hg.material.opacity = la * .3; hg.scale.z = (lw + (warn ? 22 : 14)) / R3.zpx;
+  hm.material.color.set(lc); hm.material.opacity = la; hm.scale.z = lw / R3.zpx;
+  hc.material.opacity = .95; hc.scale.z = 1.5 / R3.zpx;
+  // the enemy (drawn by the overlay): minions are drawn smaller than bosses in 2D, so they stand taller; its ring takes its color
+  const f = R3.foe; f.k = f.k0 * (G.enemy.kind === 'boss' ? 1 : 1.28);
+  R3.foeRing.material.color.set(G.enemy.color);
+  // the rune panel (hidden in cast mode: the spellbook takes the lane field)
+  const showPanel = !G.cast; R3.panelBg.visible = R3.panelLine.visible = showPanel;
+  if (showPanel) { const sig = r3PanelSig(); if (sig !== R3.panSig) { // repaint (and upload) only on a change
+    R3.panSig = sig; R3.baking = true;
+    try { r3Paint(R3.panCx, R3.panS, () => { cx.translate(-RP.x, -RP.y); drawRunePanel(t); }); } finally { R3.baking = false; }
+    R3.panTex.needsUpdate = true;
+  } }
+  for (const C of R3.cards) {
+    let vis = showPanel, dy = 0;
+    if (vis && C.i >= 0 && G.intro) { const lt = (t - G.intro.at) - (IN.runeAt + C.i * IN.runeStep); if (lt < 0) vis = false; else dy = (90 - (C.yTop + 2)) * Math.pow(1 - Math.min(1, lt / IN.runeFall), 2.4); } // the start cinematic: each card drops into its slot
+    C.mesh.visible = vis; C.mesh.position.copy(C.pos).addScaledVector(up, -dy / C.s);
+    if (C.flash) {
+      const fk = vis && G.runeFlash && G.runeFlash.key === C.key && t - G.runeFlash.at < 0.9 ? 1 - (t - G.runeFlash.at) / 0.9 : 0;
+      C.flash.visible = fk > 0; if (fk > 0) { C.flash.material.opacity = .3 * fk; C.flash.position.copy(C.mesh.position).addScaledVector(up, 2); }
+    }
+  }
+  // spells: threads, rests, glyphs (tilt's glyph pass, on the highway)
+  const tg = R3.thrGlow, tcore = R3.thrCore, D = LOOK * PXS;
+  for (const s of G.spells) {
+    const sealed = s.sealedAt && t - s.sealedAt < 0.5;
+    for (const ink of (s.fizzled ? [] : [false, true])) {
+      if (ink && !s.rune) break;
+      const col = ink ? (sealed ? '#ffffff' : ELC[s.rune]) : '#4a2a78', w = ink ? (sealed ? 5 : 3) : 2, a = ink ? (sealed ? 1 : .75) : 1;
+      for (let i = 0; i < s.glyphs.length - 1; i++) {
+        const ga = s.glyphs[i], gb = s.glyphs[i + 1];
+        if (gb.wordStart || (!!s.rune && !gb.word) !== ink) continue; // the connector breaks between chunks
+        if (s.curse === 'lightning' || (s.curse === 'tide' && (noteY(ga, t) > TIDE_Y || noteY(gb, t) > TIDE_Y))) continue; // a curse hides the thread too
+        const ua = noteU(ga, t), ubb = noteU(gb, t);
+        if (ua < R3.uMin || ubb < R3.uMin || ua > R3_UV || ubb > R3_UV) continue;
+        const pa = r3Proj(gx(ga) - W / 2, 0, r3Z(ua)), pb = r3Proj(gx(gb) - W / 2, 0, r3Z(ubb)), fa = r3Fog(ua), fb = r3Fog(ubb); // tilt's haze: the thread fades into the same distance
+        if (ink) tg.seg(pa.x, pa.y, pb.x, pb.y, w + 10, ELC[s.rune], (sealed ? .45 : .22) * fa, (sealed ? .45 : .22) * fb);
+        tcore.seg(pa.x, pa.y, pb.x, pb.y, w, col, a * fa, a * fb);
+      }
+    }
+    for (const rt of (s.fizzled ? [] : s.rests)) { // the rest between words: a small diamond down the gap between the hands
+      const u = noteU({ time: rt }, t); if (u < -0.04 || u > R3_UV) continue;
+      const d = r3Take('rest', () => r3Sprite(8.5, R3.tex.diamond)), m = r3Grow(u);
+      d.material.opacity = .55 * r3Fog(u); d.position.set(0, 0, r3Z(u)); d.scale.set(16 * m, 16 * m, 1);
+    }
+    for (const r of s.glyphs) {
+      const u = noteU(r, t); if (u < R3.uMin || u > R3_UV) continue; // 2D culls at HIT_Y + 80
+      const lid = r.shown || r.lane, l = LANE[lid], x = LNX[lid] - W / 2, z = r3Z(u), m = r3Grow(u), fin = r3Fog(u), ro = 10 + (2 - u) * 0.01; // ro: nearer glyphs over farther ones, each with its marks (tilt: back to front)
+      if (r.status === 'pending' && r.curse === 'tide' && noteY(r, t) > TIDE_Y) continue; // under the water
+      if (r.status === 'pending' && r.tallyOf) { // a tally's later presses: pips in the head's lane
+        const d = r3Take('dot', () => r3Sprite(10, R3.tex.dot)); d.renderOrder = ro; d.material.color.set(l.color); d.material.opacity = fin;
+        d.position.set(x, 0, z); d.scale.set(24 * m, 24 * m, 1); continue;
+      }
+      if (r.status === 'pending') {
+        const flash = r.curse === 'lightning' ? Math.max(0, 1 - beatPhase(t) / 0.3) : 1, fa = (0.07 + 0.93 * flash) * fin; // dark between the beat's flashes
+        const tr = r3Take('trail', () => { const o = new R3.T.Mesh(r3Quad(), r3Mat({ map: R3.tex.trail })); o.renderOrder = 7; return o; });
+        const z0 = r3Z(u + 22 / D), z1 = r3Z(u + 78 / D); // the comet trail behind it, on the floor (tilt's quad, y − 78 … y − 22)
+        tr.material.color.set(l.color); tr.material.opacity = .4 * fa; tr.scale.set(24 * m, 1, z0 - z1); tr.position.set(x, 0, (z0 + z1) / 2);
+        const gs = r3Take('glyph', () => r3Sprite(10)); gs.renderOrder = ro;
+        gs.material.map = r3DiscTex(r.ch, lid, !!G.cast); gs.material.opacity = fa; gs.position.set(x, 0, z); gs.scale.set(96 * m, 96 * m, 1);
+        if (G.cast) continue; // the veiled glyph: no letter, no marks
+        const sc = 1 / r3D(u), mk = Math.sqrt(m * sc) / sc; // mk: world size per mark px — the marks shrink half as fast as the glyph (tilt's 1/√s)
+        const at = (o, ox, oy, k) => { o.renderOrder = ro + k * 1e-5; o.material.opacity = fa; o.position.set(x + ox * m, -oy * m * up.y, z - oy * m * up.z); return o; }; // (ox, oy): glyph px off its centre, screen-parallel
+        const d = KEYDIR[r.ch];
+        if (d && !d[0] && !d[1]) { const o = at(r3Take('cdot', () => r3Sprite(10, R3.tex.cdot)), 0, 17, 1); o.material.color.set(l.color); o.scale.setScalar(5 * mk); } // finger stays home
+        else if (d) { const L = Math.hypot(d[0], d[1]), o = at(r3Take('cue', () => r3Sprite(10)), d[0] / L * 24, d[1] / L * 24, 1); // the direction the finger moves
+          o.material.map = r3CueTex(l.color); o.material.rotation = -Math.atan2(d[1], d[0]); o.scale.setScalar(16 * mk); }
+        if (SHIFT.has(r.ch)) { const o = at(r3Take('shift', () => { const q = r3Sprite(10, R3.tex.shift); q.center.set(0.5, 3 / 16); return q; }), 17, -13, 2); o.scale.setScalar(16 / sc); } // the flag never shrinks
+        if (r.tally) { const o = at(r3Take('tally', () => r3Sprite(10)), -22, -18, 3); o.material.map = r3TallyTex(r.tally, G.enemy.color); o.scale.setScalar(24 * mk); }
+      } else if (r.hitAt && t - r.hitAt < 0.25) { // judged: a ring flares out (crimson on a miss)
+        const a = 1 - (t - r.hitAt) / 0.25, rg = r3Take('ring', () => r3Sprite(10, R3.tex.ring)), R = 25 + 14 * (1 - a);
+        rg.renderOrder = ro; rg.material.color.set(r.status === 'miss' ? PAL.crimson : l.color); rg.material.opacity = a * .85;
+        rg.position.set(x, 0, z); rg.scale.setScalar(68 * R / 27 * m);
+      }
+    }
+  }
+  tg.flush(); tcore.flush();
+  R3.water.visible = G.spells.some(s => s.curse === 'tide' && !s.done && s.t0 - t < LOOK); // Rising Tide
+  for (const P of Object.values(R3.pools)) for (let i = P.n; i < P.list.length; i++) P.list[i].visible = false;
+  R3.renderer.render(R3.scene, cam);
+}
+if (window.THREE) r3Init(); else addEventListener('three-ready', r3Init, { once: true });
 </script>
 </body>
 </html>

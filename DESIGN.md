@@ -275,6 +275,15 @@ encounter, so the model must support intra-encounter tempo curves.
    eyes live at the hit line, so the top of the screen was never looked at.
    Each panel: name, the gauge with HP in it; the enemy's adds the charge bar
    and a second line, "weak to X" in the element's color.
+   **In the 3D view (decided, playtest)** the enemy stands at the top right,
+   beyond the highway, so its block (name, HP, LETHAL, the charge bar, "weak
+   to X", the curse chip, and the boss and curse cards as they land) sits under
+   its feet up there; what must reach the eyes at the line comes to the line
+   instead (§5, the countdown). Score and combo move to a dim footer bottom
+   left, bpm and chapter bottom right. Chosen in playtest ("the duel on the
+   diagonal") over the same enemy block with score kept top left and no fuse.
+   **[OPEN]** more iteration expected — among it, whether enemy HP read that far
+   above the line is enough.
 4. **Level fail.** Health reaches zero. Retry.
 
 **Educational side:** when you miss, the game should **teach you the right
@@ -427,6 +436,18 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > The caster is deliberately off-palette for contrast (playtest: purple
   > blended into the magenta night): teal cloth, gold glyph band and belt, a
   > cyan rim light and floor glyph circle, a lit face.
+  >
+  > **The 3D view (decided, playtest):** the field is a highway in perspective,
+  > the glyphs coming up it from the far end to the hit line (Three.js, pinned,
+  > from the jsDelivr CDN, rendering under the 2D canvas, which becomes its HUD).
+  > **The world holds still; only the glyphs move** — a scrolling floor was tried
+  > and rejected. The camera is the tilted 2D field's one-point perspective, and
+  > the hit line projects 1:1 onto the 2D layout, so grading, keycaps and the
+  > caster are untouched: a glyph's centre is on the line at its time. The
+  > enemy stands top right beyond the highway; shots between the fighters run
+  > along the duel line and up a gutter beside the field's right edge, never
+  > across the lanes. The flat 2D view remains the fallback when three.js
+  > cannot load or WebGL is software-only; `?3d=0` forces it, `?3d=1` forces 3D.
 - **Audio** — the "beat" of the enemy's attack; how is it conveyed (SFX, music,
   screen pulse)?
 
@@ -630,7 +651,12 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   the periphery: a **doom pulse** each countdown beat (detuned saw stack through
   a closing low-pass, a step higher each beat, the first doubled), the **hit
   line turns red** and beats with it, and the **enemy's screen edge flashes
-  red** on each beat (until you ward).
+  red** on each beat (until you ward). **In the 3D view** the enemy is far from
+  the line, so the charge also travels to it: a **fuse** burns down the channel
+  that joins the fighters (the enemy's color, red only in the last bar; gold
+  once you ward), and the countdown digit with the ward prompt (`ward: warcen`,
+  WARDED, or LETHAL) sits in a small box under the hit line, between the index
+  keycaps.
 
   **Empowered window — the caster's mirror of the charge.** A ring over the
   caster fills on a **timer** (20 beats, from the first spell; decided in
