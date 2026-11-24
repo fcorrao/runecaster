@@ -32,7 +32,8 @@
 <!-- 3D view: three.js from the CDN, pinned. The game script is classic, so a module bridges it onto window and
      says so with 'three-ready'. If the import fails the game never hears it and stays in its 2D view. ?3d=0 forces 2D.
      Software WebGL (no GPU, or a blocklisted one) runs the 3D view at a few frames a second, too slow to play to, so
-     without hardware WebGL2 the game stays 2D and three.js is never fetched; ?3d=1 skips that check (headless tests). -->
+     without hardware WebGL2 the game stays 2D and three.js is never fetched; ?3d=1 skips that check (headless tests).
+     The check relies on failIfMajorPerformanceCaveat, which Chrome and Safari honour; Firefox ignores it by default. -->
 <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }</script>
 <script type="module">
 const q3d = new URLSearchParams(location.search).get('3d');
@@ -167,7 +168,7 @@ const BASE_OF = { '!':'1','@':'2','#':'3','$':'4','%':'5','^':'6','&':'7','*':'8
 for (const [sh, base] of Object.entries(BASE_OF)) if (KEYDIR[base]) KEYDIR[sh] = KEYDIR[base];
 
 // ================= geometry =================
-const cv = document.getElementById('game'); let cx = cv.getContext('2d'); // let: the 3D view points it at offscreen canvases while it paints textures (the rune panel)
+const cv = document.getElementById('game'); let cx = cv.getContext('2d'); // let: the 3D view points it at offscreen canvases while it paints layers (the rune panel's texture, the enemy block's crossfade)
 const W = 1120, H = 840; // logical resolution: all drawing uses these; the canvas is scaled to fit the window
 let VIEW = 1; // backing-store pixels per logical pixel (window fit × device pixel ratio)
 function fitCanvas() {
@@ -3008,8 +3009,8 @@ function drawGameOver(t) {
 const R3Q = new URLSearchParams(location.search);
 // camera presets (?cam=tilt|steep|3q|deep). far = screen y where glyphs enter (u = 1); rho = how many times deeper u = 1 is
 // than the hit line (the far lanes are 1/rho as wide); alpha = how much a glyph grows with depth to stay readable
-// (0 = true perspective, 1 = never shrinks); foe = the enemy's on-screen scale at its default spot. Each can be
-// overridden: ?cam=3q&rho=2.2. The enemy's spot: ?foex=<its screen x if it stood on the hit line>&foeu=<its depth u>
+// (0 = true perspective, 1 = never shrinks); foe = the enemy's on-screen scale at its default spot. With ?dev each can be
+// overridden: ?dev&cam=3q&rho=2.2. The enemy's spot (?dev too): ?foex=<its screen x if it stood on the hit line>&foeu=<its depth u>
 const R3CAMS = {
   tilt:  { far: 138, rho: 1.6, alpha: 0,    foe: 0.8,  fov: 50 }, // tilt's: u = 1 at TOP_Y, 1 / (1 + 0.6u) scale, true perspective
   steep: { far: 262, rho: 2.0, alpha: 0.5,  foe: 0.95, fov: 50 },
@@ -3282,6 +3283,7 @@ function r3Off(why) { // back to the flat 2D view for good: the enemy's 2D ancho
   removeEventListener('resize', r3Resize);
   for (const f of R3.undo.reverse()) f();
   try { R3.renderer.dispose(); } catch (e) {} // free what the GPU still holds; a lost context has little left to free
+  R3.gl.width = R3.gl.height = 1; R3.gtex.clear(); // and if the browser restores the context anyway, it holds next to nothing
   console.warn('Runecaster: 3D view off, back to 2D —', why);
 }
 function r3Resize() { // same backing store as the game canvas (fitCanvas's DPR handling), same CSS box
@@ -3389,7 +3391,7 @@ function render3d(t, shk) {
         if (SHIFT.has(r.ch)) { const o = at(r3Take('shift', () => { const q = r3Sprite(10, R3.tex.shift); q.center.set(0.5, 3 / 16); return q; }), 17, -13, 2); o.scale.setScalar(16 / sc); } // the flag never shrinks
         if (r.tally) { const o = at(r3Take('tally', () => r3Sprite(10)), -22, -18, 3); o.material.map = r3TallyTex(r.tally, G.enemy.color); o.scale.setScalar(24 * mk); }
       } else if (r.hitAt && t - r.hitAt < 0.25) { // judged: a ring flares out (crimson on a miss)
-        const a = 1 - (t - r.hitAt) / 0.25, rg = r3Take('ring', () => r3Sprite(10, R3.tex.ring)), R = 25 + 14 * (1 - a);
+        const a = 1 - (t - r.hitAt) / 0.25, rg = r3Take('ring', () => r3Sprite(10, R3.tex.ring)), R = Math.max(0, 25 + 14 * (1 - a)); // ≥ 0 as in 2D: t can trail the stamp (a negative scale mirrors the ring)
         rg.renderOrder = ro; rg.material.color.set(r.status === 'miss' ? PAL.crimson : l.color); rg.material.opacity = a * .85;
         rg.position.set(x, 0, z); rg.scale.setScalar(68 * R / 27 * m);
       }

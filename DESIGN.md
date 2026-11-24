@@ -448,7 +448,9 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   > along the duel line and up a gutter beside the field's right edge, never
   > across the lanes. The flat 2D view remains the fallback: when three.js
   > cannot load, when WebGL is software-only (too slow to play to; three.js is
-  > then not even fetched), and for the rest of the visit if the GPU context is
+  > then not even fetched — detected through `failIfMajorPerformanceCaveat`,
+  > which Chrome and Safari honour and Firefox by default ignores), and for the
+  > rest of the visit if the GPU context is
   > lost mid-run. `?3d=0` forces 2D; `?3d=1` skips the software-WebGL check.
   > The camera presets and enemy-spot knobs (`?cam=`, `?fov=`, `?foex=`, …) are
   > dev-only (`?dev`).
