@@ -102,7 +102,7 @@ const LANES = [
   {id:'LI', name:'L index',  el:'fire',  color:'#ff6a3d', keys:'4 5 R T F G V B', sym:'4$ 5%'},
   {id:'RI', name:'R index',  el:'fire',  color:'#ff8a3d', keys:'6 7 Y U H J M N', sym:'6^ 7&'},
   {id:'RM', name:'R mid',    el:'water', color:'#2fa8ff', keys:'8 I K ,', sym:'8* <'},
-  {id:'RR', name:'R ring',   el:'earth', color:'#22d88a', keys:'9 O L .', sym:'9) >'},
+  {id:'RR', name:'R ring',   el:'earth', color:'#22d88a', keys:'9 O L .', sym:'9( >'},
   {id:'RP', name:'R pinky',  el:'air',   color:'#9b5cff', keys:'0 P ; \'' , sym:'0) -_ =+ :\' /?'},
 ];
 const LANE = Object.fromEntries(LANES.map(l => [l.id, l]));
@@ -117,7 +117,7 @@ const PAL = { void:'#07030f', night:'#0c0a3a', indigo:'#1b1280', violet:'#5c15bd
 const KEY2LANE = {};
 for (const [id, ks] of Object.entries({
   LP:'`~1!qazQAZ', LR:'2@wsxWSX', LM:'3#edcEDC', LI:'45$%rtfgvbRTFGBV',
-  RI:'67^&yuhjmnYUHMN', RM:'8*(ik,<I,K', RR:'9)ol.>O.L', RP:'0-=_+p;\':"/?P',
+  RI:'67^&yuhjmnYUHMN', RM:'8*ik,<I,K', RR:'9(ol.>O.L', RP:'0)-=_+p;\':"/?P',
 })) for (const c of ks) KEY2LANE[c] = id;
 
 // which way the finger travels from its home key — turns a lane into motor instruction
@@ -964,7 +964,8 @@ function applyStrike(s) { // an enemy strike reached the caster
   }
 }
 function hurt(dmg, why) { // the caster takes damage: an enemy strike, or his own backfire
-  if (!OPT.inf) G.hp -= dmg; // dev: infinite health (the hit still shows and sounds) G.redFlash = now();
+  if (!OPT.inf) G.hp -= dmg; // dev: infinite health (the hit still shows and sounds)
+  G.redFlash = now();
   G.wizHurt = now();
   G.shake = Math.max(G.shake, 3 + 6 * (dmg/DMG));
   thudSnd();
