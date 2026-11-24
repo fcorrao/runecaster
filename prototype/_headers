@@ -1,6 +1,9 @@
-/*
+# Art and audio are cached for a year without revalidating. They are not fingerprinted,
+# so ship a changed file under a new name or returning players keep the old one.
+/art/*
   Cache-Control: public, max-age=31536000, immutable
-/index.html
-  Cache-Control: no-cache
-/sfx.html
-  Cache-Control: no-cache
+/audio/*
+  Cache-Control: public, max-age=31536000, immutable
+# The pages (/ and /sfx) get no rule: Cloudflare's default "public, max-age=0, must-revalidate"
+# makes the browser check for a new deploy on every load. Rules match the served path, so a
+# rule for /index.html never reached / (it is a 307 to /), and a /* rule here caches the pages too.
