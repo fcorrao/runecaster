@@ -2591,12 +2591,16 @@ function drawFoeBlock(t, plateAlpha, layered) {
   cx.restore(); cx.globalAlpha = 1;
 }
 // 3D: the enemy's charged attack as a fuse burning down the gutter toward the end of the hit line: dim, in its color, one
-// step per beat while it charges (never red before the last bar); in the last bar it lights red notch by notch, beating
-// with the doom pulse (gold once warded). Its digit and the ward prompt are in the well under the line (drawWell)
+// step per beat while it charges (never red before the last bar: an enemy whose color is within 20° of hue of the alarm
+// red, the archer's, burns in the HUD's lavender instead); in the last bar it lights red notch by notch, beating with
+// the doom pulse (gold once warded). Its digit and the ward prompt are in the well under the line (drawWell)
+const hueOf = c => { const [r, g, b] = [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)), M = Math.max(r, g, b), d = M - Math.min(r, g, b);
+  return d ? ((M === r ? (g - b) / d : M === g ? 2 + (b - r) / d : 4 + (r - g) / d) * 60 + 360) % 360 : 0; };
+function fuseColor(c) { const d = Math.abs(hueOf(c) - hueOf(PAL.bad)); return Math.min(d, 360 - d) < 20 ? PAL.dim : c; }
 function drawFuse(t) {
   if (G.over || G.cast) return; // the spellbook covers the field; the block's charge bar still shows the charge
   const ck = chargeState(t); if (!ck) return;
-  const E = G.enemy, y0 = foeUp(48) + 70, S0 = [gutX(y0), y0], S1 = [gutX(470), 470], S2 = [gutX(626), 626];
+  const E = G.enemy, fc = fuseColor(E.color), y0 = foeUp(48) + 70, S0 = [gutX(y0), y0], S1 = [gutX(470), 470], S2 = [gutX(626), 626];
   const at = (P, Q, f) => [P[0] + (Q[0] - P[0]) * f, P[1] + (Q[1] - P[1]) * f];
   const seg = (P, Q, w, c, a, glow) => { cx.globalAlpha = a; cx.strokeStyle = c; cx.lineWidth = w; cx.shadowColor = c; cx.shadowBlur = glow; cx.beginPath(); cx.moveTo(P[0], P[1]); cx.lineTo(Q[0], Q[1]); cx.stroke(); cx.shadowBlur = 0; };
   const tip = (P, c, ch, chc) => {
@@ -2607,11 +2611,11 @@ function drawFuse(t) {
   cx.save(); cx.lineCap = 'round';
   if (!ck.warn) { // charging: the burnt part S0 → T, T stepping a beat at a time
     const f = Math.max(0, Math.min(1, (E.chargeBeats - ck.left) / Math.max(1, E.chargeBeats - WARN_BEATS))), T = at(S0, S1, f);
-    if (f > 0) seg(S0, T, 3, E.color, .5, 0);
-    tip(T, E.color, '⚡', E.color);
+    if (f > 0) seg(S0, T, 3, fc, .5, 0);
+    tip(T, fc, '⚡', fc);
   } else { // the last bar: S1 → N_j lit, one notch per beat; the tip reaches the end of the line on the last beat
     const warded = !!G.guard, c = warded ? RUNES.ward.color : PAL.bad, j = Math.max(1, Math.min(WARN_BEATS, WARN_BEATS - ck.left + 1)), N = i => at(S1, S2, i / WARN_BEATS);
-    seg(S0, S1, 3, E.color, .5, 0);
+    seg(S0, S1, 3, fc, .5, 0);
     seg(S1, N(j), 4, c, .7 + .3 * (1 - beatPhase(t)), 12);
     const L = Math.hypot(S2[0] - S1[0], S2[1] - S1[1]), nx = -(S2[1] - S1[1]) / L * 4, ny = (S2[0] - S1[0]) / L * 4; // 8-px ticks across the gutter
     cx.lineWidth = 2;
