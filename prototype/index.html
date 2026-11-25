@@ -2063,8 +2063,9 @@ function hudPanel(x, y0, w, frac, c1, c2, name, hp, sub, subC, lines) {
   cx.shadowBlur = 0;
 }
 // in the enemy's gauge (x .. x + w at BAR_Y): the lethal preview — held bolts as a pale ghost eaten out of the bar, the
-// pending counter as a gold notch beyond it, LETHAL when they kill — and under it the charged attack filling
-function foeGauge(t, x, BAR_Y, w) {
+// pending counter as a gold notch beyond it, LETHAL when they kill — and under it the charged attack filling.
+// tag (3D's block): LETHAL sits on a dark tag, so it reads over the gold notch too
+function foeGauge(t, x, BAR_Y, w, tag) {
   const BAR_H = 14, ck = chargeState(t);
   if (G.enemy.hp > 0) {
     const L = lethalPreview(ck && ck.warn), hp = G.enemy.hp, mx = G.enemy.max, px = v => x + w * Math.max(0, v) / mx;
@@ -2078,7 +2079,9 @@ function foeGauge(t, x, BAR_Y, w) {
     }
     if (L.bolts + L.counter >= hp) {
       cx.textAlign = 'right'; cx.fillStyle = PAL.gold; cx.shadowColor = PAL.gold; cx.shadowBlur = 10; cx.globalAlpha = .75 + .25 * Math.sin(t * 8);
-      cx.font = 'bold 10.5px ui-monospace, Menlo, monospace'; cx.fillText('LETHAL', x + w - 6, BAR_Y + 11);
+      cx.font = 'bold 10.5px ui-monospace, Menlo, monospace';
+      if (tag) { const tw = cx.measureText('LETHAL').width; cx.save(); cx.globalAlpha = 1; cx.shadowBlur = 0; cx.fillStyle = 'rgba(10,4,24,.9)'; rr(x + w - 6 - tw - 4, BAR_Y + 1.5, tw + 8, BAR_H - 3, 3); cx.fill(); cx.restore(); } // steady, under the pulsing text
+      cx.fillText('LETHAL', x + w - 6, BAR_Y + 11);
       cx.globalAlpha = 1; cx.shadowBlur = 0; cx.textAlign = 'left';
     }
   }
@@ -2462,7 +2465,9 @@ function draw(t) {
 // an arrival (the boss's entrance, ATTIRUS RISES) comes with a full bar; any other is a curse cast mid-fight
 const BOSS_CARD_KIND = new WeakMap();
 function bossCardKind(B) { let k = BOSS_CARD_KIND.get(B); if (!k) BOSS_CARD_KIND.set(B, k = G.enemy.hp >= G.enemy.max ? 'arrival' : 'curse'); return k; }
-// greedy wrap at ' · ' separators (a part still too wide breaks at its spaces), at the current font, to at most max lines
+// greedy wrap at ' · ' separators (a part still too wide breaks at its spaces), at the current font, to at most max lines —
+// unless a plain word wrap (each '·' kept on the word before it) takes fewer: "the Counting Wraith's / curse / 3×k: …"
+// would leave 'curse' alone on a line
 function wrapDots(text, maxW, max) {
   const out = [];
   for (const part of text.split(' · ')) {
@@ -2471,7 +2476,8 @@ function wrapDots(text, maxW, max) {
     else if (cx.measureText(part).width <= maxW) out.push(part);
     else out.push(...wrapText(part, maxW));
   }
-  return out.slice(0, max);
+  const flat = wrapText(text.replace(/ · /g, '\u00a0· '), maxW).map(l => l.replace(/\u00a0/g, ' '));
+  return (flat.length < out.length ? flat : out).slice(0, max);
 }
 // boss nameplate: drops in over the boss's head with a little overshoot, a sheen sweeps it, a pointer marks the boss
 function drawBossCard(t) {
@@ -2480,7 +2486,7 @@ function drawBossCard(t) {
     // block's HP and LETHAL stay readable mid-fight; its curse chip expands instead (drawFoeBlock)
     const B = G.bossCard; if (!B) return 0;
     if (bossCardKind(B) !== 'arrival' || G.cast || G.over) return 0;
-    if (!B.fired) return 1;
+    if (!B.fired) return G.intro ? 0 : 1; // (not through the start cinematic: a dev jump straight to a boss would hide the block)
     const e = t - B.at, HOLD = 3.2; if (e < 0) return 1; if (e > HOLD) return 0;
     const col = G.enemy.color, w = 194, h = 78, x = Math.max(916, Math.min(W - 10 - w, ARC_X - 97)), y = ARC_AY + 16; // ≥ 17 px right of the gutter
     const k = Math.min(1, e / 0.28), pop = 1 + 1.7 * (k - 1) ** 3 + 0.7 * (k - 1) ** 2; // ease-out-back
@@ -2559,7 +2565,7 @@ function drawFoeBlock(t, plateAlpha, layered) {
   cx.fillStyle = 'rgba(10,4,24,.72)'; rr(x - 3, top - 2, FBW + 6, nb + dy + 70 - top, 8); cx.fill(); // the backing card: legible over the figure's glow and the edge flash
   cx.strokeStyle = col; cx.globalAlpha = .5; cx.lineWidth = 1; rr(x - 3, top - 2, FBW + 6, nb + dy + 70 - top, 8); cx.stroke(); cx.globalAlpha = 1;
   hudPanel(x, nb, FBW, E.hp / E.max, PAL.wine, col, null, Math.max(0, E.hp) + ' / ' + E.max, 'weak to ' + E.weak.toUpperCase(), ELC[E.weak], lines);
-  foeGauge(t, x, nb + dy + 8, FBW);
+  foeGauge(t, x, nb + dy + 8, FBW, true);
   // the curse it has up (the chip that was in the top-left column). As a curse is cast, it lands here expanded — the card's
   // news, dropping in with the plate's overshoot and sheen — for the card's 3.2 s, then settles to its 30-px form
   const B = G.bossCard, HOLD = 3.2, ce = B && B.fired && !G.cast && bossCardKind(B) === 'curse' ? t - B.at : -1, big = ce >= 0 && ce <= HOLD;
@@ -2635,6 +2641,7 @@ function drawWell(t) {
     if (warded) { cx.fillStyle = col; cx.fillText('WARDED', X, 700); }
     else { // the boss's ward shortens with each charge it has loosed: gold, orange once shortened, red at the minimum
       const wd = wardDur(), wc = wd < WARD_S - 0.05 ? (wd <= WARD_MIN + 0.05 ? PAL.bad : '#ff9a3d') : RUNES.ward.color;
+      if (E.kind !== 'boss') cx.font = 'bold 10' + F; // 'ward: warcen' at 11 px all but fills the well
       cx.fillStyle = wc; cx.globalAlpha = .75 + .25 * Math.sin(t * 8); cx.fillText(E.kind === 'boss' ? `warcen ${wd.toFixed(1)}s` : 'ward: warcen', X, 700);
     }
   } else {
