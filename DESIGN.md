@@ -662,7 +662,9 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   so the charge also travels to it: a **fuse** burns down the channel that joins
   the fighters (the enemy's color, red only in the last bar; gold once you
   ward; an enemy whose color is within 20° of hue of that red, the archer's,
-  burns lavender until then, so a red fuse always means the last bar), and a
+  burns lavender until then, so a red fuse always means the last bar — and so
+  do its charge bar in the enemy block, the channel's dots and the glow round
+  the figure; 2D keeps its own color there), and a
   small box under the hit line, between the index keycaps, shows
   the countdown digit with the ward prompt — `ward: warcen` against a minion,
   `warcen 3.6s` against a boss (the seconds it will grant) — or WARDED, or
