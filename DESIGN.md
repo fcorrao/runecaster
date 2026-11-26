@@ -781,10 +781,16 @@ These are the seams where a full design doc would live. **[OPEN]** throughout.
   in 15 px; NEW / ×2 as a chip on the art's corner; unowned runes
   dimmed. It is drawn under the spells, so sigil threads and rest diamonds
   crossing the gap stay on top. Floating popups got a dark pill so they read
-  over it;
+  over it. **In the 3D view** the cards stand on the highway and shrink with
+  depth (the top one to about half size), so the names are drawn flat over
+  them at one size (13 px, on a dark tag over each card's art) while the art
+  and pips keep the perspective;
   (2) **NEW tags** on freshly earned runes (and the ward, from the start)
   until the spellbook has been opened; only the first of each rune gets a
-  toast; (3) **live status chips** in the left margin while an effect runs
+  toast. **In the 3D view** every rune earned instead shows a card in the
+  sky top left, over the caster: its art and charges, name, what it does,
+  where it came from, and "SPACE to cast" ("to read it and cast" for a new
+  one) — a standing lesson for new players (decided, user); (3) **live status chips** in the left margin while an effect runs
   ("WARD · 3 s · counters a charge", "VEIL · next bolt hits the weakness").
   **[OPEN]** after playtest: whether flawless powers fire too often at high
   skill (every all-perfect spell), timed casting, bolt damage vs enemy HP; the
